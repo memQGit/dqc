@@ -6,7 +6,7 @@ readme = "README.md"
 authors = [
     { name = "LukeAndreesen", email = "107073823+LukeAndreesen@users.noreply.github.com" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "networkx>=3.6.1",
 ]
