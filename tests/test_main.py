@@ -1,8 +1,6 @@
 """Basic tests for memq_dqc main module."""
 
 import pytest
-from io import StringIO
-import sys
 
 from memq_dqc.main import main
 
