@@ -1,6 +1,6 @@
 def main():
     print(
-        "Welcome to memq_dqc! This is the main entry point of the application."
+        "Welcome to memq_dqc. This is the main entry point of the application."
     )
 
 
