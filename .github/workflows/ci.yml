@@ -29,26 +29,26 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
 
-        - name: Imstall uv and set the Python version
-          uses: astral-sh/setup-uv@v7
-          with:
-            python-version: ${{ matrix.python-version }}
+      - name: Imstall uv and set the Python version
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
 
-        - name: Install the project
-          run: uv sync --locked --all-extras --dev
+      - name: Install the project
+        run: uv sync --locked --all-extras --dev
 
-        - name: Ruff (lint)
-          run: uv runn ruff check .
+      - name: Ruff (lint)
+        run: uv runn ruff check .
 
-        - name: Ruff (format check)
-          run: uv run ruff format --check .
+      - name: Ruff (format check)
+        run: uv run ruff format --check .
 
-        - name: Pytest
-          run: uv run pytest -q
+      - name: Pytest
+        run: uv run pytest -q
 
-        - name: Build package
-          run: uv build
+      - name: Build package
+        run: uv build
