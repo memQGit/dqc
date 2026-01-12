@@ -1,0 +1,54 @@
+# Copyright [2026] [memQ]
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: CI
+
+on: 
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v6
+
+        - name: Imstall uv and set the Python version
+          uses: astral-sh/setup-uv@v7
+          with:
+            python-version: ${{ matrix.python-version }}
+
+        - name: Install the project
+          run: uv sync --locked --all-extras --dev
+
+        - name: Ruff (lint)
+          run: uv runn ruff check .
+
+        - name: Ruff (format check)
+          run: uv run ruff format --check .
+
+        - name: Pytest
+          run: uv run pytest -q
+
+        - name: Build package
+          run: uv build
