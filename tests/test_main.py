@@ -14,7 +14,7 @@ def test_main_function_output(capsys):
     """Test that the main function produces expected output."""
     main()
     captured = capsys.readouterr()
-    assert "Welcome to memq_dqc!" in captured.out
+    assert "Welcome to memq_dqc." in captured.out
     assert "main entry point" in captured.out
 
 
