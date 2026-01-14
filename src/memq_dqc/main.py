@@ -19,7 +19,7 @@ Typical usage example:
 """
 
 
-def main():
+def main() -> None:
     """Example function with PEP 484 type annotations.
 
     Args:
