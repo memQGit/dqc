@@ -1,0 +1,2 @@
+Some possible utilities:
+- cost function for any graph?
