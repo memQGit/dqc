@@ -1,0 +1,16 @@
+{
+  "include": ["src", "tests"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "strict",
+  "reportMissingTypeStubs": "warning",
+  "reportUnknownParameterType": "error",
+  "reportUnknownVariableType": "error",
+  "reportUnknownMemberType": "error",
+  "reportMissingParameterType": "error",
+  "reportMissingTypeArgument": "error",
+  "reportUntypedFunctionDecorator": "error",
+  "reportUntypedClassDecorator": "error"
+}
+
