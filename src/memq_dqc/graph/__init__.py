@@ -17,23 +17,3 @@ Typical usage example:
   foo = ClassFoo()
   bar = foo.function_bar()
 """
-
-
-def main():
-    """Example function with PEP 484 type annotations.
-
-    Args:
-        param1: The first parameter.
-        param2: The second parameter.
-
-    Returns:
-        The return value. True for success, False otherwise.
-
-    """
-    print(
-        "Welcome to memq_dqc. This is the main entry point of the application."
-    )
-
-
-if __name__ == "__main__":
-    main()
