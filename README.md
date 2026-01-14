@@ -1,8 +1,22 @@
-# Local Checks
+# memQ Distributed Quantum Compiler (memQ-DQC)
+
+memQ-DQC is an open-source distributed quantum compiler designed to optimize and compile quantum circuits for execution on distributed quantum computing architectures.
+
+<p align="center">
+    <a href="https://github.com/memQGit/DistributedCompiler/actions/workflows/ci.yml">
+        <img src="https://github.com/memQGit/DistributedCompiler/actions/workflows/ci.yml/badge.svg" alt="CI Status">
+    </a>
+    <a href="https://app.codecov.io/gh/memQGit/DistributedCompiler">
+        <img src="https://codecov.io/gh/memQGit/DistributedCompiler/branch/main/graph/badge.svg?token=XXXX" alt="Code Coverage">
+    </a>
+    <a href="https://opensource.org/licenses/MIT">
+        <img src="https://img.shields.io/badge/MIT-green?style=for-the-badge" alt="License: MIT">
+    </a>
+</p>
 
 This repository uses **Ruff** for linting and formatting and **pytest** for tests. All checks are wrapped in a single script for convenience.
 
-## Run all checks
+### Run all checks
 
 First, make sure the script is executable (only needs to be done once):
 
@@ -12,15 +26,15 @@ Then run all checks (lint, format check, and tests):
 
     ./scripts/check.sh
 
-## Run checks individually
+### Run checks individually
 
 If you want to run each step on its own:
 
-### Linting (Ruff)
+#### Linting (Ruff)
 
     uv run ruff check .
 
-### Formatting check (Ruff)
+#### Formatting check (Ruff)
 
 Checks formatting without modifying files:
 
@@ -30,6 +44,6 @@ To automatically format files instead:
 
     uv run ruff format .
 
-### Tests (pytest)
+#### Tests (pytest)
 
     uv run pytest -q
