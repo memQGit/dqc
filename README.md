@@ -6,12 +6,10 @@ memQ-DQC is an open-source distributed quantum compiler designed to optimize and
     <a href="https://github.com/memQGit/DistributedCompiler/actions/workflows/ci.yml">
         <img src="https://github.com/memQGit/DistributedCompiler/actions/workflows/ci.yml/badge.svg" alt="CI Status">
     </a>
-    <a href="https://app.codecov.io/gh/memQGit/DistributedCompiler">
-        <img src="https://codecov.io/gh/memQGit/DistributedCompiler/branch/main/graph/badge.svg?token=XXXX" alt="Code Coverage">
+    <a href="https://github.com/memQGit/DistributedCompiler/blob/main/LICENSE">
+      <img src="https://img.shields.io/github/license/memQGit/DistributedCompiler" alt="License">
     </a>
-    <a href="https://opensource.org/licenses/MIT">
-        <img src="https://img.shields.io/badge/MIT-green?style=for-the-badge" alt="License: MIT">
-    </a>
+
 </p>
 
 This repository uses **Ruff** for linting and formatting and **pytest** for tests. All checks are wrapped in a single script for convenience.
