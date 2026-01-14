@@ -1,6 +1,5 @@
 # memQ Distributed Quantum Compiler (memQ-DQC)
 
-memQ-DQC is an open-source distributed quantum compiler designed to optimize and compile quantum circuits for execution on distributed quantum computing architectures.
 
 <p align="center">
     <a href="https://github.com/memQGit/DistributedCompiler/actions/workflows/ci.yml">
@@ -9,8 +8,11 @@ memQ-DQC is an open-source distributed quantum compiler designed to optimize and
     <a href="https://github.com/memQGit/DistributedCompiler/blob/main/LICENSE">
       <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
     </a>
-
 </p>
+
+memQ-DQC is an open-source distributed quantum compiler designed to optimize and compile quantum circuits for execution on distributed quantum computing architectures.
+
+---
 
 This repository uses **Ruff** for linting and formatting and **pytest** for tests. All checks are wrapped in a single script for convenience.
 
