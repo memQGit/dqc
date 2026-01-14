@@ -7,7 +7,7 @@ memQ-DQC is an open-source distributed quantum compiler designed to optimize and
         <img src="https://github.com/memQGit/DistributedCompiler/actions/workflows/ci.yml/badge.svg" alt="CI Status">
     </a>
     <a href="https://github.com/memQGit/DistributedCompiler/blob/main/LICENSE">
-      <img src="https://img.shields.io/github/license/memQGit/DistributedCompiler" alt="License">
+      <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
     </a>
 
 </p>
