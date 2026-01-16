@@ -1,0 +1,22 @@
+{
+  // Use Ruff as the formatter
+  "editor.defaultFormatter": "charliermarsh.ruff",
+
+  // Auto-format on save
+  "editor.formatOnSave": true,
+
+  // Auto-fix lint issues on save
+  "editor.codeActionsOnSave": {
+    "source.fixAll.ruff": "explicit",
+    "source.organizeImports.ruff": "explicit"
+  },
+
+  // Enable Ruff linting
+  "ruff.lint.enable": true,
+
+  // Use project virtual environment
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+
+  // Disable other formatters/linters
+  "python.linting.enabled": false
+}

@@ -5,15 +5,16 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""A one-line summary of the module or program, terminated by a period.
+"""Network graph utilities and helpers.
 
-Leave one blank line.  The rest of this docstring should contain an
-overall description of the module or program.  Optionally, it may also
-contain a brief description of exported classes and functions and/or usage
-examples.
+Exposes the public graph-construction and visualization functions.
 
 Typical usage example:
 
-  foo = ClassFoo()
-  bar = foo.function_bar()
+  graph, qubit_type_map = build_network_graph("network.json")
+  display_network_graph(graph)
 """
+
+from .network_graph import build_network_graph, display_network_graph
+
+__all__ = ["build_network_graph", "display_network_graph"]

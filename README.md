@@ -18,13 +18,9 @@ This repository uses **Ruff** for linting and formatting and **pytest** for test
 
 ### Run all checks
 
-First, make sure the script is executable (only needs to be done once):
+To run all checks locally (lint, format check, and tests):
 
-    chmod +x scripts/check.sh
-
-Then run all checks (lint, format check, and tests):
-
-    ./scripts/check.sh
+    uv run tox
 
 ### Run checks individually
 
