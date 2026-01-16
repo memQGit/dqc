@@ -5,16 +5,16 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Main entry point for memQ Distributed Quantum Compiler."""
+from pathlib import Path
+
+import pytest
 
 
-def main() -> None:
-    """Main application entry point.
-
-    Currently a placeholder - functionality to be implemented.
-    """
-    pass
-
-
-if __name__ == "__main__":
-    main()
+@pytest.fixture()
+def simple1_network_path() -> Path:
+    return (
+        Path(__file__).resolve().parents[1]
+        / "data"
+        / "networks"
+        / "simple1.json"
+    )

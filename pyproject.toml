@@ -4,11 +4,16 @@ version = "0.1.0"
 description = "memQ Distributed Quantum Compiler"
 readme = "README.md"
 authors = [
-    { name = "LukeAndreesen", email = "luke.andreesen@memq.tech" }
+    { name = "memQ Inc.", email = "luke.andreesen@memq.tech" }
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "matplotlib>=3.10.8",
     "networkx>=3.6.1",
+]
+
+classifiers = [
+    "Intended Audience :: Science/Research",
 ]
 
 [build-system]
@@ -23,6 +28,7 @@ dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "ruff>=0.14.11",
+    "tox>=4.25.0",
 ]
 
 [tool.ruff]
@@ -32,7 +38,7 @@ target-version = "py311"
 [tool.ruff.lint]
 ignore = ["E501"]
 select = ["E", "F", "I", "D", "ANN", "UP", "B"]
-per-file-ignores = { "tests/**" = ["D", "ANN"] }
+per-file-ignores = { "tests/**" = ["D", "ANN"], "scripts/**" = ["D", "ANN"] }
 
 [tool.ruff.format]
 docstring-code-format = true
