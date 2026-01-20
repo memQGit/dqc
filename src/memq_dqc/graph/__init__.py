@@ -15,6 +15,15 @@ Typical usage example:
   display_network_graph(graph)
 """
 
+from .interaction_graph import (
+    build_interaction_graph,
+    display_interaction_graph,
+)
 from .network_graph import build_network_graph, display_network_graph
 
-__all__ = ["build_network_graph", "display_network_graph"]
+__all__ = [
+    "build_network_graph",
+    "display_network_graph",
+    "build_interaction_graph",
+    "display_interaction_graph",
+]
