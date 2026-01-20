@@ -5,15 +5,27 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""A one-line summary of the module or program, terminated by a period.
+"""Partitioning algorithms for mapping logical qubits to physical qubits.
 
-Leave one blank line.  The rest of this docstring should contain an
-overall description of the module or program.  Optionally, it may also
-contain a brief description of exported classes and functions and/or usage
-examples.
+This module takes a graph representation of the quantum circuit and a graph
+representation of the quantum network and applies partitioning algorithms to
+map logical qubits to physical qubits in an optimized manner.
 
 Typical usage example:
 
-  foo = ClassFoo()
-  bar = foo.function_bar()
+  TODO: Add usage example here.
 """
+
+import networkx as nx
+
+
+def kl_partition(interaction_graph: nx.Graph, network_graph: nx.Graph) -> dict:
+    """Partition qubits using the Kernighan-Lin algorithm.
+
+    Args:
+        interaction_graph (nx.Graph): The interaction graph representing qubit interactions.
+        network_graph (nx.Graph): The network graph representing the quantum network.
+
+    Returns:
+        dict: A mapping from qubit indices to physical qubit indices.
+    """
