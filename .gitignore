@@ -24,3 +24,7 @@ coverage.xml
 
 # VS Code (choose one approach)
 .vscode/
+
+
+# Local testing / playground scripts
+scripts/
