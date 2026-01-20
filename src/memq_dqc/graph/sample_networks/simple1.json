@@ -1,0 +1,164 @@
+{
+  "processors": {
+    "1": {
+      "id": 1,
+      "qubits": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    "2": {
+      "id": 2,
+      "qubits": [
+        5,
+        6,
+        7,
+        8
+      ]
+    }
+  },
+  "qubits": {
+    "1": {
+      "id": 1,
+      "type": "computation",
+      "processorId": 1,
+      "localConnections": [
+        2,
+        3
+      ],
+      "remoteConnections": []
+    },
+    "2": {
+      "id": 2,
+      "type": "communication",
+      "processorId": 1,
+      "localConnections": [
+        1,
+        4
+      ],
+      "remoteConnections": [
+        5
+      ]
+    },
+    "3": {
+      "id": 3,
+      "type": "computation",
+      "processorId": 1,
+      "localConnections": [
+        1,
+        4
+      ],
+      "remoteConnections": []
+    },
+    "4": {
+      "id": 4,
+      "type": "communication",
+      "processorId": 1,
+      "localConnections": [
+        3,
+        2
+      ],
+      "remoteConnections": [
+        7
+      ]
+    },
+    "5": {
+      "id": 5,
+      "type": "communication",
+      "processorId": 2,
+      "localConnections": [
+        6,
+        7
+      ],
+      "remoteConnections": [
+        2
+      ]
+    },
+    "6": {
+      "id": 6,
+      "type": "computation",
+      "processorId": 2,
+      "localConnections": [
+        5,
+        8
+      ],
+      "remoteConnections": []
+    },
+    "7": {
+      "id": 7,
+      "type": "communication",
+      "processorId": 2,
+      "localConnections": [
+        8,
+        5
+      ],
+      "remoteConnections": [
+        4
+      ]
+    },
+    "8": {
+      "id": 8,
+      "type": "computation",
+      "processorId": 2,
+      "localConnections": [
+        6,
+        7
+      ],
+      "remoteConnections": []
+    }
+  },
+  "connections": [
+    {
+      "qubit1": 2,
+      "qubit2": 1,
+      "type": "local"
+    },
+    {
+      "qubit1": 3,
+      "qubit2": 1,
+      "type": "local"
+    },
+    {
+      "qubit1": 4,
+      "qubit2": 3,
+      "type": "local"
+    },
+    {
+      "qubit1": 2,
+      "qubit2": 4,
+      "type": "local"
+    },
+    {
+      "qubit1": 5,
+      "qubit2": 6,
+      "type": "local"
+    },
+    {
+      "qubit1": 8,
+      "qubit2": 6,
+      "type": "local"
+    },
+    {
+      "qubit1": 7,
+      "qubit2": 8,
+      "type": "local"
+    },
+    {
+      "qubit1": 5,
+      "qubit2": 7,
+      "type": "local"
+    },
+    {
+      "qubit1": 5,
+      "qubit2": 2,
+      "type": "remote"
+    },
+    {
+      "qubit1": 7,
+      "qubit2": 4,
+      "type": "remote"
+    }
+  ]
+}
