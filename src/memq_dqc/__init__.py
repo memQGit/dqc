@@ -5,6 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+# TODO: Update module docstring
 """A one-line summary of the module or program, terminated by a period.
 
 Leave one blank line.  The rest of this docstring should contain an
@@ -30,4 +31,5 @@ def hello() -> str:
         The return value. True for success, False otherwise.
 
     """
+    # TODO: Update / remove this
     return "Hello from memq-dqc!"

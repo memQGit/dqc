@@ -16,7 +16,10 @@ between those qubits.
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from memq_dqc.utils.utils import count_total_qubits, extract_two_qubit_gates
+from memq_dqc.utils import (
+    count_total_qubits,
+    extract_two_qubit_gates,
+)
 
 
 def build_interaction_graph(qasm_filename: str) -> nx.Graph:

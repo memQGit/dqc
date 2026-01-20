@@ -5,15 +5,30 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""A one-line summary of the module or program, terminated by a period.
+"""Utility functions for memq-dqc.
 
-Leave one blank line.  The rest of this docstring should contain an
-overall description of the module or program.  Optionally, it may also
-contain a brief description of exported classes and functions and/or usage
-examples.
-
-Typical usage example:
-
-  foo = ClassFoo()
-  bar = foo.function_bar()
+This module provides utility functions for working with quantum circuits,
+graph partitioning, and other common operations throughout the library.
 """
+
+# Circuit utilities
+from memq_dqc.utils.circuit_utils import (
+    count_total_qubits,
+    extract_qubit_index,
+    extract_two_qubit_gates,
+    load_qasm_program,
+)
+
+# Partition utilities
+from memq_dqc.utils.partition_utils import get_edge_weight, partition_cost
+
+__all__ = [
+    # Circuit utilities
+    "count_total_qubits",
+    "extract_qubit_index",
+    "extract_two_qubit_gates",
+    "load_qasm_program",
+    # Partition utilities
+    "partition_cost",
+    "get_edge_weight",
+]
