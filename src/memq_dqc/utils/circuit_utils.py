@@ -5,7 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Utility functions used throughout memQ-DQC library."""
+"""Utility functions used for OpenQASM circuits throughout the library."""
 
 from collections import Counter
 from pathlib import Path
@@ -28,6 +28,7 @@ def load_qasm_program(filename: str) -> ast.Program:
         raise FileNotFoundError(f"File not found: {filename}")
     qasm_source = qasm_path.read_text(encoding="utf-8")
     program = openqasm3.parser.parse(qasm_source)
+
     return program
 
 
@@ -45,6 +46,7 @@ def count_total_qubits(qasm_filename: str) -> int:
     for stmt in qasm_program.statements:
         if isinstance(stmt, ast.QubitDeclaration):
             total += stmt.size.value
+
     return total
 
 
@@ -59,6 +61,7 @@ def extract_qubit_index(index_statement: ast.IndexedIdentifier) -> int:
     """
     if not index_statement.indices:
         raise ValueError("No indices found in the IndexedIdentifier.")
+
     return int(index_statement.indices[0][0].value)
 
 
@@ -81,4 +84,5 @@ def extract_two_qubit_gates(qasm_filename: str) -> Counter:
         ):
             i, j = sorted(extract_qubit_index(q) for q in statement.qubits)
             multi_qubit_gates[(i, j)] += 1
+
     return multi_qubit_gates

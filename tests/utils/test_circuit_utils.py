@@ -8,7 +8,7 @@ from pathlib import Path
 
 from openqasm3 import ast
 
-from memq_dqc.utils.utils import (
+from memq_dqc.utils import (
     count_total_qubits,
     extract_qubit_index,
     extract_two_qubit_gates,
