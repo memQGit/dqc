@@ -8,8 +8,12 @@
 from pathlib import Path
 
 import networkx as nx
+import pytest
 
-from memq_dqc.graph.network_graph import build_network_graph
+from memq_dqc.graph.network_graph import (
+    build_network_graph,
+    display_network_graph,
+)
 
 
 def test_build_network_graph_returns_graph(simple1_network_path: Path) -> None:
@@ -31,14 +35,21 @@ def test_build_network_graph_structure(
     assert graph.number_of_edges() == 10
 
 
-def test_display_network_graph(simple1_network_path: Path) -> None:
+def test_display_network_graph(
+    simple1_network_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     graph, _ = build_network_graph(str(simple1_network_path))
+
+    # Patch plt.show to prevent actual rendering during tests
+    monkeypatch.setattr(
+        "memq_dqc.graph.network_graph.plt.show",
+        lambda: None,
+    )
 
     # Just ensure that the function runs without error
     nx_graph = graph
     try:
-        from memq_dqc.graph.network_graph import display_network_graph
-
         display_network_graph(nx_graph)
     except Exception as e:
         raise AssertionError(

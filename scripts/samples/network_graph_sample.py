@@ -9,7 +9,6 @@ from pathlib import Path
 
 from memq_dqc.graph import build_network_graph, display_network_graph
 
-# Resolve sample JSON relative to repository root (robust when running from any CWD)
 repo_root = Path(__file__).resolve().parents[2]
 sample_json = (
     repo_root
