@@ -5,34 +5,15 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""A one-line summary of the module or program, terminated by a period.
-
-Leave one blank line.  The rest of this docstring should contain an
-overall description of the module or program.  Optionally, it may also
-contain a brief description of exported classes and functions and/or usage
-examples.
-
-Typical usage example:
-
-  foo = ClassFoo()
-  bar = foo.function_bar()
-"""
+"""Main entry point for memQ Distributed Quantum Compiler."""
 
 
 def main() -> None:
-    """Example function with PEP 484 type annotations.
+    """Main application entry point.
 
-    Args:
-        param1: The first parameter.
-        param2: The second parameter.
-
-    Returns:
-        The return value. True for success, False otherwise.
-
+    Currently a placeholder - functionality to be implemented.
     """
-    print(
-        "Welcome to memq_dqc. This is the main entry point of the application."
-    )
+    pass
 
 
 if __name__ == "__main__":
