@@ -20,6 +20,7 @@ import random
 
 import networkx as nx
 
+from memq_dqc.graph import NetworkGraph
 from memq_dqc.utils import (
     generate_equal_partitions,
     get_edge_weight,
@@ -27,17 +28,29 @@ from memq_dqc.utils import (
 )
 
 
-def cisco_algo(interaction_graph: nx.Graph, network_graph: nx.Graph) -> dict:
+def cisco_algo(interaction_graph: nx.Graph, network: NetworkGraph) -> dict:
     """Partition qubits using the Cisco (TODO: cite) algorithm.
 
     Args:
         interaction_graph (nx.Graph): The interaction graph representing qubit interactions.
-        network_graph (nx.Graph): The network graph representing the quantum network.
+        network_graph (NetworkGraph): The network graph representing the quantum network.
 
     Returns:
         dict: A mapping from qubit indices to physical qubit indices.
     """
     # TODO: consider connectivity / # of connections effect on partitioning
+    ec = 0  # enganglement cost starts at 0
+    num_partitions = network.num_qpus
+    print(
+        f"Network qubit counts: Total: {network.num_total_qubits}, Comp: {network.num_comp_qubits}, Comm: {network.num_comm_qubits}"
+    )
+    network_graph = network.graph
+    print(num_partitions)
+    print(type(network_graph))
+    partitions = kl_partition(interaction_graph, partitions=num_partitions)
+    return partitions
+    # TODO: RETURN PARTITIONS AS MAP OF QPU TO LIST OF QUBITS
+    # partitiion = kl_partition(interaction_graph, partitions =)
 
 
 # TODO: how to implement these algorithms in a plug-and-play way?
@@ -47,7 +60,7 @@ def kl_partition(
     partitions: list[int],
     n_iter: int = 100,
     seed: int | None = 42,
-) -> dict:
+) -> list[set[int]]:
     # TODO: generalize for non-uniform partitions
     # TODO: determine optimal number of iterations
     """Generic graph partitioning using the Kernighan-Lin (KL) algorithm.
@@ -62,7 +75,8 @@ def kl_partition(
         seed (int | None): Optional RNG seed for randomizing initial partitions.
 
     Returns:
-        dict: A mapping from qubit indices to physical qubit indices.
+        A list of sets, where each set contains the node IDs in that partition.
+        For example: [{2, 3, 4}, {0, 1, 5}] represents two partitions.
     """
     nodes = [int(n) for n in graph.nodes()]
 
@@ -74,14 +88,10 @@ def kl_partition(
     verify_partition_sizes(graph, partitions)
 
     num_partitions = len(partitions)
-    # Divide graph nodes into n partitions; cast to int to avoid np.int64
 
+    # Initial partitioning
     rng = random.Random(seed)
     rng.shuffle(nodes)
-    #    partitions = [
-    #       set(int(x) for x in p) for p in np.array_split(nodes, num_partitions)
-    #  ]
-
     partition_result: list[set[int]] = []
     start = 0
     for size in partitions:
@@ -106,8 +116,6 @@ def kl_partition(
         if not cost_reduced:
             print(f"KL Converged after {n} iterations")
             break
-
-    # TODO: Build final mapping from partitions (wrong return type right now)
 
     return partition_result
 
