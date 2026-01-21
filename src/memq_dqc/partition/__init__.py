@@ -12,6 +12,6 @@
 
 """
 
-from .algos import kl_partition
+from .algos import cisco_algo, kl_partition
 
-__all__ = ["kl_partition"]
+__all__ = ["kl_partition", "cisco_algo"]
