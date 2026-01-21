@@ -70,10 +70,10 @@ def verify_partition_sizes(
     nodes = [int(n) for n in graph.nodes()]
     n_nodes = len(nodes)
 
-    if sum(partition_sizes) != n_nodes:
+    if sum(partition_sizes) < n_nodes:
         raise ValueError(
-            f"sum(partition_sizes)={sum(partition_sizes)} must equal "
-            f"number of nodes={n_nodes}."
+            f"sum(partition_sizes)={sum(partition_sizes)} must at least equal to"
+            f"number of nodes(qubits)={n_nodes}."
         )
 
 
