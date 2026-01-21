@@ -38,16 +38,36 @@ def cisco_algo(interaction_graph: nx.Graph, network: NetworkGraph) -> dict:
     Returns:
         dict: A mapping from qubit indices to physical qubit indices.
     """
-    # TODO: consider connectivity / # of connections effect on partitioning
-    ec = 0  # enganglement cost starts at 0
-    num_partitions = network.num_qpus
-    print(
-        f"Network qubit counts: Total: {network.num_total_qubits}, Comp: {network.num_comp_qubits}, Comm: {network.num_comm_qubits}"
-    )
     network_graph = network.graph
-    print(num_partitions)
-    print(type(network_graph))
-    partitions = kl_partition(interaction_graph, partitions=num_partitions)
+    weighted_graph = interaction_graph.copy()
+    if weighted_graph.number_of_edges() > 0:
+        remote_edges = sum(
+            1
+            for _, _, data in network_graph.edges(data=True)
+            if data.get("connection_type") == "remote"
+        )
+        num_nodes = network_graph.number_of_nodes()
+        avg_remote_degree = (
+            (2 * remote_edges) / num_nodes if num_nodes > 0 else 0.0
+        )
+        connectivity_penalty = 1.0 + 1.0 / (1.0 + avg_remote_degree)
+        degrees = dict(weighted_graph.degree(weight="weight"))
+        max_degree = max(degrees.values(), default=0.0)
+        if max_degree > 0:
+            for u, v, data in weighted_graph.edges(data=True):
+                base_weight = data.get("weight", 1.0)
+                degree_factor = (
+                    degrees.get(u, 0.0) + degrees.get(v, 0.0)
+                ) / (2.0 * max_degree)
+                data["weight"] = base_weight * (
+                    1.0 + connectivity_penalty * degree_factor
+                )
+    ec = 0  # enganglement cost starts at 0
+    partitions = network.comp_qubits_per_qpu()
+    print(f"Partition sizes: {partitions}")
+    # print(num_partitions)
+    # print(type(network_graph))
+    partition_result = kl_partition(weighted_graph, partitions=partitions)
     return partitions
     # TODO: RETURN PARTITIONS AS MAP OF QPU TO LIST OF QUBITS
     # partitiion = kl_partition(interaction_graph, partitions =)
