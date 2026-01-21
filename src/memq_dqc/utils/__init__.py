@@ -20,7 +20,12 @@ from memq_dqc.utils.circuit_utils import (
 )
 
 # Partition utilities
-from memq_dqc.utils.partition_utils import get_edge_weight, partition_cost
+from memq_dqc.utils.partition_utils import (
+    generate_equal_partitions,
+    get_edge_weight,
+    partition_cost,
+    verify_partition_sizes,
+)
 
 __all__ = [
     # Circuit utilities
@@ -31,4 +36,6 @@ __all__ = [
     # Partition utilities
     "partition_cost",
     "get_edge_weight",
+    "verify_partition_sizes",
+    "generate_equal_partitions",
 ]

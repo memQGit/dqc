@@ -19,9 +19,12 @@ Typical usage example:
 import random
 
 import networkx as nx
-import numpy as np
 
-from memq_dqc.utils import get_edge_weight
+from memq_dqc.utils import (
+    generate_equal_partitions,
+    get_edge_weight,
+    verify_partition_sizes,
+)
 
 
 def cisco_algo(interaction_graph: nx.Graph, network_graph: nx.Graph) -> dict:
@@ -40,7 +43,8 @@ def cisco_algo(interaction_graph: nx.Graph, network_graph: nx.Graph) -> dict:
 # TODO: how to implement these algorithms in a plug-and-play way?
 def kl_partition(
     graph: nx.Graph,
-    num_partitions: int,
+    # TODO: re-implemnt support for # partitions for uniform partitions
+    partitions: list[int],
     n_iter: int = 100,
     seed: int | None = 42,
 ) -> dict:
@@ -50,33 +54,53 @@ def kl_partition(
 
     Args:
         graph (nx.Graph): The network graph representing the quantum network.
-        num_partitions (int): The number of partitions to create.
+        partitions (int | list[int]): Either the number of equal-sized partitions
+            to create (e.g., 4 creates 4 equal partitions), or a list specifying
+            the size of each partition (e.g., [3, 5, 7] creates 3 partitions of
+            sizes 3, 5, and 7 respectively).
         n_iter (int): Number of iterations for the partitioning algorithm.
         seed (int | None): Optional RNG seed for randomizing initial partitions.
 
     Returns:
         dict: A mapping from qubit indices to physical qubit indices.
     """
-    # Divide graph nodes into n partitions; cast to int to avoid np.int64
     nodes = [int(n) for n in graph.nodes()]
+
+    if isinstance(partitions, int):
+        # Generate equal partitions if only number specified
+        partitions = generate_equal_partitions(partitions, len(nodes))
+    print(f"Partition sizes: {partitions}")
+    # Verify partition sizes if provided as list
+    verify_partition_sizes(graph, partitions)
+
+    num_partitions = len(partitions)
+    # Divide graph nodes into n partitions; cast to int to avoid np.int64
+
     rng = random.Random(seed)
     rng.shuffle(nodes)
-    partitions = [
-        set(int(x) for x in p) for p in np.array_split(nodes, num_partitions)
-    ]
-    print(f"Initial partitions: {partitions}")
+    #    partitions = [
+    #       set(int(x) for x in p) for p in np.array_split(nodes, num_partitions)
+    #  ]
+
+    partition_result: list[set[int]] = []
+    start = 0
+    for size in partitions:
+        chunk = nodes[start : start + size]
+        partition_result.append(set(chunk))
+        start += size
+    print(f"Initial partitions: {partition_result}")
 
     for n in range(n_iter):
         cost_reduced = False
         # Consider swaps between each pair of partition groups
         for a in range(num_partitions):
             for b in range(a + 1, num_partitions):
-                group_a = partitions[a]
-                group_b = partitions[b]
+                group_a = partition_result[a]
+                group_b = partition_result[b]
                 new_a, new_b, gain = two_way_refine(graph, group_a, group_b)
                 if gain > 0:
-                    partitions[a] = new_a
-                    partitions[b] = new_b
+                    partition_result[a] = new_a
+                    partition_result[b] = new_b
                     cost_reduced = True
         # Stop iterating if no cost reduction achieved
         if not cost_reduced:
@@ -85,7 +109,7 @@ def kl_partition(
 
     # TODO: Build final mapping from partitions (wrong return type right now)
 
-    return partitions
+    return partition_result
 
 
 def two_way_refine(
