@@ -45,12 +45,53 @@ def get_edge_weight(graph: nx.Graph, u: int, v: int) -> float:
         v: The second node of the edge.
 
     Returns:
-        The weight of the edge.
-
-    Raises:
-        ValueError: If no edge exists between ``u`` and ``v``.
+        The weight of the edge. If the edge does not exist, returns 0.0.
     """
     if not graph.has_edge(u, v):
-        raise ValueError(f"No edge exists between nodes {u} and {v}")
-
+        return 0.0
     return graph[u][v].get("weight", 1.0)
+
+
+def verify_partition_sizes(
+    graph: nx.Graph, partition_sizes: list[int]
+) -> None:
+    """Verify that partition sizes list is valid for the given graph.
+
+    Args:
+        graph: The input graph.
+        partition_sizes: A list of sizes for each partition.
+
+    Raises:
+        ValueError: If the sum of partition sizes does not equal the number of nodes.
+    """
+    if any(s <= 0 for s in partition_sizes):
+        raise ValueError("All partition sizes must be positive.")
+
+    nodes = [int(n) for n in graph.nodes()]
+    n_nodes = len(nodes)
+
+    if sum(partition_sizes) != n_nodes:
+        raise ValueError(
+            f"sum(partition_sizes)={sum(partition_sizes)} must equal "
+            f"number of nodes={n_nodes}."
+        )
+
+
+def generate_equal_partitions(
+    num_partitions: int, num_nodes: int
+) -> list[int]:
+    """Generate a list of equal partition sizes for the given number of nodes.
+
+    Args:
+        num_partitions: The number of partitions to create.
+        num_nodes: The total number of nodes to partition.
+
+    Returns:
+        A list of partition sizes summing to num_nodes.
+    """
+    base_size = num_nodes // num_partitions
+    remainder = num_nodes % num_partitions
+    partition_sizes = [base_size + 1] * remainder + [base_size] * (
+        num_partitions - remainder
+    )
+    return partition_sizes
