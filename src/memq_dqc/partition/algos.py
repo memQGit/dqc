@@ -32,8 +32,10 @@ def cisco_algo(interaction_graph: nx.Graph, network: NetworkGraph) -> dict:
     """Partition qubits using the Cisco (TODO: cite) algorithm.
 
     Args:
-        interaction_graph (nx.Graph): The interaction graph representing qubit interactions.
-        network_graph (NetworkGraph): The network graph representing the quantum network.
+        interaction_graph (nx.Graph): The interaction graph representing
+            qubit interactions.
+        network (NetworkGraph): The network graph representing the quantum
+            network.
 
     Returns:
         dict: A mapping from qubit indices to physical qubit indices.
@@ -56,18 +58,17 @@ def cisco_algo(interaction_graph: nx.Graph, network: NetworkGraph) -> dict:
         if max_degree > 0:
             for u, v, data in weighted_graph.edges(data=True):
                 base_weight = data.get("weight", 1.0)
-                degree_factor = (
-                    degrees.get(u, 0.0) + degrees.get(v, 0.0)
-                ) / (2.0 * max_degree)
+                degree_factor = (degrees.get(u, 0.0) + degrees.get(v, 0.0)) / (
+                    2.0 * max_degree
+                )
                 data["weight"] = base_weight * (
                     1.0 + connectivity_penalty * degree_factor
                 )
-    ec = 0  # enganglement cost starts at 0
     partitions = network.comp_qubits_per_qpu()
     print(f"Partition sizes: {partitions}")
     # print(num_partitions)
     # print(type(network_graph))
-    partition_result = kl_partition(weighted_graph, partitions=partitions)
+    kl_partition(weighted_graph, partitions=partitions)
     return partitions
     # TODO: RETURN PARTITIONS AS MAP OF QPU TO LIST OF QUBITS
     # partitiion = kl_partition(interaction_graph, partitions =)
