@@ -7,6 +7,6 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-from .dag import DAG as CircuitDAG
+from .dag import CircuitDAG
 
 __all__ = ["CircuitDAG"]
