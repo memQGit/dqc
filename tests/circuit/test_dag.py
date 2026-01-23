@@ -12,7 +12,7 @@ from qiskit import qasm3
 from qiskit.converters import circuit_to_dag
 from qiskit.dagcircuit import DAGCircuit, DAGOpNode
 
-from memq_dqc.circuit.dag import DAG
+from memq_dqc.circuit.dag import CircuitDAG as DAG
 from memq_dqc.utils.circuit_utils import load_qasm_program
 
 

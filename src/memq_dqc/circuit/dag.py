@@ -46,7 +46,7 @@ class Op:
         return len(self.qubits) == 2
 
 
-class DAG:
+class CircuitDAG:
     """Directed Acyclic Graph (DAG) for an OpenQASM 3 circuit.
 
     Args:
