@@ -107,46 +107,42 @@ class CircuitDAG:
         program = self.program
         ops: list[Op] = []
         num_qubits = 0
-        num_bits = 0
         qubits = []
-        bits = []
 
         for statement in program.statements:
             if isinstance(statement, ast.QubitDeclaration):
                 name = statement.qubit.name
                 size = 1 if statement.size is None else statement.size.value
-                for i in range(num_qubits, num_qubits + size):
-                    qubits.append(f"{name}[{i}]")
-                num_qubits += size
-            if isinstance(statement, ast.ClassicalDeclaration):
+
+                # QASM indices are 0..size-1 for that declared register
                 for i in range(size):
                     qubits.append(f"{name}[{i}]")
+
                 num_qubits += size
-            if isinstance(statement, ast.ClassicalDeclaration):
-                name = statement.classical.name
-                size = statement.classical.size.value
-                for i in range(size):
-                    bits.append(f"{name}[{i}]")
-                num_bits += size
-            if isinstance(statement, ast.QuantumGate):
+
+            elif isinstance(statement, ast.QuantumGate):
                 gate_name = statement.name.name
                 qubit_indices = [
-                    extract_qubit_index(qubit) for qubit in statement.qubits
+                    extract_qubit_index(q) for q in statement.qubits
                 ]
-                op = Op(
-                    op_id=len(ops),
-                    name=gate_name,
-                    qubits=tuple(qubit_indices),
-                    node=statement,
+                ops.append(
+                    Op(
+                        op_id=len(ops),
+                        name=gate_name,
+                        qubits=tuple(qubit_indices),
+                        node=statement,
+                    )
                 )
-                ops.append(op)
-            if isinstance(statement, ast.QuantumMeasurementStatement):
+
+            elif isinstance(statement, ast.QuantumMeasurementStatement):
                 qubit_index = extract_qubit_index(statement.measure.qubit)
-                op = Op(
-                    op_id=len(ops),
-                    name="measure",
-                    qubits=(qubit_index,),
-                    node=statement,
+                ops.append(
+                    Op(
+                        op_id=len(ops),
+                        name="measure",
+                        qubits=(qubit_index,),
+                        node=statement,
+                    )
                 )
-                ops.append(op)
+
         return ops
