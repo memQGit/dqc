@@ -68,9 +68,6 @@ class DAG:
 
         Args:
             program: Parsed OpenQASM 3 program to analyze.
-
-        Returns:
-            None.
         """
         self.program = program
         self.ops: list[Op] = self._extract_ops()
