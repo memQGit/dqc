@@ -5,14 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""DAG representation for OpenQASM 3 quantum circuits.
-
-Args:
-    None.
-
-Returns:
-    None.
-"""
+"""DAG representation for OpenQASM 3 quantum circuits."""
 
 from __future__ import annotations
 
@@ -58,9 +51,6 @@ class DAG:
 
     Args:
         program: Parsed OpenQASM 3 program to analyze.
-
-    Returns:
-        None.
     """
 
     def __init__(self, program: ast.Program) -> None:
@@ -109,10 +99,7 @@ class DAG:
 
     def _extract_ops(self) -> list[Op]:
         """Extract operations from the program in source order.
-
-        Args:
-            None.
-
+        
         Returns:
             List of extracted operations in program order.
         """
