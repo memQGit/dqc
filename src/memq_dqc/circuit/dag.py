@@ -28,14 +28,11 @@ from memq_dqc.utils import extract_qubit_index
 class Op:
     """A quantum operation in the DAG extracted from an OpenQASM circuit.
 
-    Args:
+    Attributes:
         op_id: Unique operation index in program order.
         name: Gate or instruction name.
         qubits: Qubit indices the operation applies to.
         node: Original OpenQASM AST node.
-
-    Returns:
-        None.
     """
 
     op_id: int
