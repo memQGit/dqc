@@ -119,13 +119,13 @@ class CircuitDAG:
                     qubits.append(f"{name}[{i}]")
                 num_qubits += size
             if isinstance(statement, ast.ClassicalDeclaration):
-                name = statement.identifier.name
-                size = (
-                    1
-                    if statement.type.size is None
-                    else statement.type.size.value
-                )
-                for i in range(num_bits, num_bits + size):
+                for i in range(size):
+                    qubits.append(f"{name}[{i}]")
+                num_qubits += size
+            if isinstance(statement, ast.ClassicalDeclaration):
+                name = statement.classical.name
+                size = statement.classical.size.value
+                for i in range(size):
                     bits.append(f"{name}[{i}]")
                 num_bits += size
             if isinstance(statement, ast.QuantumGate):

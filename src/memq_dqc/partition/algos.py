@@ -54,8 +54,8 @@ def cisco_algo(interaction_graph: nx.Graph, network: NetworkGraph) -> dict:
 # TODO: how to implement these algorithms in a plug-and-play way?
 def kl_partition(
     graph: nx.Graph,
-    # TODO: re-implemnt support for # partitions for uniform partitions
-    partitions: list[int],
+    # TODO: re-implement support for # partitions for uniform partitions
+    partitions: int | list[int],
     n_iter: int = 100,
     seed: int | None = 42,
 ) -> list[set[int]]:
@@ -144,7 +144,7 @@ def two_way_refine(
             for b in group_b:
                 if b in locked:
                     continue
-                # pair gain = individal gains - edge weight (* 2 for double count)
+                # pair gain = individual gains - edge weight (* 2 for double count)
                 pair_gain = D[a] + D[b] - 2 * get_edge_weight(graph, a, b)
                 if pair_gain > best_gain:
                     best_gain = pair_gain
@@ -179,7 +179,7 @@ def two_way_refine(
                 - 2 * get_edge_weight(graph, node, a)
             )
 
-    # Determine best prefix  of swaps to apply (how many of these swaps to do)
+    # Determine best prefix of swaps to apply (how many of these swaps to do)
     best_prefix_gain = 0.0
     best_prefix_length = 0  # number of swaps to apply
     current_gain = 0.0
@@ -258,14 +258,14 @@ Steps:
     a. Run algorithm 1:
         i. Construct interaction graph
         ii. Use KL algorithm to partition graph
-        iii. Obtain pertation P1
+        iii. Obtain partition P1
 4. FOR remaining subcircuits:
     a. Construct a new graph Gi where nodes are qubits involved in the subcircuit
     b. FOR each pair of qubits (u, v) in Gi:
       i. IF nodes are in same subset of partition
           - THEN add edge with weight 2x number of 2-qubit gates between them
           - ELSE add edge with weight equal to the number of CNOT gates
-    c. Apply partitioning argorithm to Gi to get new partition P_new
+    c. Apply partitioning algorithm to Gi to get new partition P_new
     d. Compute new and old entanglement costs
     e. IF new entanglement cost < old entanglement cost:
         i. THEN Update partition to P_new
