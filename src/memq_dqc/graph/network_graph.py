@@ -11,7 +11,7 @@ After describing the network topology using the GUI tool, the resulting
 JSON file is used to create a NetworkX graph representation of the network.
 The resulting graph accurately reflects local and remote connectivity.
 
-TODO: Update this docstring to be appropriate for Class descripton.
+TODO: Update this docstring to be appropriate for Class description.
 """
 
 import json
@@ -21,9 +21,16 @@ import networkx as nx
 
 
 class NetworkGraph:
-    """Represents a quantum network as a NetworkX graph with metadata."""
+    """Represents a quantum network constructed from a JSON specification.
 
-    # TODO: Update class docstring to match expected class docstring style
+    This class parses a network description JSON file and builds a
+    :class:`networkx.Graph` instance whose nodes represent qubits and whose
+    edges represent local and remote connections between those qubits.
+
+    The resulting graph and associated metadata can be accessed via
+    the ``graph`` and ``qubit_type_map`` properties and are used to
+    derive summary information such as qubit counts per QPU.
+    """
     def __init__(self, network_json_filename: str) -> None:
         """Initialize a NetworkGraph from a JSON specification file.
 

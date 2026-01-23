@@ -37,9 +37,6 @@ class Op:
     def is_two_qubit(self) -> bool:
         """Return True when the operation acts on two qubits.
 
-        Args:
-            None.
-
         Returns:
             True if the operation spans two qubits, otherwise False.
         """
@@ -54,6 +51,12 @@ class CircuitDAG:
     """
 
     def __init__(self, program: ast.Program) -> None:
+        """Initialize the DAG representation for a quantum program.
+
+        Args:
+            program: The OpenQASM 3 program from which to extract operations
+                and build the corresponding directed acyclic graph.
+        """
         """Initialize the DAG from a parsed OpenQASM program.
 
         Args:
@@ -62,8 +65,6 @@ class CircuitDAG:
         self.program = program
         self.ops: list[Op] = self._extract_ops()
         self.graph: nx.DiGraph = self._build_dag()
-
-    # Public Methods
 
     # Private Methods
     def _build_dag(self) -> nx.DiGraph:

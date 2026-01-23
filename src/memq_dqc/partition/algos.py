@@ -41,11 +41,10 @@ def cisco_algo(interaction_graph: nx.Graph, network: NetworkGraph) -> dict:
     # network_graph = network.graph
     weighted_graph = interaction_graph.copy()
 
-    #    ec = 0  # enganglement cost starts at 0
+    #    ec = 0  # entanglement cost starts at 0
     partitions = network.comp_qubits_per_qpu()
     print(f"Partition sizes: {partitions}")
     # print(num_partitions)
-    # print(type(network_graph))
     partition_result = kl_partition(weighted_graph, partitions=partitions)
     return partition_result
     # TODO: RETURN PARTITIONS AS MAP OF QPU TO LIST OF QUBITS
