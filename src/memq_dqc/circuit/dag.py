@@ -5,7 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Add appropriate docstring for class here"""
+"""DAG representation for OpenQASM 3 quantum circuits."""
 
 from __future__ import annotations
 
@@ -19,7 +19,14 @@ from memq_dqc.utils import extract_qubit_index
 
 @dataclass(frozen=True, slots=True)
 class Op:
-    """A quantum operation in the DAG, extracted from QASM circuit"""
+    """A quantum operation in the DAG extracted from an OpenQASM circuit.
+
+    Attributes:
+        op_id: Unique operation index in program order.
+        name: Gate or instruction name.
+        qubits: Qubit indices the operation applies to.
+        node: Original OpenQASM AST node.
+    """
 
     op_id: int
     name: str
@@ -28,18 +35,30 @@ class Op:
 
     @property
     def is_two_qubit(self) -> bool:
-        """Check if the operation is a two-qubit gate."""
+        """Return True when the operation acts on two qubits.
+
+        Args:
+            None.
+
+        Returns:
+            True if the operation spans two qubits, otherwise False.
+        """
         return len(self.qubits) == 2
 
 
 class DAG:
-    """TODO: Update class docstring to match expected class docstring style
+    """Directed Acyclic Graph (DAG) for an OpenQASM 3 circuit.
 
-    Directed Acyclic Graph (DAG) representation of a quantum circuit.
-
+    Args:
+        program: Parsed OpenQASM 3 program to analyze.
     """
 
     def __init__(self, program: ast.Program) -> None:
+        """Initialize the DAG from a parsed OpenQASM program.
+
+        Args:
+            program: Parsed OpenQASM 3 program to analyze.
+        """
         self.program = program
         self.ops: list[Op] = self._extract_ops()
         self.graph: nx.DiGraph = self._build_dag()
@@ -48,6 +67,14 @@ class DAG:
 
     # Private Methods
     def _build_dag(self) -> nx.DiGraph:
+        """Build the dependency graph for the circuit operations.
+
+        Args:
+            None.
+
+        Returns:
+            Directed acyclic graph of operation dependencies.
+        """
         g = nx.DiGraph()
 
         for op in self.ops:
@@ -71,7 +98,11 @@ class DAG:
         return g
 
     def _extract_ops(self) -> list[Op]:
-        """TODO: Add method docstring"""
+        """Extract operations from the program in source order.
+
+        Returns:
+            List of extracted operations in program order.
+        """
         program = self.program
         ops: list[Op] = []
         num_qubits = 0
@@ -82,13 +113,17 @@ class DAG:
         for statement in program.statements:
             if isinstance(statement, ast.QubitDeclaration):
                 name = statement.qubit.name
-                size = statement.qubit.size.value
+                size = 1 if statement.size is None else statement.size.value
                 for i in range(num_qubits, num_qubits + size):
                     qubits.append(f"{name}[{i}]")
                 num_qubits += size
             if isinstance(statement, ast.ClassicalDeclaration):
-                name = statement.classical.name
-                size = statement.classical.size.value
+                name = statement.identifier.name
+                size = (
+                    1
+                    if statement.type.size is None
+                    else statement.type.size.value
+                )
                 for i in range(num_bits, num_bits + size):
                     bits.append(f"{name}[{i}]")
                 num_bits += size
@@ -105,7 +140,7 @@ class DAG:
                 )
                 ops.append(op)
             if isinstance(statement, ast.QuantumMeasurementStatement):
-                qubit_index = extract_qubit_index(statement.measurement.qubit)
+                qubit_index = extract_qubit_index(statement.measure.qubit)
                 op = Op(
                     op_id=len(ops),
                     name="measure",
