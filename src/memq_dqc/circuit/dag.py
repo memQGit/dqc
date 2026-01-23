@@ -99,7 +99,7 @@ class DAG:
 
     def _extract_ops(self) -> list[Op]:
         """Extract operations from the program in source order.
-        
+
         Returns:
             List of extracted operations in program order.
         """
