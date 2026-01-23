@@ -10,6 +10,8 @@
 After describing the network topology using the GUI tool, the resulting
 JSON file is used to create a NetworkX graph representation of the network.
 The resulting graph accurately reflects local and remote connectivity.
+
+TODO: Update this docstring to be appropriate for Class descripton.
 """
 
 import json
@@ -21,6 +23,7 @@ import networkx as nx
 class NetworkGraph:
     """Represents a quantum network as a NetworkX graph with metadata."""
 
+    # TODO: Update class docstring to match expected class docstring style
     def __init__(self, network_json_filename: str) -> None:
         """Initialize a NetworkGraph from a JSON specification file.
 
