@@ -16,34 +16,50 @@ Typical usage example:
   TODO: Add usage example here.
 """
 
+import math
 import random
 
 import networkx as nx
 
-from memq_dqc.graph import NetworkGraph
+from memq_dqc.circuit import CircuitDAG
+from memq_dqc.graph import NetworkGraph, build_interaction_graph
 from memq_dqc.utils import (
+    create_subcircuit_graphs,
     generate_equal_partitions,
     get_edge_weight,
+    load_qasm_program,
     verify_partition_sizes,
 )
 
 
-def cisco_algo(interaction_graph: nx.Graph, network: NetworkGraph) -> dict:
+def cisco_algo(
+    circuit_filename: str, network: NetworkGraph, window_length=2
+) -> dict:
     """Partition qubits using the Cisco (TODO: cite) algorithm.
 
     Args:
-        interaction_graph (nx.Graph): The interaction graph representing qubit interactions.
+        circuit_filename (str): The filename of the quantum circuit in QASM format.
         network (NetworkGraph): The network graph representing the quantum network.
+        window_size (int): The size of the window for subcircuit partitioning.
+            # TODO: DETERMINE OPTIMAL DEFAULT WINDOW SIZE
 
     Returns:
         dict: A mapping from qubit indices to physical qubit indices.
     """
+    program = load_qasm_program(circuit_filename)
+    interaction_graph = build_interaction_graph(circuit_filename)
     # network_graph = network.graph
     weighted_graph = interaction_graph.copy()
+    dag = CircuitDAG(program)
+
+    depth = dag.depth
+    # TODO: cite this formula (cisco paper)
+    n = math.ceil(dag.num_two_qubit_gates / window_length)
+    subcircuit_graphs = create_subcircuit_graphs(dag, n, [])
 
     #    ec = 0  # entanglement cost starts at 0
     partitions = network.comp_qubits_per_qpu()
-    print(f"Partition sizes: {partitions}")
+    # print(f"Partition sizes: {partitions}")
     # print(num_partitions)
     partition_result = kl_partition(weighted_graph, partitions=partitions)
     return partition_result

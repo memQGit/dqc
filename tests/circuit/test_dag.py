@@ -67,6 +67,32 @@ def _memq_edges(dag: DAG) -> dict[tuple[int, int], set[int]]:
     return edges
 
 
+def _qiskit_layers(
+    dag: DAGCircuit,
+) -> list[frozenset[tuple[str, tuple[int, ...]]]]:
+    qubit_index = {qubit: idx for idx, qubit in enumerate(dag.qubits)}
+    layers: list[frozenset[tuple[str, tuple[int, ...]]]] = []
+    for layer in dag.layers():
+        layer_dag = layer
+        if isinstance(layer, dict):
+            layer_dag = layer.get("graph", layer)
+        nodes = list(layer_dag.op_nodes())
+        layers.append(
+            frozenset(
+                (node.name, tuple(qubit_index[q] for q in node.qargs))
+                for node in nodes
+            )
+        )
+    return layers
+
+
+def _memq_layers(dag: DAG) -> list[frozenset[tuple[str, tuple[int, ...]]]]:
+    return [
+        frozenset((op.name, op.qubits) for op in layer)
+        for layer in dag.extract_layers()
+    ]
+
+
 @pytest.mark.parametrize(
     "fixture_name",
     [
@@ -87,3 +113,56 @@ def test_dag_matches_qiskit(
     qiskit_ops = _qiskit_op_signatures(qiskit_dag, qiskit_nodes)
     assert memq_ops == qiskit_ops
     assert _memq_edges(memq_dag) == _qiskit_edges(qiskit_dag, qiskit_nodes)
+
+
+@pytest.mark.parametrize(
+    "fixture_name",
+    [
+        "bell_circuit_path",
+        "simple1_circuit_path",
+    ],
+)
+def test_depth_matches_qiskit(
+    request: pytest.FixtureRequest,
+    fixture_name: str,
+) -> None:
+    qasm_path = request.getfixturevalue(fixture_name)
+    memq_dag = _build_memq_dag(qasm_path)
+    qiskit_dag = _build_qiskit_dag(qasm_path)
+
+    assert memq_dag.depth == qiskit_dag.depth()
+
+
+@pytest.mark.parametrize(
+    "fixture_name",
+    [
+        "bell_circuit_path",
+        "simple1_circuit_path",
+    ],
+)
+def test_layers_match_qiskit(
+    request: pytest.FixtureRequest,
+    fixture_name: str,
+) -> None:
+    qasm_path = request.getfixturevalue(fixture_name)
+    memq_dag = _build_memq_dag(qasm_path)
+    qiskit_dag = _build_qiskit_dag(qasm_path)
+
+    assert _memq_layers(memq_dag) == _qiskit_layers(qiskit_dag)
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "expected_two_qubit_gates"),
+    [
+        ("simple1_circuit_path", 8),
+        ("bell_circuit_path", 1),
+    ],
+)
+def test_count_two_qubit_gates(
+    request: pytest.FixtureRequest,
+    fixture_name: str,
+    expected_two_qubit_gates: int,
+) -> None:
+    qasm_path = request.getfixturevalue(fixture_name)
+    dag = _build_memq_dag(qasm_path)
+    assert dag.num_two_qubit_gates == expected_two_qubit_gates

@@ -14,6 +14,7 @@ graph partitioning, and other common operations throughout the library.
 # Circuit utilities
 from memq_dqc.utils.circuit_utils import (
     count_total_qubits,
+    create_subcircuit_graphs,
     extract_qubit_index,
     extract_two_qubit_gates,
     load_qasm_program,
@@ -33,6 +34,7 @@ __all__ = [
     "extract_qubit_index",
     "extract_two_qubit_gates",
     "load_qasm_program",
+    "create_subcircuit_graphs",
     # Partition utilities
     "partition_cost",
     "get_edge_weight",
