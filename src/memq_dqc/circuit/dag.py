@@ -57,14 +57,12 @@ class CircuitDAG:
             program: The OpenQASM 3 program from which to extract operations
                 and build the corresponding directed acyclic graph.
         """
-        """Initialize the DAG from a parsed OpenQASM program.
-
-        Args:
-            program: Parsed OpenQASM 3 program to analyze.
-        """
         self.program = program
         self.ops: list[Op] = self._extract_ops()
+        self.num_two_qubit_gates = self._count_two_qubit_gates()
         self.graph: nx.DiGraph = self._build_dag()
+        self.layers = self._extract_layers()
+        self.depth = len(self.layers)
 
     # Private Methods
     def _build_dag(self) -> nx.DiGraph:
@@ -146,3 +144,54 @@ class CircuitDAG:
                 )
 
         return ops
+
+    def _count_two_qubit_gates(self) -> int:
+        """Count operations that act on exactly two qubits.
+
+        Returns:
+            The number of two-qubit operations in the circuit.
+        """
+        return sum(1 for op in self.ops if op.is_two_qubit)
+
+    def _extract_layers(self) -> list[list[Op]]:
+        """Extract layers of operations from the DAG.
+
+        Returns:
+            A list of layers, where each layer is a list of Ops that can be
+            executed in parallel.
+        """
+        in_degree_map = dict(self.graph.in_degree())
+        # Initial Nodes have in-degree of 0
+        degree_zero_nodes = [
+            node for node, degree in in_degree_map.items() if degree == 0
+        ]
+
+        layers: list[list[Op]] = []
+
+        while degree_zero_nodes:
+            current_layer: list[Op] = []
+            next_layer_nodes: set[int] = set()
+
+            for node in degree_zero_nodes:
+                op = self.graph.nodes[node]["op"]
+                current_layer.append(op)
+
+                # Move to next layer by reducing in-degrees of successor nodes
+                for _, succ in self.graph.edges(node):
+                    in_degree_map[succ] -= 1
+                    if in_degree_map[succ] == 0:
+                        next_layer_nodes.add(succ)
+
+            layers.append(current_layer)
+            degree_zero_nodes = list(next_layer_nodes)
+
+        return layers
+
+    def extract_layers(self) -> list[list[Op]]:
+        """Return the extracted operation layers for the circuit.
+
+        Returns:
+            A list of layers, where each layer contains operations that can be
+            executed in parallel.
+        """
+        return self.layers
