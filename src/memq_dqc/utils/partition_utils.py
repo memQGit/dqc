@@ -12,19 +12,19 @@ from __future__ import annotations
 import networkx as nx
 
 
-def partition_cost(graph: nx.Graph, partition: dict[int, set]) -> float:
+def partition_cost(graph: nx.Graph, partition: list[set[int]]) -> float:
     """Sum edge weights for edges crossing partition boundaries.
 
     Args:
         graph: The input graph.
-        partition: A mapping from partition ID to set of nodes in that partition.
+        partition: A list of sets, where each set contains the nodes in that partition.
 
     Returns:
         The total weight of edges that connect nodes in different partitions.
     """
     # Build a node->group lookup for quick checking
     group_assignment = {}
-    for group_id, nodes in partition.items():
+    for group_id, nodes in enumerate(partition):
         for node in nodes:
             group_assignment[node] = group_id
 

@@ -31,6 +31,7 @@ class NetworkGraph:
     the ``graph`` and ``qubit_type_map`` properties and are used to
     derive summary information such as qubit counts per QPU.
     """
+
     def __init__(self, network_json_filename: str) -> None:
         """Initialize a NetworkGraph from a JSON specification file.
 

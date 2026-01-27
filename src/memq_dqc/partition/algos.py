@@ -24,10 +24,16 @@ import networkx as nx
 from memq_dqc.circuit import CircuitDAG
 from memq_dqc.graph import NetworkGraph, build_interaction_graph
 from memq_dqc.utils import (
+    count_two_qubit_pairs,
+    create_initial_subcircuit_graph,
     create_subcircuit_graphs,
+    distribute,
     generate_equal_partitions,
     get_edge_weight,
     load_qasm_program,
+    movement_cost,
+    partition_cost,
+    qubit_partition_set_to_map,
     verify_partition_sizes,
 )
 
@@ -46,25 +52,86 @@ def cisco_algo(
     Returns:
         dict: A mapping from qubit indices to physical qubit indices.
     """
+    # Load circuit and build interaction graph
     program = load_qasm_program(circuit_filename)
     interaction_graph = build_interaction_graph(circuit_filename)
-    # network_graph = network.graph
-    weighted_graph = interaction_graph.copy()
+    circuit_graph = interaction_graph.copy()
+    # TODO: interaction graph needs to be object wiwth num_qubits attribute
+    num_qubits = circuit_graph.number_of_nodes()
+    # Compute logical qubits per QPU
+    partition_sizes = network.comp_qubits_per_qpu()
+
+    # Generate DAG from program
     dag = CircuitDAG(program)
-
-    depth = dag.depth
     # TODO: cite this formula (cisco paper)
-    n = math.ceil(dag.num_two_qubit_gates / window_length)
-    subcircuit_graphs = create_subcircuit_graphs(dag, n, [])
+    num_subcircuits = math.ceil(dag.num_two_qubit_gates / window_length)
+    # First, generate the initial subcircuit graph as standard interaction graph
+    initial_subcircuit = create_initial_subcircuit_graph(
+        dag, num_qubits, num_subcircuits
+    )
+    # Partition the first subcircuit graph; use partitioning for rest
+    partition_result = kl_partition(
+        initial_subcircuit, partitions=partition_sizes
+    )
 
-    #    ec = 0  # entanglement cost starts at 0
-    partitions = network.comp_qubits_per_qpu()
-    # print(f"Partition sizes: {partitions}")
-    # print(num_partitions)
-    partition_result = kl_partition(weighted_graph, partitions=partitions)
-    return partition_result
-    # TODO: RETURN PARTITIONS AS MAP OF QPU TO LIST OF QUBITS
-    # partitiion = kl_partition(interaction_graph, partitions =)
+    # Create n subcircuit graphs using the initial partition
+    subcircuit_graphs = create_subcircuit_graphs(
+        dag, num_qubits, num_subcircuits, partition_result
+    )
+
+    # Track selected partition and total entanglement cost for each window
+    total_entanglement_cost = partition_cost(
+        initial_subcircuit, partition_result
+    )
+    print("initial partition", partition_result)
+    print("\n")
+    window_partitions = [partition_result]
+    layer_sizes = distribute(dag.depth, num_subcircuits)
+
+    layer = layer_sizes[0]
+    for i, num_layers in enumerate(layer_sizes[1:], start=1):
+        partition_map = qubit_partition_set_to_map(window_partitions[i - 1])
+        end_layer = min(layer + num_layers, dag.depth)
+        combined_layers = dag.layers[layer:end_layer]
+        ops = [op for layer_ops in combined_layers for op in layer_ops]
+        two_qubit_counts = count_two_qubit_pairs(
+            op.qubits for op in ops if len(op.qubits) == 2
+        )
+        g = nx.Graph()
+        for q in range(num_qubits):
+            g.add_node(q)
+        for (k, j), count in two_qubit_counts.items():
+            weight = count
+            part_i = partition_map.get(k)
+            part_j = partition_map.get(j)
+            if part_i == part_j:
+                # Double weight to prefer non-remote gates
+                g.add_edge(k, j, weight=(weight * 2))
+            else:
+                g.add_edge(k, j, weight=weight)
+        # print edges and weights
+        print(f"Subcircuit {i} edges and weights:")
+        for u, v, data in g.edges(data=True):
+            print(f"  ({u}, {v}): weight = {data.get('weight', 1)}")
+        p_old = window_partitions[i - 1]
+        p_new = kl_partition(g, partitions=partition_sizes)
+        old_cost = partition_cost(g, p_old)
+        new_cost = partition_cost(g, p_new) + movement_cost(p_new, p_old)
+        print("old partition:", p_old, "cost:", old_cost)
+        print(
+            f"new partition: {p_new} cost: {new_cost} -> {partition_cost(g, p_new)} + {movement_cost(p_new, p_old)}"
+        )
+        print("=" * 100)
+        print("\n")
+        if new_cost < old_cost:
+            window_partitions.append(p_new)
+            total_entanglement_cost += new_cost
+        else:
+            window_partitions.append(p_old)
+            total_entanglement_cost += old_cost
+        layer = end_layer
+
+    return total_entanglement_cost, window_partitions
 
 
 # TODO: how to implement these algorithms in a plug-and-play way?
@@ -97,8 +164,6 @@ def kl_partition(
     if isinstance(partitions, int):
         # Generate equal partitions if only number specified
         partitions = generate_equal_partitions(partitions, len(nodes))
-    print(f"Partition sizes: {partitions}")
-    # Verify partition sizes if provided as list
     verify_partition_sizes(graph, partitions)
 
     num_partitions = len(partitions)
@@ -112,9 +177,8 @@ def kl_partition(
         chunk = nodes[start : start + size]
         partition_result.append(set(chunk))
         start += size
-    print(f"Initial partitions: {partition_result}")
 
-    for n in range(n_iter):
+    for _ in range(n_iter):
         cost_reduced = False
         # Consider swaps between each pair of partition groups
         for a in range(num_partitions):
@@ -128,7 +192,6 @@ def kl_partition(
                     cost_reduced = True
         # Stop iterating if no cost reduction achieved
         if not cost_reduced:
-            print(f"KL Converged after {n} iterations")
             break
 
     return partition_result
