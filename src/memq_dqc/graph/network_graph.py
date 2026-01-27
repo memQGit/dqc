@@ -5,13 +5,11 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Module for construction of network graphs from JSON specifications.
+"""Construction of network graphs from JSON specifications.
 
 After describing the network topology using the GUI tool, the resulting
 JSON file is used to create a NetworkX graph representation of the network.
-The resulting graph accurately reflects local and remote connectivity.
-
-TODO: Update this docstring to be appropriate for Class description.
+The resulting graph reflects local and remote connectivity between qubits.
 """
 
 import json
@@ -113,9 +111,7 @@ class NetworkGraph:
         """Return the number of computation qubits for each QPU.
 
         Returns:
-            A list where index i contains the number of computation qubits
-            in QPU i. For example, [3, 7, 2, 3] means QPU 0 has 3 comp
-            qubits, QPU 1 has 7, etc.
+            Counts of computation qubits per QPU, ordered by processor ID.
         """
         processors = self._network_data["processors"]
         # Sort by processor ID to ensure consistent ordering
@@ -138,9 +134,7 @@ class NetworkGraph:
         """Return the number of communication qubits for each QPU.
 
         Returns:
-            A list where index i contains the number of communication qubits
-            in QPU i. For example, [2, 1, 3, 2] means QPU 0 has 2 comm
-            qubits, QPU 1 has 1, etc.
+            Counts of communication qubits per QPU, ordered by processor ID.
         """
         processors = self._network_data["processors"]
         # Sort by processor ID to ensure consistent ordering
@@ -164,8 +158,8 @@ class NetworkGraph:
         """Return True if all QPUs have identical comp and comm qubit counts.
 
         Returns:
-            True if all QPUs have the same number of computation qubits
-            AND the same number of communication qubits. False otherwise.
+            True when computation and communication qubit counts match across
+            all QPUs.
         """
         comp_counts = self.comp_qubits_per_qpu()
         comm_counts = self.comm_qubits_per_qpu()
@@ -209,7 +203,7 @@ class NetworkGraph:
         """Get all local connection edges from the graph.
 
         Returns:
-            A list of edge tuples representing local connections.
+            Local connection edges.
         """
         return [
             (u, v)
@@ -221,7 +215,7 @@ class NetworkGraph:
         """Get all remote connection edges from the graph.
 
         Returns:
-            A list of edge tuples representing remote connections.
+            Remote connection edges.
         """
         return [
             (u, v)

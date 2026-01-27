@@ -23,13 +23,13 @@ from memq_dqc.utils import (
 
 
 def build_interaction_graph(qasm_filename: str) -> nx.Graph:
-    """Builds an interaction graph from a QASM circuit file.
+    """Build an interaction graph from a QASM circuit file.
 
     Args:
         qasm_filename: Path to the QASM circuit file.
 
     Returns:
-        An interaction graph as a NetworkX Graph object.
+        The interaction graph for the circuit.
     """
     # TODO: performance can be improved by avoiding re-parsing the file
     num_qubits = count_total_qubits(qasm_filename)
@@ -49,7 +49,7 @@ def display_interaction_graph(graph: nx.Graph) -> None:
     """Displays the interaction graph using Matplotlib.
 
     Args:
-        graph: The interaction graph as a NetworkX Graph object.
+        graph: The interaction graph to display.
     """
     pos = nx.spring_layout(graph)
     edge_labels = nx.get_edge_attributes(graph, "weight")

@@ -71,7 +71,7 @@ class Layer(Sequence[Op]):
         """Return the sorted unique qubits used by the layer.
 
         Returns:
-            Sorted list of qubit indices used by operations in the layer.
+            Sorted unique qubit indices used by operations in the layer.
         """
         return sorted({q for op in self.ops for q in op.qubits})
 
@@ -79,8 +79,8 @@ class Layer(Sequence[Op]):
 class CircuitDAG:
     """Directed Acyclic Graph (DAG) for an OpenQASM 3 circuit.
 
-    Args:
-        program: Parsed OpenQASM 3 program to analyze.
+    The DAG captures operation dependencies and provides layered views
+    suitable for scheduling and partitioning.
     """
 
     def __init__(self, program: ast.Program) -> None:
@@ -100,9 +100,6 @@ class CircuitDAG:
     # Private Methods
     def _build_dag(self) -> nx.DiGraph:
         """Build the dependency graph for the circuit operations.
-
-        Args:
-            None.
 
         Returns:
             Directed acyclic graph of operation dependencies.
@@ -133,7 +130,7 @@ class CircuitDAG:
         """Extract operations from the program in source order.
 
         Returns:
-            List of extracted operations in program order.
+            Operations extracted in program order.
         """
         program = self.program
         ops: list[Op] = []
@@ -190,8 +187,7 @@ class CircuitDAG:
         """Extract layers of operations from the DAG.
 
         Returns:
-            A list of layers, where each layer contains operations that can be
-            executed in parallel.
+            Layers of operations that can be executed in parallel.
         """
         in_degree_map = dict(self.graph.in_degree())
         # Initial Nodes have in-degree of 0
@@ -224,7 +220,6 @@ class CircuitDAG:
         """Return the extracted operation layers for the circuit.
 
         Returns:
-            A list of layers, where each layer contains operations that can be
-            executed in parallel.
+            Operation layers that can be executed in parallel.
         """
         return self.layers

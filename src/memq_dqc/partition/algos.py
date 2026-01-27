@@ -5,18 +5,13 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Partitioning algorithms for mapping logical qubits to physical qubits.
+"""Partitioning algorithms for mapping logical qubits to network resources.
 
 This module takes a graph representation of the quantum circuit and a graph
 representation of the quantum network and applies partitioning algorithms to
 map logical qubits to physical qubits in an optimized manner.
-
-Typical usage example:
-
-  TODO: Add usage example here.
 """
 
-import math
 import random
 
 import networkx as nx
@@ -24,114 +19,110 @@ import networkx as nx
 from memq_dqc.circuit import CircuitDAG
 from memq_dqc.graph import NetworkGraph, build_interaction_graph
 from memq_dqc.utils import (
-    count_two_qubit_pairs,
     create_initial_subcircuit_graph,
-    create_subcircuit_graphs,
-    distribute,
     generate_equal_partitions,
     get_edge_weight,
+    get_windows,
     load_qasm_program,
     movement_cost,
     partition_cost,
     qubit_partition_set_to_map,
     verify_partition_sizes,
 )
+from memq_dqc.utils.circuit_utils import build_window_interaction_graph
 
 
 def cisco_algo(
-    circuit_filename: str, network: NetworkGraph, window_length=2
-) -> dict:
+    circuit_filename: str,
+    network: NetworkGraph,
+    window_length: int = 2,
+    # TODO: add input for state / gate costs
+    # TODO: determine optimal window default
+) -> tuple[float, list[list[set[int]]]]:
     """Partition qubits using the Cisco (TODO: cite) algorithm.
 
     Args:
-        circuit_filename (str): The filename of the quantum circuit in QASM format.
-        network (NetworkGraph): The network graph representing the quantum network.
-        window_size (int): The size of the window for subcircuit partitioning.
-            # TODO: DETERMINE OPTIMAL DEFAULT WINDOW SIZE
+        circuit_filename: QASM file that defines the circuit.
+        network: Network graph describing available resources.
+        window_length: Number of two-qubit gates per window.
 
     Returns:
-        dict: A mapping from qubit indices to physical qubit indices.
+        Total entanglement cost and the selected partition for each window.
     """
     # Load circuit and build interaction graph
     program = load_qasm_program(circuit_filename)
     interaction_graph = build_interaction_graph(circuit_filename)
     circuit_graph = interaction_graph.copy()
     # TODO: interaction graph needs to be object wiwth num_qubits attribute
+
     num_qubits = circuit_graph.number_of_nodes()
     # Compute logical qubits per QPU
     partition_sizes = network.comp_qubits_per_qpu()
-
     # Generate DAG from program
     dag = CircuitDAG(program)
-    # TODO: cite this formula (cisco paper)
-    num_subcircuits = math.ceil(dag.num_two_qubit_gates / window_length)
-    # First, generate the initial subcircuit graph as standard interaction graph
+    # Divide circuit into windows of given length
+    windows = get_windows(dag, window_length)
+
+    # Create initial partition using first subcircuit
     initial_subcircuit = create_initial_subcircuit_graph(
-        dag, num_qubits, num_subcircuits
+        num_qubits, windows[0]
     )
     # Partition the first subcircuit graph; use partitioning for rest
     partition_result = kl_partition(
         initial_subcircuit, partitions=partition_sizes
     )
 
-    # Create n subcircuit graphs using the initial partition
-    subcircuit_graphs = create_subcircuit_graphs(
-        dag, num_qubits, num_subcircuits, partition_result
-    )
-
     # Track selected partition and total entanglement cost for each window
     total_entanglement_cost = partition_cost(
         initial_subcircuit, partition_result
     )
-    print("initial partition", partition_result)
-    print("\n")
     window_partitions = [partition_result]
-    layer_sizes = distribute(dag.depth, num_subcircuits)
 
-    layer = layer_sizes[0]
-    for i, num_layers in enumerate(layer_sizes[1:], start=1):
-        partition_map = qubit_partition_set_to_map(window_partitions[i - 1])
-        end_layer = min(layer + num_layers, dag.depth)
-        combined_layers = dag.layers[layer:end_layer]
-        ops = [op for layer_ops in combined_layers for op in layer_ops]
-        two_qubit_counts = count_two_qubit_pairs(
-            op.qubits for op in ops if len(op.qubits) == 2
-        )
-        g = nx.Graph()
-        for q in range(num_qubits):
-            g.add_node(q)
-        for (k, j), count in two_qubit_counts.items():
-            weight = count
-            part_i = partition_map.get(k)
-            part_j = partition_map.get(j)
-            if part_i == part_j:
-                # Double weight to prefer non-remote gates
-                g.add_edge(k, j, weight=(weight * 2))
-            else:
-                g.add_edge(k, j, weight=weight)
-        # print edges and weights
-        print(f"Subcircuit {i} edges and weights:")
-        for u, v, data in g.edges(data=True):
-            print(f"  ({u}, {v}): weight = {data.get('weight', 1)}")
+    # Iterate through remaining windows to refine partitioning
+    for i, ops in enumerate(windows[1:], start=1):
         p_old = window_partitions[i - 1]
-        p_new = kl_partition(g, partitions=partition_sizes)
+        partition_map = qubit_partition_set_to_map(p_old)
+        g, active_qubits = build_window_interaction_graph(ops, partition_map)
+        # No active qubits in the window, continue
+        if not active_qubits:
+            window_partitions.append(p_old)
+            #  layer = end_layer
+            continue
+
+        # Ignore unused qubits from previous partition, only consider active
+        new_partition_sizes = [len(p & active_qubits) for p in p_old]
+        # Create partition of active qubits for this window
+        p_new_active = kl_partition(g, partitions=new_partition_sizes)
+        # Fill back in the inactive qubits to get full partition at this window
+        p_new = _merge_partitions_with_active(
+            p_old, p_new_active, active_qubits
+        )
+
+        # Select partition with lower entanglement cost, add to schedule
         old_cost = partition_cost(g, p_old)
         new_cost = partition_cost(g, p_new) + movement_cost(p_new, p_old)
-        print("old partition:", p_old, "cost:", old_cost)
-        print(
-            f"new partition: {p_new} cost: {new_cost} -> {partition_cost(g, p_new)} + {movement_cost(p_new, p_old)}"
-        )
-        print("=" * 100)
-        print("\n")
-        if new_cost < old_cost:
+        if new_cost <= old_cost:
             window_partitions.append(p_new)
             total_entanglement_cost += new_cost
         else:
             window_partitions.append(p_old)
             total_entanglement_cost += old_cost
-        layer = end_layer
 
     return total_entanglement_cost, window_partitions
+
+
+def _merge_partitions_with_active(
+    p_old: list[set[int]],
+    p_new_active: list[set[int]],
+    active_qubits: set[int],
+) -> list[set[int]]:
+    """Merge active-qubit partitions into the previous full partition."""
+    p_new = [set(p) for p in p_old]
+    for idx in range(len(p_new)):
+        p_new[idx] -= active_qubits
+    for idx, part in enumerate(p_new_active):
+        p_new[idx].update(part)
+    return p_new
 
 
 # TODO: how to implement these algorithms in a plug-and-play way?
@@ -147,17 +138,14 @@ def kl_partition(
     """Generic graph partitioning using the Kernighan-Lin (KL) algorithm.
 
     Args:
-        graph (nx.Graph): The network graph representing the quantum network.
-        partitions (int | list[int]): Either the number of equal-sized partitions
-            to create (e.g., 4 creates 4 equal partitions), or a list specifying
-            the size of each partition (e.g., [3, 5, 7] creates 3 partitions of
-            sizes 3, 5, and 7 respectively).
-        n_iter (int): Number of iterations for the partitioning algorithm.
-        seed (int | None): Optional RNG seed for randomizing initial partitions.
+        graph: Graph to partition.
+        partitions: Either the number of equal-sized partitions to create or
+            explicit sizes for each partition group.
+        n_iter: Number of refinement iterations.
+        seed: Optional RNG seed for randomizing initial partitions.
 
     Returns:
-        A list of sets, where each set contains the node IDs in that partition.
-        For example: [{2, 3, 4}, {0, 1, 5}] represents two partitions.
+        Partition groups where each group contains node IDs.
     """
     nodes = [int(n) for n in graph.nodes()]
 
@@ -200,8 +188,16 @@ def kl_partition(
 def two_way_refine(
     graph: nx.Graph, group_a: set[int], group_b: set[int]
 ) -> tuple[set[int], set[int], float]:
-    # TODO: Docstring, determine where to keep / package this function
-    """Perform a two-way refinement between two groups using KL algorithm."""
+    """Perform a two-way refinement between two groups using KL algorithm.
+
+    Args:
+        graph: Graph whose cut is being refined.
+        group_a: First group of nodes.
+        group_b: Second group of nodes.
+
+    Returns:
+        The updated groups and the achieved gain.
+    """
     # Make copies to avoid modifying original sets
     group_a = set(group_a)
     group_b = set(group_b)
@@ -297,13 +293,12 @@ def compute_move_gains_for_pair(
     Positive gain means moving x to the other group reduces cut weight.
 
     Args:
-        graph: The input graph.
-        group_a: The first group of nodes.
-        group_b: The second group of nodes.
+        graph: Graph whose cut is being evaluated.
+        group_a: First group of nodes.
+        group_b: Second group of nodes.
 
     Returns:
-        Mapping from node to move gain. Positive values indicate that
-        moving the node to the opposite group reduces the cut cost.
+        Mapping from node to move gain.
     """
     gains: dict[int, float] = {}
     combined = group_a | group_b
@@ -323,34 +318,3 @@ def compute_move_gains_for_pair(
         gains[node] = external - internal
 
     return gains
-
-
-""" 
-Algorithm 3
-
-Inputs:
-circuit, window length
-Steps:
-1. divide circuit into subcircuits (C_i's) of different window lengths
-2. set entanglement cost to 0 (EC = 0)
-3. FOR the FIRST subcircuit:
-    a. Run algorithm 1:
-        i. Construct interaction graph
-        ii. Use KL algorithm to partition graph
-        iii. Obtain partition P1
-4. FOR remaining subcircuits:
-    a. Construct a new graph Gi where nodes are qubits involved in the subcircuit
-    b. FOR each pair of qubits (u, v) in Gi:
-      i. IF nodes are in same subset of partition
-          - THEN add edge with weight 2x number of 2-qubit gates between them
-          - ELSE add edge with weight equal to the number of CNOT gates
-    c. Apply partitioning algorithm to Gi to get new partition P_new
-    d. Compute new and old entanglement costs
-    e. IF new entanglement cost < old entanglement cost:
-        i. THEN Update partition to P_new
-        ii. ELSE keep old partition
-    f. Update total entanglement cost with updated partition
-5. Return total entanglement cost, final partition (for each window)
-
-
-"""

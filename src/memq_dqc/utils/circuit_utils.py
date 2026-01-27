@@ -19,7 +19,7 @@ import openqasm3
 from openqasm3 import ast
 
 if TYPE_CHECKING:
-    from memq_dqc.circuit import CircuitDAG
+    from memq_dqc.circuit import CircuitDAG, Op
 
 
 # PUBLIC METHODS
@@ -29,10 +29,10 @@ def load_qasm_program(filename: str) -> ast.Program:
     """Load an OpenQASM 3 program from a file.
 
     Args:
-        filename (str): Path to the OpenQASM 3 file.
+        filename: Path to the OpenQASM 3 file.
 
     Returns:
-        ast.Program: The parsed OpenQASM 3 program.
+        The parsed OpenQASM 3 program.
     """
     qasm_path = Path(filename)
     if not qasm_path.is_file():
@@ -47,10 +47,10 @@ def count_total_qubits(qasm_filename: str) -> int:
     """Count the total number of qubits in an OpenQASM 3 program.
 
     Args:
-        qasm_filename (str): The path to the OpenQASM 3 file.
+        qasm_filename: Path to the OpenQASM 3 file.
 
     Returns:
-        int: The total number of qubits.
+        The total number of qubits in the program.
     """
     qasm_program = load_qasm_program(qasm_filename)
     total = 0
@@ -65,10 +65,10 @@ def extract_qubit_index(index_statement: ast.IndexedIdentifier) -> int:
     """Extract the qubit index from an IndexedIdentifier.
 
     Args:
-        index_statement (ast.IndexedIdentifier): The IndexedIdentifier.
+        index_statement: Indexed identifier to extract from.
 
     Returns:
-        int: The qubit index.
+        The extracted qubit index.
     """
     if not index_statement.indices:
         raise ValueError("No indices found in the IndexedIdentifier.")
@@ -79,6 +79,14 @@ def extract_qubit_index(index_statement: ast.IndexedIdentifier) -> int:
 def count_two_qubit_pairs(
     pairs: Iterable[tuple[int, int]],
 ) -> Counter[tuple[int, int]]:
+    """Count unordered two-qubit pairs.
+
+    Args:
+        pairs: Qubit index pairs to count.
+
+    Returns:
+        Counts keyed by ordered qubit index pairs.
+    """
     counts: Counter[tuple[int, int]] = Counter()
     for i, j in pairs:
         key = (i, j) if i <= j else (j, i)
@@ -90,11 +98,10 @@ def extract_two_qubit_gates(qasm_filename: str) -> Counter:
     """Extract two-qubit gates from an OpenQASM 3 program.
 
     Args:
-        qasm_filename (str): The path to the OpenQASM 3 file.
+        qasm_filename: Path to the OpenQASM 3 file.
 
     Returns:
-        Counter: A counter of two-qubit gates in the program in the form
-                  {(i, j): count}, where (i, j) are the qubit indices.
+        Counts of two-qubit gates keyed by qubit index pairs.
     """
     qasm_program = load_qasm_program(qasm_filename)
     pairs = (
@@ -108,9 +115,7 @@ def extract_two_qubit_gates(qasm_filename: str) -> Counter:
 
 
 def create_initial_subcircuit_graph(
-    dag: CircuitDAG,
-    num_qubits: int,
-    num_subcircuits: int,
+    num_qubits: int, window: list[Op]
 ) -> nx.Graph:
     """Generate the initial interaction graph for first of n subcircuits.
 
@@ -118,25 +123,25 @@ def create_initial_subcircuit_graph(
     is then used to create the remaining n-1 subcircuit graphs afterwards.
 
     Args:
-        dag (CircuitDAG): The DAG representation of the full circuit.
-        num_qubits (int): The total number of qubits in the circuit.
-        num_subcircuits (int): The number of subcircuits to create.
+        num_qubits: Total number of qubits in the circuit.
+        window: Operations in the first subcircuit window.
 
     Returns:
-        nx.Graph: The interaction graph for the first subcircuit.
+        The interaction graph for the first subcircuit window.
 
     """
     # Compute the layer sizes for each subcircuit to determine first layer
-    depth = dag.depth
-    layer_sizes = distribute(depth, num_subcircuits)
-    start_layer = 0
-    end_layer = layer_sizes[0]
+    # depth = dag.depth
+    # layer_sizes = distribute(depth, num_subcircuits)
+    # start_layer = 0
+    # end_layer = layer_sizes[0]
 
-    # Combine layers to form the first subcircuit
-    combined_layers = dag.layers[start_layer:end_layer]
-    ops = [op for layer_ops in combined_layers for op in layer_ops]
+    # # Combine layers to form the first subcircuit
+    # combined_layers = dag.layers[start_layer:end_layer]
+    # ops = [op for layer_ops in combined_layers for op in layer_ops]
+
     two_qubit_counts = count_two_qubit_pairs(
-        op.qubits for op in ops if len(op.qubits) == 2
+        op.qubits for op in window if len(op.qubits) == 2
     )
 
     # Generate the interaction graph for the first subcircuit
@@ -149,63 +154,37 @@ def create_initial_subcircuit_graph(
     return g
 
 
-def create_subcircuit_graphs(
-    dag: CircuitDAG,
-    num_qubits: int,
-    num_subcircuits: int,
-    partition: list[set[int]],
-) -> list[nx.Graph] | tuple[list[nx.Graph], list[Counter[tuple[int, int]]]]:
-    """Create graphs representing subcircuits of a larger circuit.
-
-    These graphs have nodes representing qubits, with edge weights being either
-    the number of CNOT gates if both qubits are in the same partition, or twice
-    this number if the qubits are in different partitions.
+def build_window_interaction_graph(
+    ops: Iterable[Op],
+    partition_map: dict[int, int],
+) -> tuple[nx.Graph, set[int]]:
+    """Build a weighted interaction graph for a window of operations.
 
     Args:
-        dag (CircuitDAG): The DAG representation of the full circuit.
-        num_subcircuits (int): The number of subcircuits to create.
-        partition (list[set[int]]): The partitioning of qubits.
+        ops: Operations in the window.
+        partition_map: Mapping from qubit index to partition index.
 
     Returns:
-        list[nx.Graph]: A list of NetworkX graphs representing the subcircuits.
+        The interaction graph for the window and the active qubits.
     """
-    depth = dag.depth
-    layer_sizes = distribute(depth, num_subcircuits)
+    two_qubit_counts = count_two_qubit_pairs(
+        op.qubits for op in ops if len(op.qubits) == 2
+    )
+    active_qubits = {q for pair in two_qubit_counts.keys() for q in pair}
 
-    partition_map = qubit_partition_set_to_map(partition)
+    graph = nx.Graph()
+    for q in active_qubits:
+        graph.add_node(q)
 
-    subcircuit_graphs: list[nx.Graph] = []
+    for (i, j), count in two_qubit_counts.items():
+        weight = count
+        part_i = partition_map.get(i)
+        part_j = partition_map.get(j)
+        if part_i == part_j:
+            weight *= 2
+        graph.add_edge(i, j, weight=weight)
 
-    layer = 0
-    for num_layers in layer_sizes:
-        end_layer = min(layer + num_layers, depth)
-        combined_layers = dag.layers[layer:end_layer]
-        # Create subcircuit by combining layers
-        subcircuit_qubits = set()
-        for layer in combined_layers:
-            subcircuit_qubits.update(layer.qubits)
-        ops = [op for layer_ops in combined_layers for op in layer_ops]
-        two_qubit_counts = count_two_qubit_pairs(
-            op.qubits for op in ops if len(op.qubits) == 2
-        )
-        # Generate the interaction graph for the subcircuit
-        g = nx.Graph()
-        # Add initial nodes for all qubits in partition
-        for q in range(num_qubits):
-            g.add_node(q)
-        for (i, j), count in two_qubit_counts.items():
-            weight = count
-            part_i = partition_map.get(i)
-            part_j = partition_map.get(j)
-            if part_i == part_j:
-                # Double weight to prefer non-remote gates
-                g.add_edge(i, j, weight=(weight * 2))
-            else:
-                g.add_edge(i, j, weight=weight)
-        subcircuit_graphs.append(g)
-        layer = end_layer
-
-    return subcircuit_graphs
+    return graph, active_qubits
 
 
 def movement_cost(
@@ -215,11 +194,11 @@ def movement_cost(
     """Calculate the cost of moving qubits between partitions.
 
     Args:
-        new_partition (list[set[int]]): The new partitioning of qubits.
-        old_partition (list[set[int]]): The old partitioning of qubits.
+        new_partition: The updated partitioning of qubits.
+        old_partition: The previous partitioning of qubits.
 
     Returns:
-        float: The movement cost based on the number of qubits moved.
+        The movement cost based on the number of qubits moved.
     """
     old_qubit_to_part = qubit_partition_set_to_map(old_partition)
     new_qubit_to_part = qubit_partition_set_to_map(new_partition)
@@ -237,13 +216,13 @@ def movement_cost(
 
 
 def qubit_partition_set_to_map(partition: list[set[int]]) -> dict[int, int]:
-    """Given a partitioning of qubits in the form of a list of sets, create a map from qubit index to partition index.
+    """Create a mapping from qubit index to partition index.
 
     Args:
-        partition (list[set[int]]): The partitioning of qubits.
+        partition: Partitioning of qubits by group.
 
     Returns:
-        dict[int, int]: A mapping from qubit index to partition index.
+        The partition index for each qubit index.
     """
     qubit_to_partition: dict[int, int] = {}
     for part_idx, qubit_set in enumerate(partition):
@@ -256,13 +235,46 @@ def distribute(v: int, n: int) -> list[int]:
     """Distribute v items into n buckets as evenly as possible.
 
     Args:
-        v (int): The number of items to distribute.
-        n (int): The number of buckets.
+        v: The number of items to distribute.
+        n: The number of buckets.
 
     Returns:
-        list[int]: A list of size n, where the i-th element is the number of
-            items in the i-th bucket.
+        Bucket sizes in order.
 
     """
     q, r = divmod(v, n)
     return [q + 1 if i < r else q for i in range(n)]
+
+
+def get_windows(
+    dag: CircuitDAG,
+    window_size: int,
+) -> list[list[Op]]:
+    """Generate subcircuit windows with a target two-qubit gate count.
+
+    Args:
+        dag: Circuit DAG providing operations in program order.
+        window_size: Number of two-qubit operations per window.
+
+    Returns:
+        Operation windows in circuit order.
+    """
+    ops = dag.ops
+    windows = []
+    current_window = []
+    num_two_qubit_ops = 0
+
+    for op in ops:
+        current_window.append(op)
+        if len(op.qubits) == 2:
+            num_two_qubit_ops += 1
+        if num_two_qubit_ops == window_size:
+            windows.append(current_window)
+            current_window = []
+            num_two_qubit_ops = 0
+
+    # Add any remaining operations as the last window
+    if current_window:
+        windows.append(current_window)
+
+    return windows

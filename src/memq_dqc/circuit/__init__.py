@@ -9,4 +9,4 @@
 
 from .dag import CircuitDAG
 
-__all__ = ["CircuitDAG"]
+__all__ = ["CircuitDAG", "Op"]

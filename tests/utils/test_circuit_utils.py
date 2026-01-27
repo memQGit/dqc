@@ -8,14 +8,20 @@
 import pytest
 from openqasm3 import ast
 
-from memq_dqc.circuit.dag import CircuitDAG
+from memq_dqc.circuit import CircuitDAG
 from memq_dqc.utils import (
     count_total_qubits,
-    create_subcircuit_graphs,
+    count_two_qubit_pairs,
+    create_initial_subcircuit_graph,
+    distribute,
     extract_qubit_index,
     extract_two_qubit_gates,
+    get_windows,
     load_qasm_program,
+    movement_cost,
+    qubit_partition_set_to_map,
 )
+from memq_dqc.utils.circuit_utils import build_window_interaction_graph
 
 
 @pytest.mark.parametrize(
@@ -72,6 +78,7 @@ def test_extract_qubit_index(
 ) -> None:
     qasm_path = request.getfixturevalue(fixture_name)
     program = load_qasm_program(str(qasm_path))
+    result = None
     for statement in program.statements:
         if (
             isinstance(statement, ast.QuantumGate)
@@ -111,12 +118,6 @@ def test_extract_two_qubit_gates(
     assert gate_counts == expected_counts
 
 
-@pytest.mark.parametrize(
-    "fixture_name",
-    [
-        "simple1_circuit_path",
-    ],
-)
 def _graph_edges(graph) -> dict[tuple[int, int], int]:
     edges: dict[tuple[int, int], int] = {}
     for u, v, data in graph.edges(data=True):
@@ -125,52 +126,74 @@ def _graph_edges(graph) -> dict[tuple[int, int], int]:
     return edges
 
 
-@pytest.mark.parametrize(
-    (
-        "fixture_name",
-        "num_subcircuits",
-        "partition",
-        "expected_graphs",
-    ),
-    [
-        (
-            "bell_circuit_path",
-            1,
-            [{0}, {1}],
-            # Manually computed expected subcircuit graphs for partition above
-            [{(0, 1): 1}],
-        ),
-        (
-            "simple1_circuit_path",
-            4,
-            [{0, 1, 2}, {3, 4, 5}],
-            # Manually computed expected subcircuit graphs for partition above
-            [
-                {(0, 1): 2, (1, 2): 2},
-                {(0, 1): 2, (2, 3): 1, (3, 4): 2},
-                {(4, 5): 2},
-                {(3, 4): 2, (0, 5): 1},
-            ],
-        ),
-    ],
-)
-def test_create_subcircuit_graphs(
-    request: pytest.FixtureRequest,
-    fixture_name: str,
-    num_subcircuits: int,
-    partition: list[set[int]],
-    expected_graphs: list[dict[tuple[int, int], int]],
+def test_count_two_qubit_pairs() -> None:
+    pairs = [(1, 0), (0, 1), (2, 3)]
+    counts = count_two_qubit_pairs(pairs)
+    assert counts == {(0, 1): 2, (2, 3): 1}
+
+
+def test_create_initial_subcircuit_graph(
+    simple1_circuit_path,
 ) -> None:
-    qasm_path = request.getfixturevalue(fixture_name)
-    program = load_qasm_program(str(qasm_path))
+    program = load_qasm_program(str(simple1_circuit_path))
     dag = CircuitDAG(program)
-    dags = create_subcircuit_graphs(
-        dag,
-        num_subcircuits=num_subcircuits,
-        partition=partition,
+    windows = get_windows(dag, window_size=2)
+    graph = create_initial_subcircuit_graph(6, windows[0])
+
+    assert set(graph.nodes()) == set(range(6))
+    assert _graph_edges(graph) == {(0, 1): 1, (1, 2): 1}
+
+
+def test_build_window_interaction_graph_weights(
+    simple1_circuit_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    dag = CircuitDAG(program)
+    windows = get_windows(dag, window_size=2)
+    partition_map = {0: 0, 1: 0, 2: 1, 3: 1, 4: 1, 5: 1}
+
+    graph, active_qubits = build_window_interaction_graph(
+        windows[0], partition_map
     )
-    assert len(dags) == len(expected_graphs)
-    for graph, expected in zip(dags, expected_graphs, strict=True):
-        assert _graph_edges(graph) == expected
-        expected_nodes = {n for edge in expected for n in edge}
-        assert set(graph.nodes) == expected_nodes
+
+    assert active_qubits == {0, 1, 2}
+    assert set(graph.nodes()) == {0, 1, 2}
+    assert _graph_edges(graph) == {(0, 1): 2, (1, 2): 1}
+
+
+def test_build_window_interaction_graph_empty() -> None:
+    graph, active_qubits = build_window_interaction_graph([], {})
+
+    assert active_qubits == set()
+    assert list(graph.nodes()) == []
+    assert list(graph.edges()) == []
+
+
+def test_movement_cost() -> None:
+    old_partition = [{0, 1}, {2, 3}]
+    new_partition = [{0, 2}, {1, 3}]
+
+    assert movement_cost(new_partition, old_partition) == 2.0
+
+
+def test_qubit_partition_set_to_map() -> None:
+    partition = [{0, 2}, {1}]
+
+    assert qubit_partition_set_to_map(partition) == {0: 0, 2: 0, 1: 1}
+
+
+def test_distribute() -> None:
+    assert distribute(10, 3) == [4, 3, 3]
+    assert distribute(2, 4) == [1, 1, 0, 0]
+
+
+def test_get_windows(
+    simple1_circuit_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    dag = CircuitDAG(program)
+
+    windows = get_windows(dag, window_size=3)
+
+    assert [len(window) for window in windows] == [3, 3, 2]
+    assert sum(len(window) for window in windows) == 8
