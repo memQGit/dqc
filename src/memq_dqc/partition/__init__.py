@@ -5,12 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-# TODO: Update module docstring
-"""Partitioning algorithms for graphs.
-
-# TODO: Update module docstring
-
-"""
+"""Partitioning algorithms for interaction and network graphs."""
 
 from .algos import cisco_algo, kl_partition
 
