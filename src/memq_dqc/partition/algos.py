@@ -17,7 +17,7 @@ import random
 import networkx as nx
 
 from memq_dqc.circuit import CircuitDAG
-from memq_dqc.graph import NetworkGraph, build_interaction_graph
+from memq_dqc.graph import InteractionGraph, NetworkGraph
 from memq_dqc.utils import (
     create_initial_subcircuit_graph,
     generate_equal_partitions,
@@ -51,11 +51,10 @@ def cisco_algo(
     """
     # Load circuit and build interaction graph
     program = load_qasm_program(circuit_filename)
-    interaction_graph = build_interaction_graph(circuit_filename)
-    circuit_graph = interaction_graph.copy()
-    # TODO: interaction graph needs to be object wiwth num_qubits attribute
+    interaction_graph = InteractionGraph(circuit_filename)
+    circuit_graph = interaction_graph.graph.copy()
 
-    num_qubits = circuit_graph.number_of_nodes()
+    num_qubits = interaction_graph.num_qubits
     # Compute logical qubits per QPU
     partition_sizes = network.comp_qubits_per_qpu()
     # Generate DAG from program
