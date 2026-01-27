@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
 import networkx as nx
@@ -43,6 +44,38 @@ class Op:
         return len(self.qubits) == 2
 
 
+@dataclass(frozen=True, slots=True)
+class Layer(Sequence[Op]):
+    """A layer of operations that can be executed in parallel.
+
+    Attributes:
+        ops: Operations contained in the layer, in scheduling order.
+    """
+
+    ops: tuple[Op, ...]
+
+    def __iter__(self) -> Iterator[Op]:
+        """Return an iterator over operations in the layer."""
+        return iter(self.ops)
+
+    def __len__(self) -> int:
+        """Return the number of operations in the layer."""
+        return len(self.ops)
+
+    def __getitem__(self, index: int) -> Op:
+        """Return the operation at a given index."""
+        return self.ops[index]
+
+    @property
+    def qubits(self) -> list[int]:
+        """Return the sorted unique qubits used by the layer.
+
+        Returns:
+            Sorted list of qubit indices used by operations in the layer.
+        """
+        return sorted({q for op in self.ops for q in op.qubits})
+
+
 class CircuitDAG:
     """Directed Acyclic Graph (DAG) for an OpenQASM 3 circuit.
 
@@ -61,7 +94,7 @@ class CircuitDAG:
         self.ops: list[Op] = self._extract_ops()
         self.num_two_qubit_gates = self._count_two_qubit_gates()
         self.graph: nx.DiGraph = self._build_dag()
-        self.layers = self._extract_layers()
+        self.layers: list[Layer] = self._extract_layers()
         self.depth = len(self.layers)
 
     # Private Methods
@@ -153,11 +186,11 @@ class CircuitDAG:
         """
         return sum(1 for op in self.ops if op.is_two_qubit)
 
-    def _extract_layers(self) -> list[list[Op]]:
+    def _extract_layers(self) -> list[Layer]:
         """Extract layers of operations from the DAG.
 
         Returns:
-            A list of layers, where each layer is a list of Ops that can be
+            A list of layers, where each layer contains operations that can be
             executed in parallel.
         """
         in_degree_map = dict(self.graph.in_degree())
@@ -166,7 +199,7 @@ class CircuitDAG:
             node for node, degree in in_degree_map.items() if degree == 0
         ]
 
-        layers: list[list[Op]] = []
+        layers: list[Layer] = []
 
         while degree_zero_nodes:
             current_layer: list[Op] = []
@@ -182,12 +215,12 @@ class CircuitDAG:
                     if in_degree_map[succ] == 0:
                         next_layer_nodes.add(succ)
 
-            layers.append(current_layer)
+            layers.append(Layer(tuple(current_layer)))
             degree_zero_nodes = list(next_layer_nodes)
 
         return layers
 
-    def extract_layers(self) -> list[list[Op]]:
+    def extract_layers(self) -> list[Layer]:
         """Return the extracted operation layers for the circuit.
 
         Returns:

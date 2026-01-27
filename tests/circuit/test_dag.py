@@ -152,6 +152,25 @@ def test_layers_match_qiskit(
 
 
 @pytest.mark.parametrize(
+    "fixture_name",
+    [
+        "bell_circuit_path",
+        "simple1_circuit_path",
+    ],
+)
+def test_layer_qubits_are_sorted_unique(
+    request: pytest.FixtureRequest,
+    fixture_name: str,
+) -> None:
+    qasm_path = request.getfixturevalue(fixture_name)
+    memq_dag = _build_memq_dag(qasm_path)
+
+    for layer in memq_dag.layers:
+        expected = sorted({q for op in layer for q in op.qubits})
+        assert layer.qubits == expected
+
+
+@pytest.mark.parametrize(
     ("fixture_name", "expected_two_qubit_gates"),
     [
         ("simple1_circuit_path", 8),
