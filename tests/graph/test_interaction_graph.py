@@ -10,20 +10,20 @@ from pathlib import Path
 import networkx as nx
 import pytest
 
-from memq_dqc.graph import build_interaction_graph, display_interaction_graph
+from memq_dqc.graph import InteractionGraph
 
 
 def test_build_interaction_graph_returns_graph(
     bell_circuit_path: Path,
 ) -> None:
-    graph = build_interaction_graph(str(bell_circuit_path))
-    assert isinstance(graph, nx.Graph)
+    interaction_graph = InteractionGraph(str(bell_circuit_path))
+    assert isinstance(interaction_graph.graph, nx.Graph)
 
 
 def test_build_interaction_graph_structure_bell(
     bell_circuit_path: Path,
 ) -> None:
-    graph = build_interaction_graph(str(bell_circuit_path))
+    graph = InteractionGraph(str(bell_circuit_path)).graph
 
     # The bell.qasm circuit has 2 qubits
     assert graph.number_of_nodes() == 2
@@ -35,7 +35,7 @@ def test_build_interaction_graph_structure_bell(
 def test_build_interaction_graph_structure_simple1(
     simple1_circuit_path: Path,
 ) -> None:
-    graph = build_interaction_graph(str(simple1_circuit_path))
+    graph = InteractionGraph(str(simple1_circuit_path)).graph
 
     # The simple1.qasm circuit has 6 qubits
     assert graph.number_of_nodes() == 6
@@ -61,7 +61,7 @@ def test_display_interaction_graph(
     simple1_circuit_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    graph = build_interaction_graph(str(simple1_circuit_path))
+    interaction_graph = InteractionGraph(str(simple1_circuit_path))
 
     # Patch plt.show to prevent actual rendering during tests
     monkeypatch.setattr(
@@ -70,7 +70,7 @@ def test_display_interaction_graph(
     )
 
     try:
-        display_interaction_graph(graph)
+        interaction_graph.display()
     except Exception as e:
         raise AssertionError(
             "Displaying interaction graph raised an exception"
