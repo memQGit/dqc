@@ -14,33 +14,34 @@ qubits.
 
 import matplotlib.pyplot as plt
 import networkx as nx
+from openqasm3 import ast
 
 from memq_dqc.utils import count_total_qubits, extract_two_qubit_gates
 
 
 class InteractionGraph:
-    """Represents an interaction graph derived from a QASM circuit file.
+    """Represents an interaction graph derived from a QASM circuit.
 
     The graph is built once on initialization and can be accessed via the
     ``graph`` property. Additional metadata such as the number of qubits is
     available via properties.
     """
 
-    def __init__(self, qasm_filename: str) -> None:
-        """Initialize an InteractionGraph from a QASM circuit file.
+    def __init__(self, qasm: str | ast.Program) -> None:
+        """Initialize an InteractionGraph from a QASM circuit.
 
         Args:
-            qasm_filename: Path to the QASM circuit file.
+            qasm: QASM program or path to a QASM file.
         """
-        self._qasm_filename = qasm_filename
+        self._qasm = qasm
         self._graph = nx.Graph()
         self._num_qubits = 0
         self._build_graph()
 
     def _build_graph(self) -> None:
         """Build the NetworkX graph from the QASM circuit file."""
-        self._num_qubits = count_total_qubits(self._qasm_filename)
-        gates_count = extract_two_qubit_gates(self._qasm_filename)
+        self._num_qubits = count_total_qubits(self._qasm)
+        gates_count = extract_two_qubit_gates(self._qasm)
 
         self._graph.add_nodes_from(range(self._num_qubits))
         for (q1, q2), weight in gates_count.items():
@@ -68,9 +69,7 @@ class InteractionGraph:
             node_color="lightblue",
             node_size=500,
         )
-        nx.draw_networkx_edge_labels(
-            self._graph, pos, edge_labels=edge_labels
-        )
+        nx.draw_networkx_edge_labels(self._graph, pos, edge_labels=edge_labels)
 
         plt.title("Interaction Graph")
         plt.show()
