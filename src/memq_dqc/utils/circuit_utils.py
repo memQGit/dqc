@@ -43,16 +43,18 @@ def load_qasm_program(filename: str) -> ast.Program:
     return program
 
 
-def count_total_qubits(qasm_filename: str) -> int:
+def count_total_qubits(qasm: str | ast.Program) -> int:
     """Count the total number of qubits in an OpenQASM 3 program.
 
     Args:
-        qasm_filename: Path to the OpenQASM 3 file.
+        qasm: QASM program or path to a QASM file.
 
     Returns:
         The total number of qubits in the program.
     """
-    qasm_program = load_qasm_program(qasm_filename)
+    qasm_program = (
+        qasm if isinstance(qasm, ast.Program) else load_qasm_program(qasm)
+    )
     total = 0
     for stmt in qasm_program.statements:
         if isinstance(stmt, ast.QubitDeclaration):
@@ -94,16 +96,18 @@ def count_two_qubit_pairs(
     return counts
 
 
-def extract_two_qubit_gates(qasm_filename: str) -> Counter:
+def extract_two_qubit_gates(qasm: str | ast.Program) -> Counter:
     """Extract two-qubit gates from an OpenQASM 3 program.
 
     Args:
-        qasm_filename: Path to the OpenQASM 3 file.
+        qasm: QASM program or path to a QASM file.
 
     Returns:
         Counts of two-qubit gates keyed by qubit index pairs.
     """
-    qasm_program = load_qasm_program(qasm_filename)
+    qasm_program = (
+        qasm if isinstance(qasm, ast.Program) else load_qasm_program(qasm)
+    )
     pairs = (
         (extract_qubit_index(q0), extract_qubit_index(q1))
         for statement in qasm_program.statements

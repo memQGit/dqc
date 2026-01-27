@@ -66,6 +66,14 @@ def test_count_total_qubits(
     assert total_qubits == expected
 
 
+def test_count_total_qubits_from_program(
+    simple1_circuit_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+
+    assert count_total_qubits(program) == 6
+
+
 @pytest.mark.parametrize(
     "fixture_name",
     [
@@ -116,6 +124,14 @@ def test_extract_two_qubit_gates(
     qasm_path = request.getfixturevalue(fixture_name)
     gate_counts = extract_two_qubit_gates(str(qasm_path))
     assert gate_counts == expected_counts
+
+
+def test_extract_two_qubit_gates_from_program(
+    bell_circuit_path,
+) -> None:
+    program = load_qasm_program(str(bell_circuit_path))
+
+    assert extract_two_qubit_gates(program) == {(0, 1): 1}
 
 
 def _graph_edges(graph) -> dict[tuple[int, int], int]:

@@ -16,6 +16,13 @@ def simple1_network_path() -> Path:
 
 
 @pytest.fixture()
+def three_comp_one_comm_x2_network_path() -> Path:
+    return (
+        Path(__file__).parent / "fixtures" / "networks" / "3comp_1comm_x2.json"
+    )
+
+
+@pytest.fixture()
 def bell_circuit_path() -> Path:
     return Path(__file__).parent / "fixtures" / "circuits" / "bell.qasm"
 
