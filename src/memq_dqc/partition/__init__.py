@@ -7,6 +7,7 @@
 
 """Partitioning algorithms for interaction and network graphs."""
 
-from .algos import cisco_algo, kl_partition
+from .cisco import CiscoPartitioner
+from .partitioner import Partitioner
 
-__all__ = ["kl_partition", "cisco_algo"]
+__all__ = ["CiscoPartitioner", "Partitioner"]

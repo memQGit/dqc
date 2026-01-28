@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import pickle
 from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
@@ -25,34 +26,66 @@ if TYPE_CHECKING:
 # PUBLIC METHODS
 
 
-def load_qasm_program(filename: str) -> ast.Program:
+def load_qasm_program(filename: str, from_cache: bool = False) -> ast.Program:
     """Load an OpenQASM 3 program from a file.
 
     Args:
         filename: Path to the OpenQASM 3 file.
+        from_cache: Whether to load from a cached parsed program (used for
+        large circuits within tests)
 
     Returns:
         The parsed OpenQASM 3 program.
+
+    Notes:
+        The qv_100.qasm fixture is cached to disk under .cache/qasm to keep
+        repeated test runs fast.
     """
     qasm_path = Path(filename)
     if not qasm_path.is_file():
         raise FileNotFoundError(f"File not found: {filename}")
+    if from_cache:
+        return _load_program_from_cache(qasm_path)
     qasm_source = qasm_path.read_text(encoding="utf-8")
     program = openqasm3.parser.parse(qasm_source)
 
     return program
 
 
-def count_total_qubits(qasm_filename: str) -> int:
+def _load_program_from_cache(qasm_path: Path) -> ast.Program:
+    """Load the large programs from a cache to minimize parsing time."""
+    cache_path = Path(".cache/qasm") / (qasm_path.name + ".program.pkl")
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if cache_path.exists():
+        qasm_mtime = qasm_path.stat().st_mtime
+        cache_mtime = cache_path.stat().st_mtime
+        if cache_mtime >= qasm_mtime:
+            try:
+                with cache_path.open("rb") as handle:
+                    return pickle.load(handle)
+            except (pickle.UnpicklingError, EOFError):
+                pass
+
+    qasm_source = qasm_path.read_text(encoding="utf-8")
+    program = openqasm3.parser.parse(qasm_source)
+    with cache_path.open("wb") as handle:
+        pickle.dump(program, handle)
+    return program
+
+
+def count_total_qubits(qasm: str | ast.Program) -> int:
     """Count the total number of qubits in an OpenQASM 3 program.
 
     Args:
-        qasm_filename: Path to the OpenQASM 3 file.
+        qasm: QASM program or path to a QASM file.
 
     Returns:
         The total number of qubits in the program.
     """
-    qasm_program = load_qasm_program(qasm_filename)
+    qasm_program = (
+        qasm if isinstance(qasm, ast.Program) else load_qasm_program(qasm)
+    )
     total = 0
     for stmt in qasm_program.statements:
         if isinstance(stmt, ast.QubitDeclaration):
@@ -94,16 +127,18 @@ def count_two_qubit_pairs(
     return counts
 
 
-def extract_two_qubit_gates(qasm_filename: str) -> Counter:
+def extract_two_qubit_gates(qasm: str | ast.Program) -> Counter:
     """Extract two-qubit gates from an OpenQASM 3 program.
 
     Args:
-        qasm_filename: Path to the OpenQASM 3 file.
+        qasm: QASM program or path to a QASM file.
 
     Returns:
         Counts of two-qubit gates keyed by qubit index pairs.
     """
-    qasm_program = load_qasm_program(qasm_filename)
+    qasm_program = (
+        qasm if isinstance(qasm, ast.Program) else load_qasm_program(qasm)
+    )
     pairs = (
         (extract_qubit_index(q0), extract_qubit_index(q1))
         for statement in qasm_program.statements
@@ -209,7 +244,7 @@ def movement_cost(
         if new_qubit_to_part.get(qubit) != old_part
     )
 
-    # Cost per moved qubit can be adjusted as needed
+    # Increasing this value leads to more stationary partition
     cost_per_moved_qubit = 1.0
 
     return moved_qubits * cost_per_moved_qubit
@@ -248,13 +283,13 @@ def distribute(v: int, n: int) -> list[int]:
 
 def get_windows(
     dag: CircuitDAG,
-    window_size: int,
+    window_length: int,
 ) -> list[list[Op]]:
     """Generate subcircuit windows with a target two-qubit gate count.
 
     Args:
         dag: Circuit DAG providing operations in program order.
-        window_size: Number of two-qubit operations per window.
+        window_length: Number of two-qubit operations per window.
 
     Returns:
         Operation windows in circuit order.
@@ -268,7 +303,7 @@ def get_windows(
         current_window.append(op)
         if len(op.qubits) == 2:
             num_two_qubit_ops += 1
-        if num_two_qubit_ops == window_size:
+        if num_two_qubit_ops == window_length:
             windows.append(current_window)
             current_window = []
             num_two_qubit_ops = 0

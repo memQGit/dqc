@@ -11,6 +11,7 @@ import networkx as nx
 import pytest
 
 from memq_dqc.graph import InteractionGraph
+from memq_dqc.utils import load_qasm_program
 
 
 def test_build_interaction_graph_returns_graph(
@@ -18,6 +19,16 @@ def test_build_interaction_graph_returns_graph(
 ) -> None:
     interaction_graph = InteractionGraph(str(bell_circuit_path))
     assert isinstance(interaction_graph.graph, nx.Graph)
+
+
+def test_build_interaction_graph_from_program(
+    bell_circuit_path: Path,
+) -> None:
+    program = load_qasm_program(str(bell_circuit_path))
+    interaction_graph = InteractionGraph(program)
+
+    assert isinstance(interaction_graph.graph, nx.Graph)
+    assert interaction_graph.num_qubits == 2
 
 
 def test_build_interaction_graph_structure_bell(
