@@ -1,3 +1,5 @@
+"""Circuit-level data structures."""
+
 # ============================================================================
 # Copyright (c) 2026 memQ Inc.
 #
@@ -5,9 +7,6 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Partitioning algorithms for interaction and network graphs."""
+from .dag import CircuitDAG
 
-from .cisco import CiscoPartitioner
-from .partitioner import Partitioner
-
-__all__ = ["CiscoPartitioner", "Partitioner"]
+__all__ = ["CircuitDAG", "Op"]

@@ -1,6 +1,7 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
+*.py[cod]
 build/
 dist/
 wheels/
@@ -14,3 +15,24 @@ coverage.xml
 
 # Virtual environments
 .venv
+
+# macOS
+.DS_Store
+
+# Tox
+.tox/
+
+# VS Code (choose one approach)
+.vscode/
+
+
+# Local testing / playground scripts
+scripts/
+
+
+# Local notes
+notes.txt
+
+# CODEX
+.codex/
+AGENTS.md
