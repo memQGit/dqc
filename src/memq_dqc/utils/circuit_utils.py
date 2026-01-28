@@ -48,6 +48,11 @@ def load_qasm_program(filename: str, from_cache: bool = False) -> ast.Program:
         return _load_program_from_cache(qasm_path)
     qasm_source = qasm_path.read_text(encoding="utf-8")
     program = openqasm3.parser.parse(qasm_source)
+    num_qbit_regs = _count_qubit_declarations(program)
+    if num_qbit_regs > 1:
+        raise NotImplementedError(
+            "Multiple qubit registers are not supported yet."
+        )
 
     return program
 
@@ -165,16 +170,6 @@ def create_initial_subcircuit_graph(
         The interaction graph for the first subcircuit window.
 
     """
-    # Compute the layer sizes for each subcircuit to determine first layer
-    # depth = dag.depth
-    # layer_sizes = distribute(depth, num_subcircuits)
-    # start_layer = 0
-    # end_layer = layer_sizes[0]
-
-    # # Combine layers to form the first subcircuit
-    # combined_layers = dag.layers[start_layer:end_layer]
-    # ops = [op for layer_ops in combined_layers for op in layer_ops]
-
     two_qubit_counts = count_two_qubit_pairs(
         op.qubits for op in window if len(op.qubits) == 2
     )
@@ -313,3 +308,28 @@ def get_windows(
         windows.append(current_window)
 
     return windows
+
+
+# PRIVATE METHODS
+
+
+def _count_qubit_declarations(
+    program: ast.Program,
+) -> int:
+    """Count the total number of qubit registers in an OpenQASM 3 program.
+
+    Current implementation of compiler only supports qasm programs with a single
+    qubit register containing all qubits.
+    TODO: Extend to support multiple registers.
+
+    Args:
+        program: The OpenQASM 3 program.
+
+    Returns:
+        The total number of qubits in the program.
+    """
+    count = 0
+    for stmt in program.statements:
+        if isinstance(stmt, ast.QubitDeclaration):
+            count += 1
+    return count
