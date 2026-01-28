@@ -5,15 +5,9 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""A one-line summary of the module or program, terminated by a period.
+"""Partitioning algorithms for interaction and network graphs."""
 
-Leave one blank line.  The rest of this docstring should contain an
-overall description of the module or program.  Optionally, it may also
-contain a brief description of exported classes and functions and/or usage
-examples.
+from .cisco import CiscoPartitioner
+from .partitioner import Partitioner
 
-Typical usage example:
-
-  foo = ClassFoo()
-  bar = foo.function_bar()
-"""
+__all__ = ["CiscoPartitioner", "Partitioner"]

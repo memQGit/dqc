@@ -16,6 +16,18 @@ def simple1_network_path() -> Path:
 
 
 @pytest.fixture()
+def three_comp_one_comm_x2_network_path() -> Path:
+    return (
+        Path(__file__).parent / "fixtures" / "networks" / "3comp_1comm_x2.json"
+    )
+
+
+@pytest.fixture()
+def hundred_qubit_network_path() -> Path:
+    return Path(__file__).parent / "fixtures" / "networks" / "50x2.json"
+
+
+@pytest.fixture()
 def bell_circuit_path() -> Path:
     return Path(__file__).parent / "fixtures" / "circuits" / "bell.qasm"
 
@@ -23,3 +35,13 @@ def bell_circuit_path() -> Path:
 @pytest.fixture()
 def simple1_circuit_path() -> Path:
     return Path(__file__).parent / "fixtures" / "circuits" / "simple1.qasm"
+
+
+@pytest.fixture()
+def qv_100_circuit_path() -> Path:
+    return Path(__file__).parent / "fixtures" / "circuits" / "qv_100.qasm"
+
+
+@pytest.fixture()
+def two_reg_circuit_path() -> Path:
+    return Path(__file__).parent / "fixtures" / "circuits" / "two_reg.qasm"
