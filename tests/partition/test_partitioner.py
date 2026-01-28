@@ -26,3 +26,20 @@ def test_partitioner_cisco_default(
     assert len(schedule) == len(
         get_windows(CircuitDAG(program), window_length=2)
     )
+
+
+def test_partitioner_large_circuit(
+    qv_100_circuit_path,
+    hundred_qubit_network_path,
+) -> None:
+    program = load_qasm_program(str(qv_100_circuit_path), from_cache=True)
+    network = NetworkGraph(str(hundred_qubit_network_path))
+    partitioner = Partitioner(network, program)
+    cost, schedule = partitioner.run()
+    # For now, just confirm it runs without error
+    assert isinstance(cost, float)
+    assert schedule
+    # Make sure each window of schedule has correct number of qubits
+    for window in schedule:
+        total_qubits = sum(len(part) for part in window)
+        assert total_qubits == network.num_comp_qubits
