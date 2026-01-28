@@ -40,3 +40,8 @@ def simple1_circuit_path() -> Path:
 @pytest.fixture()
 def qv_100_circuit_path() -> Path:
     return Path(__file__).parent / "fixtures" / "circuits" / "qv_100.qasm"
+
+
+@pytest.fixture()
+def two_reg_circuit_path() -> Path:
+    return Path(__file__).parent / "fixtures" / "circuits" / "two_reg.qasm"

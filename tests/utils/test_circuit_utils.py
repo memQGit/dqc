@@ -42,6 +42,17 @@ def test_load_qasm_program(
     assert hasattr(program, "statements")
 
 
+def test_load_qasm_program_multi_reg(
+    two_reg_circuit_path,
+) -> None:
+    try:
+        load_qasm_program(str(two_reg_circuit_path))
+    except NotImplementedError:
+        pass
+    else:
+        raise AssertionError("Expected NotImplementedError was not raised.")
+
+
 def test_load_qasm_program_file_not_found() -> None:
     try:
         load_qasm_program("non_existent_file.qasm")
