@@ -50,7 +50,6 @@ def kl_partition(
     if isinstance(partitions, int):
         # Generate equal partitions if only number specified
         partitions = generate_equal_partitions(partitions, len(nodes))
-    print(partitions)
     verify_partition_sizes(graph, partitions)
 
     num_partitions = len(partitions)

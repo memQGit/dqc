@@ -213,7 +213,7 @@ def movement_cost(
         if new_qubit_to_part.get(qubit) != old_part
     )
 
-    # Cost per moved qubit can be adjusted as needed
+    # Increasing this value leads to more stationary partition
     cost_per_moved_qubit = 1.0
 
     return moved_qubits * cost_per_moved_qubit
@@ -252,13 +252,13 @@ def distribute(v: int, n: int) -> list[int]:
 
 def get_windows(
     dag: CircuitDAG,
-    window_size: int,
+    window_length: int,
 ) -> list[list[Op]]:
     """Generate subcircuit windows with a target two-qubit gate count.
 
     Args:
         dag: Circuit DAG providing operations in program order.
-        window_size: Number of two-qubit operations per window.
+        window_length: Number of two-qubit operations per window.
 
     Returns:
         Operation windows in circuit order.
@@ -272,7 +272,7 @@ def get_windows(
         current_window.append(op)
         if len(op.qubits) == 2:
             num_two_qubit_ops += 1
-        if num_two_qubit_ops == window_size:
+        if num_two_qubit_ops == window_length:
             windows.append(current_window)
             current_window = []
             num_two_qubit_ops = 0
