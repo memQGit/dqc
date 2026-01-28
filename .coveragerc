@@ -1,0 +1,11 @@
+[run]
+omit =
+    tests/*
+    **/__init__.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    if __name__ == .__main__.:
+    raise NotImplementedError
