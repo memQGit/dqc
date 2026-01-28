@@ -153,7 +153,7 @@ def test_create_initial_subcircuit_graph(
 ) -> None:
     program = load_qasm_program(str(simple1_circuit_path))
     dag = CircuitDAG(program)
-    windows = get_windows(dag, window_size=2)
+    windows = get_windows(dag, window_length=2)
     graph = create_initial_subcircuit_graph(6, windows[0])
 
     assert set(graph.nodes()) == set(range(6))
@@ -165,7 +165,7 @@ def test_build_window_interaction_graph_weights(
 ) -> None:
     program = load_qasm_program(str(simple1_circuit_path))
     dag = CircuitDAG(program)
-    windows = get_windows(dag, window_size=2)
+    windows = get_windows(dag, window_length=2)
     partition_map = {0: 0, 1: 0, 2: 1, 3: 1, 4: 1, 5: 1}
 
     graph, active_qubits = build_window_interaction_graph(
@@ -209,7 +209,7 @@ def test_get_windows(
     program = load_qasm_program(str(simple1_circuit_path))
     dag = CircuitDAG(program)
 
-    windows = get_windows(dag, window_size=3)
+    windows = get_windows(dag, window_length=3)
 
     assert [len(window) for window in windows] == [3, 3, 2]
     assert sum(len(window) for window in windows) == 8

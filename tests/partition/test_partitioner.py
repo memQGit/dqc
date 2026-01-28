@@ -17,12 +17,12 @@ def test_partitioner_cisco_default(
 ) -> None:
     program = load_qasm_program(str(simple1_circuit_path))
     network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
-
-    partitioner = Partitioner(network, program)
+    algo_args = {"window_length": 2}
+    partitioner = Partitioner(network, program, algo_kwargs=algo_args)
     cost, schedule = partitioner.run()
 
     assert isinstance(cost, float)
     assert schedule
     assert len(schedule) == len(
-        get_windows(CircuitDAG(program), window_size=2)
+        get_windows(CircuitDAG(program), window_length=2)
     )

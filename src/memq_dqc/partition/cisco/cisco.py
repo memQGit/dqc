@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import math
+
 from openqasm3 import ast
 
 from memq_dqc.circuit import CircuitDAG
@@ -34,7 +36,7 @@ class CiscoPartitioner(BasePartitioner):
         network: NetworkGraph,
         program: ast.Program,
         *,
-        window_length: int = 2,
+        window_length: int = None,
     ) -> None:
         """Initialize the Cisco partitioner.
 
@@ -53,11 +55,25 @@ class CiscoPartitioner(BasePartitioner):
             The entanglement cost and partition schedule.
         """
         num_qubits = count_total_qubits(self.program)
-        print(num_qubits)
         partition_sizes = self.network.comp_qubits_per_qpu()
         dag = CircuitDAG(self.program)
+        num_2q_ops = dag.num_two_qubit_gates
+        # Determining optimal window size
+        if self.window_length is None:
+            if num_2q_ops == 0:
+                self.window_length = 1
+            else:
+                gate_density = num_2q_ops / max(1, num_qubits)
+                density_scale = max(0.5, min(math.sqrt(gate_density), 2.0))
+                base_window = math.sqrt(num_2q_ops) * density_scale
+                min_window = 1 if num_2q_ops < 10 else 10
+                max_window = min(100, num_2q_ops)
+                self.window_length = max(
+                    min_window, min(int(round(base_window)), max_window)
+                )
+        print("window length", self.window_length)
         windows = get_windows(dag, self.window_length)
-
+        print("num windows", len(windows))
         initial_subcircuit = create_initial_subcircuit_graph(
             num_qubits, windows[0]
         )
@@ -70,6 +86,7 @@ class CiscoPartitioner(BasePartitioner):
         )
         window_partitions = [partition_result]
 
+        idx = 0
         for ops in windows[1:]:
             p_old = window_partitions[-1]
             partition_map = qubit_partition_set_to_map(p_old)
@@ -94,6 +111,7 @@ class CiscoPartitioner(BasePartitioner):
             else:
                 window_partitions.append(p_old)
                 total_entanglement_cost += old_cost
+            idx += 1
 
         return total_entanglement_cost, window_partitions
 

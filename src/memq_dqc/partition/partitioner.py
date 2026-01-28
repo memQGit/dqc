@@ -19,7 +19,7 @@ from memq_dqc.graph import NetworkGraph
 PartitionSchedule = list[list[set[int]]]
 PartitionResult = tuple[float, PartitionSchedule]
 
-_AlgorithmT = TypeVar("_AlgorithmT", bound="BasePartitioner")
+_Algorithm = TypeVar("_Algorithm", bound="BasePartitioner")
 
 
 class BasePartitioner(ABC):
@@ -53,7 +53,7 @@ class Partitioner:
         network: NetworkGraph,
         program: ast.Program,
         *,
-        algo: str | type[_AlgorithmT] | _AlgorithmT = "cisco",
+        algo: str | type[_Algorithm] | _Algorithm = "cisco",
         algo_kwargs: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the partitioner and select the algorithm.
@@ -80,7 +80,8 @@ class Partitioner:
         self,
         network: NetworkGraph,
         program: ast.Program,
-        algo: str | type[_AlgorithmT] | _AlgorithmT,
+        # Allow developers to pass custom algorithm implementations
+        algo: str | type[_Algorithm] | _Algorithm,
         algo_kwargs: dict[str, Any] | None,
     ) -> BasePartitioner:
         if isinstance(algo, BasePartitioner):
@@ -92,11 +93,11 @@ class Partitioner:
 
         algo_kwargs = algo_kwargs or {}
         if isinstance(algo, str):
-            algo_cls = _get_algorithm_class(algo)
+            algo_class = _get_algorithm_class(algo)
         else:
-            algo_cls = algo
+            algo_class = algo
 
-        return algo_cls(network, program, **algo_kwargs)
+        return algo_class(network, program, **algo_kwargs)
 
 
 def _get_algorithm_class(name: str) -> type[BasePartitioner]:
@@ -105,4 +106,6 @@ def _get_algorithm_class(name: str) -> type[BasePartitioner]:
         from memq_dqc.partition.cisco.cisco import CiscoPartitioner
 
         return CiscoPartitioner
+    if name == "genetic":
+        return NotImplementedError("Genetic algorithm not yet implemented.")
     raise ValueError(f"Unknown partitioning algorithm: {name}")
