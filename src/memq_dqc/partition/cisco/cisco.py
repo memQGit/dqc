@@ -73,8 +73,9 @@ class CiscoPartitioner(BasePartitioner):
                 )
         windows = get_windows(dag, self.window_length)
         if not windows:
-            print("No operations in circuit; returning trivial partition.")
-            return 0.0, [set(range(num_qubits))]
+            raise ValueError(
+                "No operation windows generated from the circuit."
+            )
         initial_subcircuit = create_initial_subcircuit_graph(
             num_qubits, windows[0]
         )

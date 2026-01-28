@@ -107,5 +107,5 @@ def _get_algorithm_class(name: str) -> type[BasePartitioner]:
 
         return CiscoPartitioner
     if name == "genetic":
-        return NotImplementedError("Genetic algorithm not yet implemented.")
+        raise NotImplementedError("Genetic algorithm not yet implemented.")
     raise ValueError(f"Unknown partitioning algorithm: {name}")
