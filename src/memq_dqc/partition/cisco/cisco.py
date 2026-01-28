@@ -71,9 +71,10 @@ class CiscoPartitioner(BasePartitioner):
                 self.window_length = max(
                     min_window, min(int(round(base_window)), max_window)
                 )
-        print("window length", self.window_length)
         windows = get_windows(dag, self.window_length)
-        print("num windows", len(windows))
+        if not windows:
+            print("No operations in circuit; returning trivial partition.")
+            return 0.0, [set(range(num_qubits))]
         initial_subcircuit = create_initial_subcircuit_graph(
             num_qubits, windows[0]
         )

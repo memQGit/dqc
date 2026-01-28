@@ -139,6 +139,7 @@ class CircuitDAG:
 
         for statement in program.statements:
             if isinstance(statement, ast.QubitDeclaration):
+                # TODO: Handle qubit naming / multi-registers
                 name = statement.qubit.name
                 size = 1 if statement.size is None else statement.size.value
 

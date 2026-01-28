@@ -66,7 +66,7 @@ def verify_partition_sizes(
             nodes.
     """
     if any(s < 0 for s in partition_sizes):
-        raise ValueError("All partition sizes must be positive.")
+        raise ValueError("All partition sizes must be non-negative.")
 
     nodes = [int(n) for n in graph.nodes()]
     n_nodes = len(nodes)
