@@ -5,9 +5,8 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Partitioning algorithms for interaction and network graphs."""
+"""Cisco partitioning implementation."""
 
 from .cisco import CiscoPartitioner
-from .partitioner import Partitioner
 
-__all__ = ["CiscoPartitioner", "Partitioner"]
+__all__ = ["CiscoPartitioner"]
