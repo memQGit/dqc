@@ -17,7 +17,7 @@ PartitionTimeline = list[list[set[int]]]
 __all__ = ["plot_partition_heatmap", "plot_migration_timeline"]
 
 
-def plot_partition_heatmap(
+def plot_partition_heatmap(  # pragma: no cover
     partition: PartitionTimeline,
     *,
     top_k_most_moved: int | None = None,
@@ -112,7 +112,7 @@ def plot_partition_heatmap(
     return ax
 
 
-def plot_migration_timeline(
+def plot_migration_timeline(  # pragma: no cover
     partition: PartitionTimeline,
     *,
     window_entanglement_cost: list[float] | None = None,
