@@ -7,7 +7,7 @@
 
 import networkx as nx
 
-from memq_dqc.utils import partition_cost
+from memq_dqc.partition.utils import partition_cost
 
 
 def test_partition_cost_sums_crossing_edges() -> None:

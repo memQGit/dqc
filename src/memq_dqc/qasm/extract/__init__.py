@@ -5,8 +5,14 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Public entry points for circuit extraction utilities."""
+"""Extraction helpers that operate on cleaned QASM data."""
 
-from .circuit_extractor import extract_distributed_circuit
+from memq_dqc.qasm.extract.extract_utils import (
+    identify_remote_gates,
+    identify_state_tele_ops,
+)
 
-__all__ = ["extract_distributed_circuit"]
+__all__ = [
+    "identify_remote_gates",
+    "identify_state_tele_ops",
+]

@@ -5,7 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Utility functions for graph partitioning."""
+"""Partitioning helper utilities."""
 
 from __future__ import annotations
 
@@ -22,8 +22,7 @@ def partition_cost(graph: nx.Graph, partition: list[set[int]]) -> float:
     Returns:
         The total weight of edges that connect different groups.
     """
-    # Build a node->group lookup for quick checking
-    group_assignment = {}
+    group_assignment: dict[int, int] = {}
     for group_id, nodes in enumerate(partition):
         for node in nodes:
             group_assignment[node] = group_id

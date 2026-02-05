@@ -16,7 +16,7 @@ import random
 
 import networkx as nx
 
-from memq_dqc.utils import (
+from memq_dqc.partition.utils import (
     generate_equal_partitions,
     get_edge_weight,
     verify_partition_sizes,

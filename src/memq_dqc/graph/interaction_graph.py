@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 from openqasm3 import ast
 
-from memq_dqc.utils import count_total_qubits, extract_two_qubit_gates
+from memq_dqc.qasm import count_total_qubits, extract_two_qubit_gates
 
 
 class InteractionGraph:

@@ -11,7 +11,7 @@ import networkx as nx
 import pytest
 
 from memq_dqc.graph import InteractionGraph
-from memq_dqc.utils import load_qasm_program
+from memq_dqc.io.qasm import load_qasm_program
 
 
 def test_build_interaction_graph_returns_graph(

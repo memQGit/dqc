@@ -9,78 +9,22 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
-
 import networkx as nx
 from openqasm3 import ast
 
-from memq_dqc.utils import extract_qubit_index
-
-
-@dataclass(frozen=True, slots=True)
-class Op:
-    """A quantum operation in the DAG extracted from an OpenQASM circuit.
-
-    Attributes:
-        op_id: Unique operation index in program order.
-        name: Gate or instruction name.
-        qubits: Qubit indices the operation applies to.
-        node: Original OpenQASM AST node.
-    """
-
-    op_id: int
-    name: str
-    qubits: tuple[int, ...]
-    node: ast.QASMNode
-
-    @property
-    def is_two_qubit(self) -> bool:
-        """Return True when the operation acts on two qubits.
-
-        Returns:
-            True if the operation spans two qubits, otherwise False.
-        """
-        return len(self.qubits) == 2
-
-
-@dataclass(frozen=True, slots=True)
-class Layer(Sequence[Op]):
-    """A layer of operations that can be executed in parallel.
-
-    Attributes:
-        ops: Operations contained in the layer, in scheduling order.
-    """
-
-    ops: tuple[Op, ...]
-
-    def __iter__(self) -> Iterator[Op]:
-        """Return an iterator over operations in the layer."""
-        return iter(self.ops)
-
-    def __len__(self) -> int:
-        """Return the number of operations in the layer."""
-        return len(self.ops)
-
-    def __getitem__(self, index: int) -> Op:
-        """Return the operation at a given index."""
-        return self.ops[index]
-
-    @property
-    def qubits(self) -> list[int]:
-        """Return the sorted unique qubits used by the layer.
-
-        Returns:
-            Sorted unique qubit indices used by operations in the layer.
-        """
-        return sorted({q for op in self.ops for q in op.qubits})
+from memq_dqc.circuit.layers import Layer
+from memq_dqc.circuit.ops import Op
+from memq_dqc.qasm.cleaning import CleanedQuantumGate, CleanedStatement
+from memq_dqc.qasm.types import Qubit
+from memq_dqc.qasm.types import Qubit
+from memq_dqc.qasm import extract_cleaned_statements
 
 
 class CircuitDAG:
     """Directed Acyclic Graph (DAG) for an OpenQASM 3 circuit.
 
-    The DAG captures operation dependencies and provides layered views
-    suitable for scheduling and partitioning.
+    The DAG captures operation dependencies and provstatement_ides layered views
+    suitable f.or scheduling and partitioning.
     """
 
     def __init__(self, program: ast.Program) -> None:
@@ -91,6 +35,7 @@ class CircuitDAG:
                 and build the corresponding directed acyclic graph.
         """
         self.program = program
+        self.statements = extract_cleaned_statements(program)
         self.ops: list[Op] = self._extract_ops()
         self.num_two_qubit_gates = self._count_two_qubit_gates()
         self.graph: nx.DiGraph = self._build_dag()
@@ -110,7 +55,7 @@ class CircuitDAG:
             g.add_node(op.op_id, op=op, name=op.name, qubits=op.qubits)
 
         # track last operation on each qubit
-        last_op_on_qubit: dict[int, int] = {}
+        last_op_on_qubit: dict[Qubit, int] = {}
         for op in self.ops:
             for q in op.qubits:
                 # Previous op exists on this qubit, so current op depends on it
@@ -136,44 +81,42 @@ class CircuitDAG:
         ops: list[Op] = []
         num_qubits = 0
         qubits = []
+        statements = self.statements
 
-        for statement in program.statements:
-            if isinstance(statement, ast.QubitDeclaration):
-                # TODO: Handle qubit naming / multi-registers
-                name = statement.qubit.name
-                size = 1 if statement.size is None else statement.size.value
-
-                # QASM indices are 0..size-1 for that declared register
-                for i in range(size):
-                    qubits.append(f"{name}[{i}]")
-
-                num_qubits += size
-
-            elif isinstance(statement, ast.QuantumGate):
-                gate_name = statement.name.name
-                qubit_indices = [
-                    extract_qubit_index(q) for q in statement.qubits
-                ]
-                ops.append(
-                    Op(
-                        op_id=len(ops),
-                        name=gate_name,
-                        qubits=tuple(qubit_indices),
-                        node=statement,
+        # Extract operations (gates & measurements) from statements
+        for statement_id, statement in enumerate(statements):
+            if statement is None:
+                continue
+            if statement.is_op:
+                op_id = len(ops)
+                if statement.name == "measure":
+                    ops.append(
+                        Op(
+                            op_id=op_id,
+                            statement_id=statement_id,
+                            name=statement.name,
+                            qubits=(
+                                Qubit(
+                                    statement.qubit.register_name,
+                                    statement.qubit.index,
+                                ),
+                            ),
+                            node=statement.node,
+                        )
                     )
-                )
-
-            elif isinstance(statement, ast.QuantumMeasurementStatement):
-                qubit_index = extract_qubit_index(statement.measure.qubit)
-                ops.append(
-                    Op(
-                        op_id=len(ops),
-                        name="measure",
-                        qubits=(qubit_index,),
-                        node=statement,
+                else:
+                    ops.append(
+                        Op(
+                            op_id=op_id,
+                            statement_id=statement_id,
+                            name=statement.name,
+                            qubits=tuple(
+                                Qubit(q.register_name, q.index)
+                                for q in statement.qubits
+                            ),
+                            node=statement.node,
+                        )
                     )
-                )
-
         return ops
 
     def _count_two_qubit_gates(self) -> int:
@@ -224,3 +167,97 @@ class CircuitDAG:
             Operation layers that can be executed in parallel.
         """
         return self.layers
+
+
+class DistributedCircuitDAG(CircuitDAG):
+    """DAG representation with remote gate names applied.
+
+    Attributes:
+        num_remote_gates: Number of operations tagged as remote gates.
+    """
+
+    def __init__(
+        self,
+        base_dag: CircuitDAG,
+        remote_statement_ids: set[int],
+    ) -> None:
+        """Initialize a distributed DAG from an existing DAG.
+
+        Args:
+            base_dag: Original circuit DAG.
+            remote_statement_ids: Statement indices to rename as remote gates.
+        """
+        self.program = base_dag.program
+        self.statements = self._build_statements(
+            base_dag.statements,
+            remote_statement_ids,
+        )
+        self.ops = self._build_ops(base_dag.ops, remote_statement_ids)
+        self.num_remote_gates = self._count_remote_gates(
+            remote_statement_ids
+        )
+        self.num_two_qubit_gates = self._count_two_qubit_gates()
+        self.graph = self._build_dag()
+        self.layers = self._extract_layers()
+        self.depth = len(self.layers)
+
+    @staticmethod
+    def _build_statements(
+        statements: list[CleanedStatement],
+        remote_statement_ids: set[int],
+    ) -> list[CleanedStatement]:
+        distributed_statements = []
+        for idx, statement in enumerate(statements):
+            if idx in remote_statement_ids and isinstance(
+                statement, CleanedQuantumGate
+            ):
+                distributed_statements.append(
+                    CleanedQuantumGate(
+                        statement_type=statement.statement_type,
+                        node=statement.node,
+                        is_op=statement.is_op,
+                        name=f"r{statement.name}",
+                        qubits=statement.qubits,
+                    )
+                )
+            else:
+                distributed_statements.append(statement)
+        return distributed_statements
+
+    @staticmethod
+    def _build_ops(
+        ops: list[Op],
+        remote_statement_ids: set[int],
+    ) -> list[Op]:
+        distributed_ops = []
+        for op in ops:
+            name = op.name
+            if op.statement_id in remote_statement_ids:
+                name = f"r{name}"
+            distributed_ops.append(
+                Op(
+                    op_id=op.op_id,
+                    statement_id=op.statement_id,
+                    name=name,
+                    qubits=op.qubits,
+                    node=op.node,
+                )
+            )
+        return distributed_ops
+
+    def _count_remote_gates(
+        self,
+        remote_statement_ids: set[int],
+    ) -> int:
+        """Count operations marked as remote.
+
+        Args:
+            remote_statement_ids: Statement indices corresponding to remote
+                operations.
+
+        Returns:
+            The number of operations tagged as remote gates.
+        """
+        return sum(
+            1 for op in self.ops if op.statement_id in remote_statement_ids
+        )
