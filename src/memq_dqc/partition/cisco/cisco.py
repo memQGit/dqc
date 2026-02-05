@@ -16,14 +16,14 @@ from openqasm3 import ast
 from memq_dqc.circuit import CircuitDAG
 from memq_dqc.graph import NetworkGraph
 from memq_dqc.partition.algos import kl_partition
-from memq_dqc.partition.partitioner import BasePartitioner, PartitionResult
+from memq_dqc.partition.partitioner import BasePartitioner
+from memq_dqc.partition.utils import partition_cost
+from memq_dqc.qasm import count_total_qubits
 from memq_dqc.utils import (
-    count_total_qubits,
     create_initial_subcircuit_graph,
     get_windows,
     movement_cost,
-    partition_cost,
-    qubit_partition_set_to_map,
+    qubit_partition_map,
 )
 from memq_dqc.utils.circuit_utils import build_window_interaction_graph
 
@@ -48,15 +48,15 @@ class CiscoPartitioner(BasePartitioner):
         super().__init__(network, program)
         self.window_length = window_length
 
-    def run(self) -> PartitionResult:
+    def run(self) -> None:
         """Run the Cisco partitioning algorithm.
 
-        Returns:
-            The entanglement cost and partition schedule.
+        Updates:
+            cost, schedule, and windows with the latest partitioning results.
         """
         num_qubits = count_total_qubits(self.program)
         partition_sizes = self.network.comp_qubits_per_qpu()
-        dag = CircuitDAG(self.program)
+        dag = self.dag
         num_2q_ops = dag.num_two_qubit_gates
         # Determining optimal window size
         if self.window_length is None:
@@ -76,6 +76,7 @@ class CiscoPartitioner(BasePartitioner):
             raise ValueError(
                 "No operation windows generated from the circuit."
             )
+        self.windows = windows
         initial_subcircuit = create_initial_subcircuit_graph(
             num_qubits, windows[0]
         )
@@ -88,10 +89,9 @@ class CiscoPartitioner(BasePartitioner):
         )
         window_partitions = [partition_result]
 
-        idx = 0
         for ops in windows[1:]:
             p_old = window_partitions[-1]
-            partition_map = qubit_partition_set_to_map(p_old)
+            partition_map = qubit_partition_map(p_old)
             g, active_qubits = build_window_interaction_graph(
                 ops, partition_map
             )
@@ -113,9 +113,9 @@ class CiscoPartitioner(BasePartitioner):
             else:
                 window_partitions.append(p_old)
                 total_entanglement_cost += old_cost
-            idx += 1
 
-        return total_entanglement_cost, window_partitions
+        self.cost = total_entanglement_cost
+        self.schedule = window_partitions
 
 
 def _merge_partitions_with_active(

@@ -5,8 +5,8 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Public entry points for circuit extraction utilities."""
+"""Input/output helpers for memq-dqc."""
 
-from .circuit_extractor import extract_distributed_circuit
+from memq_dqc.io.qasm import load_qasm_program
 
-__all__ = ["extract_distributed_circuit"]
+__all__ = ["load_qasm_program"]

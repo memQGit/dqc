@@ -5,7 +5,9 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Partitioner interfaces and orchestration helpers."""
+"""Partitioner interfaces. Goal of partitioner is to create standardized
+entry point for different partitioning algorithms, providing them with all
+of the necessary data to perform partitioning."""
 
 from __future__ import annotations
 
@@ -14,10 +16,11 @@ from typing import Any, TypeVar
 
 from openqasm3 import ast
 
+from memq_dqc.circuit import CircuitDAG, Op
 from memq_dqc.graph import NetworkGraph
 
 PartitionSchedule = list[list[set[int]]]
-PartitionResult = tuple[float, PartitionSchedule]
+PartitionWindows = list[list[Op]]
 
 _Algorithm = TypeVar("_Algorithm", bound="BasePartitioner")
 
@@ -34,13 +37,17 @@ class BasePartitioner(ABC):
         """
         self.network = network
         self.program = program
+        self.dag = CircuitDAG(program)
+        self.cost: float | None = None
+        self.schedule: PartitionSchedule | None = None
+        self.windows: PartitionWindows | None = None
 
     @abstractmethod
-    def run(self) -> PartitionResult:
+    def run(self) -> None:
         """Run the partitioning algorithm.
 
-        Returns:
-            The entanglement cost and partition schedule.
+        Updates:
+            cost, schedule, and windows with the latest partitioning results.
         """
         raise NotImplementedError
 
@@ -68,13 +75,33 @@ class Partitioner:
             network, program, algo, algo_kwargs
         )
 
-    def run(self) -> PartitionResult:
+    def run(self) -> None:
         """Run the configured partitioning algorithm.
 
-        Returns:
-            The entanglement cost and partition schedule.
+        Updates:
+            cost, schedule, and windows with the latest partitioning results.
         """
-        return self._algorithm.run()
+        self._algorithm.run()
+
+    @property
+    def cost(self) -> float | None:
+        """Return the latest entanglement cost, if available."""
+        return self._algorithm.cost
+
+    @property
+    def schedule(self) -> PartitionSchedule | None:
+        """Return the latest partition schedule, if available."""
+        return self._algorithm.schedule
+
+    @property
+    def windows(self) -> PartitionWindows | None:
+        """Return the latest operation windows, if available."""
+        return self._algorithm.windows
+
+    @property
+    def dag(self) -> CircuitDAG:
+        """Return the circuit DAG for the configured program."""
+        return self._algorithm.dag
 
     def _resolve_algorithm(
         self,

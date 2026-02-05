@@ -9,109 +9,18 @@
 
 from __future__ import annotations
 
-import pickle
 from collections import Counter
 from collections.abc import Iterable
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import networkx as nx
-import openqasm3
-from openqasm3 import ast
+
 
 if TYPE_CHECKING:
     from memq_dqc.circuit import CircuitDAG, Op
 
 
 # PUBLIC METHODS
-
-
-def load_qasm_program(filename: str, from_cache: bool = False) -> ast.Program:
-    """Load an OpenQASM 3 program from a file.
-
-    Args:
-        filename: Path to the OpenQASM 3 file.
-        from_cache: Whether to load from a cached parsed program (used for
-        large circuits within tests)
-
-    Returns:
-        The parsed OpenQASM 3 program.
-
-    Notes:
-        The qv_100.qasm fixture is cached to disk under .cache/qasm to keep
-        repeated test runs fast.
-    """
-    qasm_path = Path(filename)
-    if not qasm_path.is_file():
-        raise FileNotFoundError(f"File not found: {filename}")
-    if from_cache:
-        return _load_program_from_cache(qasm_path)
-    qasm_source = qasm_path.read_text(encoding="utf-8")
-    program = openqasm3.parser.parse(qasm_source)
-    num_qbit_regs = _count_qubit_declarations(program)
-    if num_qbit_regs > 1:
-        raise NotImplementedError(
-            "Multiple qubit registers are not supported yet."
-        )
-
-    return program
-
-
-def _load_program_from_cache(qasm_path: Path) -> ast.Program:
-    """Load the large programs from a cache to minimize parsing time."""
-    cache_path = Path(".cache/qasm") / (qasm_path.name + ".program.pkl")
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if cache_path.exists():
-        qasm_mtime = qasm_path.stat().st_mtime
-        cache_mtime = cache_path.stat().st_mtime
-        if cache_mtime >= qasm_mtime:
-            try:
-                with cache_path.open("rb") as handle:
-                    return pickle.load(handle)
-            except (pickle.UnpicklingError, EOFError):
-                pass
-
-    qasm_source = qasm_path.read_text(encoding="utf-8")
-    program = openqasm3.parser.parse(qasm_source)
-    with cache_path.open("wb") as handle:
-        pickle.dump(program, handle)
-    return program
-
-
-def count_total_qubits(qasm: str | ast.Program) -> int:
-    """Count the total number of qubits in an OpenQASM 3 program.
-
-    Args:
-        qasm: QASM program or path to a QASM file.
-
-    Returns:
-        The total number of qubits in the program.
-    """
-    qasm_program = (
-        qasm if isinstance(qasm, ast.Program) else load_qasm_program(qasm)
-    )
-    total = 0
-    for stmt in qasm_program.statements:
-        if isinstance(stmt, ast.QubitDeclaration):
-            total += stmt.size.value
-
-    return total
-
-
-def extract_qubit_index(index_statement: ast.IndexedIdentifier) -> int:
-    """Extract the qubit index from an IndexedIdentifier.
-
-    Args:
-        index_statement: Indexed identifier to extract from.
-
-    Returns:
-        The extracted qubit index.
-    """
-    if not index_statement.indices:
-        raise ValueError("No indices found in the IndexedIdentifier.")
-
-    return int(index_statement.indices[0][0].value)
 
 
 def count_two_qubit_pairs(
@@ -132,28 +41,6 @@ def count_two_qubit_pairs(
     return counts
 
 
-def extract_two_qubit_gates(qasm: str | ast.Program) -> Counter:
-    """Extract two-qubit gates from an OpenQASM 3 program.
-
-    Args:
-        qasm: QASM program or path to a QASM file.
-
-    Returns:
-        Counts of two-qubit gates keyed by qubit index pairs.
-    """
-    qasm_program = (
-        qasm if isinstance(qasm, ast.Program) else load_qasm_program(qasm)
-    )
-    pairs = (
-        (extract_qubit_index(q0), extract_qubit_index(q1))
-        for statement in qasm_program.statements
-        if isinstance(statement, ast.QuantumGate)
-        and len(statement.qubits) == 2
-        for q0, q1 in [statement.qubits]
-    )
-    return count_two_qubit_pairs(pairs)
-
-
 def create_initial_subcircuit_graph(
     num_qubits: int, window: list[Op]
 ) -> nx.Graph:
@@ -171,7 +58,7 @@ def create_initial_subcircuit_graph(
 
     """
     two_qubit_counts = count_two_qubit_pairs(
-        op.qubits for op in window if len(op.qubits) == 2
+        op.qubit_indices for op in window if len(op.qubits) == 2
     )
 
     # Generate the interaction graph for the first subcircuit
@@ -198,7 +85,7 @@ def build_window_interaction_graph(
         The interaction graph for the window and the active qubits.
     """
     two_qubit_counts = count_two_qubit_pairs(
-        op.qubits for op in ops if len(op.qubits) == 2
+        op.qubit_indices for op in ops if len(op.qubits) == 2
     )
     active_qubits = {q for pair in two_qubit_counts.keys() for q in pair}
 
@@ -230,8 +117,8 @@ def movement_cost(
     Returns:
         The movement cost based on the number of qubits moved.
     """
-    old_qubit_to_part = qubit_partition_set_to_map(old_partition)
-    new_qubit_to_part = qubit_partition_set_to_map(new_partition)
+    old_qubit_to_part = qubit_partition_map(old_partition)
+    new_qubit_to_part = qubit_partition_map(new_partition)
 
     moved_qubits = sum(
         1
@@ -245,7 +132,7 @@ def movement_cost(
     return moved_qubits * cost_per_moved_qubit
 
 
-def qubit_partition_set_to_map(partition: list[set[int]]) -> dict[int, int]:
+def qubit_partition_map(partition: list[set[int]]) -> dict[int, int]:
     """Create a mapping from qubit index to partition index.
 
     Args:
@@ -313,23 +200,12 @@ def get_windows(
 # PRIVATE METHODS
 
 
-def _count_qubit_declarations(
-    program: ast.Program,
-) -> int:
-    """Count the total number of qubit registers in an OpenQASM 3 program.
-
-    Current implementation of compiler only supports qasm programs with a single
-    qubit register containing all qubits.
-    TODO: Extend to support multiple registers.
-
-    Args:
-        program: The OpenQASM 3 program.
-
-    Returns:
-        The total number of qubits in the program.
-    """
-    count = 0
-    for stmt in program.statements:
-        if isinstance(stmt, ast.QubitDeclaration):
-            count += 1
-    return count
+__all__ = [
+    "build_window_interaction_graph",
+    "count_two_qubit_pairs",
+    "create_initial_subcircuit_graph",
+    "distribute",
+    "get_windows",
+    "movement_cost",
+    "qubit_partition_map",
+]
