@@ -9,10 +9,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import matplotlib.pyplot as plt
 import numpy as np
 
-PartitionTimeline = list[list[set[int]]]
+if TYPE_CHECKING:
+    from memq_dqc.partition.types import QPU
+
+PartitionTimeline = list[dict["QPU", set[int]]]
 
 __all__ = ["plot_partition_heatmap", "plot_migration_timeline"]
 
@@ -177,19 +182,22 @@ def _assignments_and_qpu_count(
         raise ValueError("partition windows must include at least one QPU")
 
     assignments: list[dict[int, int]] = []
+    qpu_ids = {qpu.id for qpu in partition[0].keys()}
     for window_idx, window in enumerate(partition):
         if len(window) != num_qpus:
             raise ValueError("All windows must have the same QPU count")
 
         mapping: dict[int, int] = {}
-        for qpu_idx, qubits in enumerate(window):
+        if {qpu.id for qpu in window.keys()} != qpu_ids:
+            raise ValueError("All windows must use the same QPU identifiers")
+        for qpu, qubits in window.items():
             for qubit in qubits:
                 if qubit in mapping:
                     raise ValueError(
                         "Qubit assigned to multiple QPUs in "
                         f"window {window_idx}."
                     )
-                mapping[qubit] = qpu_idx
+                mapping[qubit] = qpu.id
         assignments.append(mapping)
 
     return assignments, num_qpus

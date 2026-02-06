@@ -7,7 +7,20 @@
 
 """Partitioning algorithms for interaction and network graphs."""
 
-from .cisco import CiscoPartitioner
-from .partitioner import Partitioner
+from typing import TYPE_CHECKING
 
-__all__ = ["CiscoPartitioner", "Partitioner"]
+from .partitioner import Partitioner
+from .types import QPU
+
+if TYPE_CHECKING:
+    from .cisco import CiscoPartitioner
+
+__all__ = ["CiscoPartitioner", "Partitioner", "QPU"]
+
+
+def __getattr__(name: str) -> object:  # pragma: no cover
+    if name == "CiscoPartitioner":
+        from .cisco import CiscoPartitioner
+
+        return CiscoPartitioner
+    raise AttributeError(name)

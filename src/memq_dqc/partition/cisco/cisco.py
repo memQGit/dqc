@@ -13,10 +13,9 @@ import math
 
 from openqasm3 import ast
 
-from memq_dqc.circuit import CircuitDAG
 from memq_dqc.graph import NetworkGraph
 from memq_dqc.partition.algos import kl_partition
-from memq_dqc.partition.partitioner import BasePartitioner
+from memq_dqc.partition.partitioner import QPU, BasePartitioner
 from memq_dqc.partition.utils import partition_cost
 from memq_dqc.qasm import count_total_qubits
 from memq_dqc.utils import (
@@ -77,6 +76,7 @@ class CiscoPartitioner(BasePartitioner):
                 "No operation windows generated from the circuit."
             )
         self.windows = windows
+        qpus = [QPU(id=idx) for idx in range(len(partition_sizes))]
         initial_subcircuit = create_initial_subcircuit_graph(
             num_qubits, windows[0]
         )
@@ -115,7 +115,7 @@ class CiscoPartitioner(BasePartitioner):
                 total_entanglement_cost += old_cost
 
         self.cost = total_entanglement_cost
-        self.schedule = window_partitions
+        self.schedule = _build_schedule(window_partitions, qpus)
 
 
 def _merge_partitions_with_active(
@@ -130,3 +130,14 @@ def _merge_partitions_with_active(
     for idx, part in enumerate(p_new_active):
         p_new[idx].update(part)
     return p_new
+
+
+def _build_schedule(
+    partitions: list[list[set[int]]],
+    qpus: list[QPU],
+) -> list[dict[QPU, set[int]]]:
+    """Convert partitions to a schedule keyed by QPU objects."""
+    return [
+        {qpu: set(part) for qpu, part in zip(qpus, partition, strict=True)}
+        for partition in partitions
+    ]

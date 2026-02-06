@@ -19,7 +19,6 @@ from memq_dqc.utils.circuit_utils import (
     get_windows,
     movement_cost,
 )
-
 from memq_dqc.utils.common import qubit_partition_map, window_op_map
 
 __all__ = [
