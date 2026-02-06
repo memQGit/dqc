@@ -15,9 +15,10 @@ from typing import TYPE_CHECKING
 
 import networkx as nx
 
-
 if TYPE_CHECKING:
-    from memq_dqc.circuit import CircuitDAG, Op
+    from memq_dqc.circuit.dag import CircuitDAG
+    from memq_dqc.circuit.ops import Op
+    from memq_dqc.partition.types import QPU
 
 
 # PUBLIC METHODS
@@ -105,8 +106,8 @@ def build_window_interaction_graph(
 
 
 def movement_cost(
-    new_partition: list[set[int]],
-    old_partition: list[set[int]],
+    new_partition: list[set[int]] | dict[QPU, set[int]],
+    old_partition: list[set[int]] | dict[QPU, set[int]],
 ) -> float:
     """Calculate the cost of moving qubits between partitions.
 
@@ -126,13 +127,17 @@ def movement_cost(
         if new_qubit_to_part.get(qubit) != old_part
     )
 
+    print("num moved qubits:", moved_qubits)
+
     # Increasing this value leads to more stationary partition
     cost_per_moved_qubit = 1.0
 
     return moved_qubits * cost_per_moved_qubit
 
 
-def qubit_partition_map(partition: list[set[int]]) -> dict[int, int]:
+def qubit_partition_map(
+    partition: list[set[int]] | dict[QPU, set[int]],
+) -> dict[int, int]:
     """Create a mapping from qubit index to partition index.
 
     Args:
@@ -142,6 +147,11 @@ def qubit_partition_map(partition: list[set[int]]) -> dict[int, int]:
         The partition index for each qubit index.
     """
     qubit_to_partition: dict[int, int] = {}
+    if isinstance(partition, dict):
+        for qpu, qubit_set in partition.items():
+            for qubit in qubit_set:
+                qubit_to_partition[qubit] = qpu.id
+        return qubit_to_partition
     for part_idx, qubit_set in enumerate(partition):
         for qubit in qubit_set:
             qubit_to_partition[qubit] = part_idx
