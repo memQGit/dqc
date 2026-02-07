@@ -37,7 +37,7 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
     swap_sched = synthesize_state_teleportation_swaps(sched)
     num_swaps = sum(len(timestep_swaps) for timestep_swaps in swap_sched)
     remote_statement_ids = {op.statement_id for op, _ in remote_gates}
-    # TODO: update DAG to take partitioner object direclty for cleaner footprint
+    # TODO: update DAG to take partitioner object directly for cleaner footprint
     dist_dag = DistributedCircuitDAG(
         dag, remote_statement_ids, swap_sched, windows, sched
     )
@@ -48,11 +48,12 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
     # TODO: handle any number of input registers (or enforce 1)
     num_qbit_regs = 1
 
-    include_dist_gates = 1 if len(remote_gates) > 0 else 0
+    include_dist_gates = 1 if len(remote_gates) > 0 or num_swaps > 0 else 0
     # Add statement for each swap, replace 1 qubit register w/ one per qpu
+
     assert (
         len(dist_dag.statements)
-        == len(dag.statements)
+        == len(dag.statements)  # TODO: clean this up
         + include_dist_gates
         + num_swaps
         + num_qpu

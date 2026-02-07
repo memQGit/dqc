@@ -242,13 +242,11 @@ def identify_remote_gates(
             continue
         # TODO: theres probably a cleaner, more efficient way to do this
         remote_gates.append((op, {"q1_qpu": q1_qpu, "q2_qpu": q2_qpu}))
-    print(
-        f"Identified {len(remote_gates)} remote gates. {len(ops)} total gates."
-    )
+
     return remote_gates
 
 
-def window_final_op_id_map(windows: [list[Op]]) -> dict[int, int]:
+def window_final_op_id_map(windows: list[[list[Op]]]) -> dict[int, int]:
     """Create a map from each window index to the id of final Op in that window.
 
     This is useful to determine when we have reached the end of a given window,
