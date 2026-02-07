@@ -127,8 +127,6 @@ def movement_cost(
         if new_qubit_to_part.get(qubit) != old_part
     )
 
-    print("num moved qubits:", moved_qubits)
-
     # Increasing this value leads to more stationary partition
     cost_per_moved_qubit = 1.0
 

@@ -55,7 +55,18 @@ class CircuitDAG:
                 and build the corresponding directed acyclic graph.
         """
         self.program = program
-        self.statements = extract_cleaned_statements(program)
+        cleaned_statements = extract_cleaned_statements(program)
+        self.num_barrier_statements = sum(
+            1
+            for statement in cleaned_statements
+            if isinstance(statement, CleanedStatement)
+            and isinstance(statement.node, ast.QuantumBarrier)
+        )
+        self.statements = [
+            statement
+            for statement in cleaned_statements
+            if not isinstance(statement.node, ast.QuantumBarrier)
+        ]
         self.ops: list[Op] = self._extract_ops()
         self.num_two_qubit_gates = self._count_two_qubit_gates()
         self.graph: nx.DiGraph = self._build_dag()
@@ -240,6 +251,7 @@ class DistributedCircuitDAG(CircuitDAG):
         schedule: list[dict[QPU, set[int]]],
     ) -> list[CleanedStatement]:
         # Get list of all ids to insert swaps (final op of each window except last)
+        num_swaps = sum(len(swaps) for swaps in swaps_schedule)
         final_ops_in_windows = set(window_final_op_id_map(windows).values())
         window_map = window_op_map(windows)
         logical_to_physical = logical_physical_map(schedule, swaps_schedule)
@@ -248,19 +260,16 @@ class DistributedCircuitDAG(CircuitDAG):
         swap_window_idx = 0
         current_window_idx = 0
         for idx, statement in enumerate(statements):
+            # Update statement node with correct physical qubit mapping
             mapped_node = statement.node
             if statement.is_op:
                 op_id += 1
                 current_window_idx = window_map.get(op_id, current_window_idx)
-                mapped_node = _remap_statement_qubits(
-                    mapped_node,
-                    logical_to_physical[current_window_idx],
-                )
-            else:
-                mapped_node = _remap_statement_qubits(
-                    mapped_node,
-                    logical_to_physical[current_window_idx],
-                )
+            mapped_node = _remap_statement_qubits(
+                mapped_node,
+                logical_to_physical[current_window_idx],
+            )
+            # Rebuild list of statements using appropriate remote gates
             if idx in remote_statement_ids and isinstance(
                 statement, CleanedQuantumGate
             ):
@@ -280,6 +289,7 @@ class DistributedCircuitDAG(CircuitDAG):
                         ),
                     )
                 )
+            # Insert non-remote gates
             else:
                 if isinstance(statement, CleanedQuantumGate):
                     distributed_statements.append(
@@ -311,6 +321,7 @@ class DistributedCircuitDAG(CircuitDAG):
                     distributed_statements.append(
                         _replace_statement_node(statement, mapped_node)
                     )
+            # If we find final op in window, insert swaps to reach next partition
             if statement.is_op and op_id in final_ops_in_windows:
                 swaps = swaps_schedule[swap_window_idx]
                 for swap in swaps:
@@ -326,8 +337,10 @@ class DistributedCircuitDAG(CircuitDAG):
                             qubits=swap_qubits,
                         )
                     )
+                current_window_idx += 1
                 swap_window_idx += 1
-        if remote_statement_ids:
+        # Add custom distributed gateset if remote gates or swaps are present
+        if remote_statement_ids or num_swaps > 0:
             include_node = clone_statement_node(
                 ast.Include(filename="distgates.inc")
             )
@@ -449,6 +462,7 @@ def _map_qubit_ref(
     qubit: ast.IndexedIdentifier | ast.Identifier,
     logical_to_physical: dict[int, tuple[int, int]],
 ) -> ast.IndexedIdentifier:
+    # TODO: handle unindexed identifers (eg c = measure q)
     if isinstance(qubit, ast.Identifier):
         raise NotImplementedError("Cannot remap unindexed qubit identifiers.")
     logical_index = extract_qubit_index(qubit)
@@ -463,7 +477,15 @@ def _replace_qubit_declarations(
     statements: list[CleanedStatement],
     schedule: list[dict[QPU, set[int]]],
 ) -> list[CleanedStatement]:
-    # TODO: handle case of multiple qubit registers (currently works for just 1)
+    """Replace original qubit declaration with new declarations for each QPU.
+
+    Args:
+        statements: List of cleaned statements to process.
+        schedule: Mapping of QPUs to sets of statement indices for each scheduling step.
+
+    Returns:
+        Updated list of cleaned statements with new qubit declarations.
+    """
     if not schedule:
         raise ValueError("schedule must contain at least one window.")
 
