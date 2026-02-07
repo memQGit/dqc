@@ -10,12 +10,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-
 if TYPE_CHECKING:
-    from memq_dqc.circuit import CircuitDAG, Op
+    from memq_dqc.circuit.ops import Op
+    from memq_dqc.partition.types import QPU
 
 
-def qubit_partition_map(partition: list[set[int]]) -> dict[int, int]:
+def qubit_partition_map(
+    partition: list[set[int]] | dict[QPU, set[int]],
+) -> dict[int, int]:
     """Create a mapping from qubit index to partition index.
 
     Args:
@@ -25,17 +27,21 @@ def qubit_partition_map(partition: list[set[int]]) -> dict[int, int]:
         The partition index for each qubit index.
     """
     qubit_to_partition: dict[int, int] = {}
+    if isinstance(partition, dict):
+        for qpu, qubit_set in partition.items():
+            for qubit in qubit_set:
+                qubit_to_partition[qubit] = qpu.id
+        return qubit_to_partition
     for part_idx, qubit_set in enumerate(partition):
         for qubit in qubit_set:
             qubit_to_partition[qubit] = part_idx
     return qubit_to_partition
 
 
-def window_op_map(dag: CircuitDAG, windows: list[list[Op]]) -> dict[int, int]:
+def window_op_map(windows: list[list[Op]]) -> dict[int, int]:
     """Create a mapping from operation ID to its window index.
 
     Args:
-        dag: Circuit DAG providing operations.
         windows: List of operation windows.
 
     Returns:

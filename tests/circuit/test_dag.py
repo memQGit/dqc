@@ -15,6 +15,9 @@ from qiskit.dagcircuit import DAGCircuit, DAGOpNode
 from memq_dqc.circuit.dag import CircuitDAG as DAG
 from memq_dqc.circuit.dag import DistributedCircuitDAG
 from memq_dqc.io.qasm import load_qasm_program
+from memq_dqc.partition.types import QPU
+from memq_dqc.qasm.cleaning import CleanedQuantumGate
+from memq_dqc.qasm.extract.extract_utils import SwapOp
 
 
 def _build_memq_dag(qasm_path: Path) -> DAG:
@@ -196,10 +199,36 @@ def test_distributed_dag_counts_remote_gates(
     remote_statement_ids = {
         op.statement_id for op in base_dag.ops if op.is_two_qubit
     }
-
-    dist_dag = DistributedCircuitDAG(base_dag, remote_statement_ids)
+    qpu0 = QPU(id=0)
+    all_qubits = {q.index for op in base_dag.ops for q in op.qubits}
+    schedule = [{qpu0: all_qubits}, {qpu0: all_qubits}]
+    windows = [base_dag.ops[:1], base_dag.ops[1:]]
+    swaps_schedule = [
+        [SwapOp(q0=0, q1=1, pos0=(0, 0), pos1=(0, 1))],
+    ]
+    num_swaps = sum(len(interval) for interval in swaps_schedule)
+    dist_dag = DistributedCircuitDAG(
+        base_dag,
+        remote_statement_ids,
+        swaps_schedule=swaps_schedule,
+        windows=windows,
+        schedule=schedule,
+    )
 
     assert dist_dag.num_remote_gates == len(remote_statement_ids)
-    assert dist_dag.num_remote_gates == sum(
-        1 for op in dist_dag.ops if op.name.startswith("r")
+    swap_gate_count = sum(
+        1
+        for statement in dist_dag.statements
+        if isinstance(statement, CleanedQuantumGate)
+        and statement.name == "rswap"
+    )
+    remote_gate_count = sum(
+        1
+        for statement in dist_dag.statements
+        if isinstance(statement, CleanedQuantumGate)
+        and statement.name == "rcx"
+    )
+    assert swap_gate_count == num_swaps
+    assert remote_gate_count + swap_gate_count == (
+        len(remote_statement_ids) + num_swaps
     )

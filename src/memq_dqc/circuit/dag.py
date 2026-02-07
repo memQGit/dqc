@@ -9,15 +9,35 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from typing import TYPE_CHECKING
+
 import networkx as nx
 from openqasm3 import ast
 
 from memq_dqc.circuit.layers import Layer
 from memq_dqc.circuit.ops import Op
-from memq_dqc.qasm.cleaning import CleanedQuantumGate, CleanedStatement
-from memq_dqc.qasm.types import Qubit
-from memq_dqc.qasm.types import Qubit
 from memq_dqc.qasm import extract_cleaned_statements
+from memq_dqc.qasm.cleaning import (
+    CleanedIncludeStatement,
+    CleanedQuantumGate,
+    CleanedQuantumMeasurementStatement,
+    CleanedQubitDeclaration,
+    CleanedStatement,
+    clone_statement_node,
+    rename_quantum_gate,
+)
+from memq_dqc.qasm.extract.extract_utils import (
+    SwapOp,
+    logical_physical_map,
+    window_final_op_id_map,
+)
+from memq_dqc.qasm.extraction import extract_qubit_index
+from memq_dqc.qasm.types import Qubit
+from memq_dqc.utils.common import window_op_map
+
+if TYPE_CHECKING:
+    from memq_dqc.partition.types import QPU
 
 
 class CircuitDAG:
@@ -35,7 +55,18 @@ class CircuitDAG:
                 and build the corresponding directed acyclic graph.
         """
         self.program = program
-        self.statements = extract_cleaned_statements(program)
+        cleaned_statements = extract_cleaned_statements(program)
+        self.num_barrier_statements = sum(
+            1
+            for statement in cleaned_statements
+            if isinstance(statement, CleanedStatement)
+            and isinstance(statement.node, ast.QuantumBarrier)
+        )
+        self.statements = [
+            statement
+            for statement in cleaned_statements
+            if not isinstance(statement.node, ast.QuantumBarrier)
+        ]
         self.ops: list[Op] = self._extract_ops()
         self.num_two_qubit_gates = self._count_two_qubit_gates()
         self.graph: nx.DiGraph = self._build_dag()
@@ -77,10 +108,7 @@ class CircuitDAG:
         Returns:
             Operations extracted in program order.
         """
-        program = self.program
         ops: list[Op] = []
-        num_qubits = 0
-        qubits = []
         statements = self.statements
 
         # Extract operations (gates & measurements) from statements
@@ -172,30 +200,43 @@ class CircuitDAG:
 class DistributedCircuitDAG(CircuitDAG):
     """DAG representation with remote gate names applied.
 
+    A distributed circuit DAG extends the base CircuitDAG to handle circuits
+    that have been partitioned across multiple quantum processing units (QPUs).
+    It tracks which operations are designated as remote gates and maintains
+    the scheduling information for distributed execution.
+
     Attributes:
         num_remote_gates: Number of operations tagged as remote gates.
     """
 
     def __init__(
+        # TODO: see if we can avoid passing along so much data here =
         self,
         base_dag: CircuitDAG,
         remote_statement_ids: set[int],
+        swaps_schedule: list[list[SwapOp]],
+        windows: list[list[Op]],
+        schedule: list[dict[QPU, set[int]]],
     ) -> None:
         """Initialize a distributed DAG from an existing DAG.
 
         Args:
             base_dag: Original circuit DAG.
             remote_statement_ids: Statement indices to rename as remote gates.
+            swaps_schedule: List of swap operations organized by scheduling windows.
+            windows: List of operation windows for distributed execution.
+            schedule: Mapping of QPUs to sets of statement indices for each scheduling step.
         """
         self.program = base_dag.program
         self.statements = self._build_statements(
             base_dag.statements,
             remote_statement_ids,
+            windows,
+            swaps_schedule,
+            schedule,
         )
         self.ops = self._build_ops(base_dag.ops, remote_statement_ids)
-        self.num_remote_gates = self._count_remote_gates(
-            remote_statement_ids
-        )
+        self.num_remote_gates = self._count_remote_gates(remote_statement_ids)
         self.num_two_qubit_gates = self._count_two_qubit_gates()
         self.graph = self._build_dag()
         self.layers = self._extract_layers()
@@ -205,23 +246,115 @@ class DistributedCircuitDAG(CircuitDAG):
     def _build_statements(
         statements: list[CleanedStatement],
         remote_statement_ids: set[int],
+        windows: list[list[Op]],
+        swaps_schedule: list[list[SwapOp]],
+        schedule: list[dict[QPU, set[int]]],
     ) -> list[CleanedStatement]:
+        # Get list of all ids to insert swaps (final op of each window except last)
+        num_swaps = sum(len(swaps) for swaps in swaps_schedule)
+        final_ops_in_windows = set(window_final_op_id_map(windows).values())
+        window_map = window_op_map(windows)
+        logical_to_physical = logical_physical_map(schedule, swaps_schedule)
         distributed_statements = []
+        op_id = -1
+        swap_window_idx = 0
+        current_window_idx = 0
         for idx, statement in enumerate(statements):
+            # Update statement node with correct physical qubit mapping
+            mapped_node = statement.node
+            if statement.is_op:
+                op_id += 1
+                current_window_idx = window_map.get(op_id, current_window_idx)
+            mapped_node = _remap_statement_qubits(
+                mapped_node,
+                logical_to_physical[current_window_idx],
+            )
+            # Rebuild list of statements using appropriate remote gates
             if idx in remote_statement_ids and isinstance(
                 statement, CleanedQuantumGate
             ):
+                updated_node = rename_quantum_gate(
+                    mapped_node,
+                    f"r{statement.name}",
+                )
                 distributed_statements.append(
                     CleanedQuantumGate(
                         statement_type=statement.statement_type,
-                        node=statement.node,
+                        node=updated_node,
                         is_op=statement.is_op,
                         name=f"r{statement.name}",
-                        qubits=statement.qubits,
+                        qubits=_remap_cleaned_qubits(
+                            statement.qubits,
+                            logical_to_physical[current_window_idx],
+                        ),
                     )
                 )
+            # Insert non-remote gates
             else:
-                distributed_statements.append(statement)
+                if isinstance(statement, CleanedQuantumGate):
+                    distributed_statements.append(
+                        CleanedQuantumGate(
+                            statement_type=statement.statement_type,
+                            node=mapped_node,
+                            is_op=statement.is_op,
+                            name=statement.name,
+                            qubits=_remap_cleaned_qubits(
+                                statement.qubits,
+                                logical_to_physical[current_window_idx],
+                            ),
+                        )
+                    )
+                elif isinstance(statement, CleanedQuantumMeasurementStatement):
+                    distributed_statements.append(
+                        CleanedQuantumMeasurementStatement(
+                            statement_type=statement.statement_type,
+                            node=mapped_node,
+                            is_op=statement.is_op,
+                            qubit=_remap_cleaned_qubit(
+                                statement.qubit,
+                                logical_to_physical[current_window_idx],
+                            ),
+                            cbit=statement.cbit,
+                        )
+                    )
+                else:
+                    distributed_statements.append(
+                        _replace_statement_node(statement, mapped_node)
+                    )
+            # If we find final op in window, insert swaps to reach next partition
+            if statement.is_op and op_id in final_ops_in_windows:
+                swaps = swaps_schedule[swap_window_idx]
+                for swap in swaps:
+                    swap_node, swap_qubits = _build_swap_gate(
+                        swap,
+                    )
+                    distributed_statements.append(
+                        CleanedQuantumGate(
+                            statement_type=ast.QuantumGate,
+                            node=swap_node,
+                            is_op=True,
+                            name="rswap",
+                            qubits=swap_qubits,
+                        )
+                    )
+                current_window_idx += 1
+                swap_window_idx += 1
+        # Add custom distributed gateset if remote gates or swaps are present
+        if remote_statement_ids or num_swaps > 0:
+            include_node = clone_statement_node(
+                ast.Include(filename="distgates.inc")
+            )
+            dist_include = CleanedIncludeStatement(
+                statement_type=ast.Include,
+                node=include_node,
+                is_op=False,
+                filename="distgates.inc",
+            )
+            distributed_statements = [dist_include] + distributed_statements
+        distributed_statements = _replace_qubit_declarations(
+            distributed_statements,
+            schedule,
+        )
         return distributed_statements
 
     @staticmethod
@@ -261,3 +394,160 @@ class DistributedCircuitDAG(CircuitDAG):
         return sum(
             1 for op in self.ops if op.statement_id in remote_statement_ids
         )
+
+
+def _replace_statement_node(
+    statement: CleanedStatement,
+    node: ast.Statement,
+) -> CleanedStatement:
+    if statement.node is node:
+        return statement
+    return replace(statement, node=node)
+
+
+def _remap_cleaned_qubits(
+    qubits: list[Qubit],
+    logical_to_physical: dict[int, tuple[int, int]],
+) -> list[Qubit]:
+    return [
+        _remap_cleaned_qubit(qubit, logical_to_physical) for qubit in qubits
+    ]
+
+
+def _remap_cleaned_qubit(
+    qubit: Qubit | None,
+    logical_to_physical: dict[int, tuple[int, int]],
+) -> Qubit | None:
+    if qubit is None:
+        return None
+    qpu_id, slot_idx = logical_to_physical[qubit.index]
+    return Qubit(register_name=f"q{qpu_id}", index=slot_idx)
+
+
+def _remap_statement_qubits(
+    statement: ast.Statement,
+    logical_to_physical: dict[int, tuple[int, int]],
+) -> ast.Statement:
+    mapped = clone_statement_node(statement)
+    if isinstance(mapped, ast.QuantumGate):
+        mapped.qubits = [
+            _map_qubit_ref(qubit, logical_to_physical)
+            for qubit in mapped.qubits
+        ]
+        return mapped
+    if isinstance(mapped, ast.QuantumMeasurementStatement):
+        mapped.measure = ast.QuantumMeasurement(
+            qubit=_map_qubit_ref(mapped.measure.qubit, logical_to_physical)
+        )
+        return mapped
+    if isinstance(mapped, ast.QuantumBarrier):
+        mapped.qubits = [
+            _map_qubit_ref(qubit, logical_to_physical)
+            for qubit in mapped.qubits
+        ]
+        return mapped
+    if isinstance(mapped, ast.QuantumReset):
+        mapped.qubits = _map_qubit_ref(mapped.qubits, logical_to_physical)
+        return mapped
+    if isinstance(mapped, ast.QuantumPhase):
+        mapped.qubits = [
+            _map_qubit_ref(qubit, logical_to_physical)
+            for qubit in mapped.qubits
+        ]
+        return mapped
+    return mapped
+
+
+def _map_qubit_ref(
+    qubit: ast.IndexedIdentifier | ast.Identifier,
+    logical_to_physical: dict[int, tuple[int, int]],
+) -> ast.IndexedIdentifier:
+    # TODO: handle unindexed identifers (eg c = measure q)
+    if isinstance(qubit, ast.Identifier):
+        raise NotImplementedError("Cannot remap unindexed qubit identifiers.")
+    logical_index = extract_qubit_index(qubit)
+    qpu_id, slot_idx = logical_to_physical[logical_index]
+    return ast.IndexedIdentifier(
+        name=ast.Identifier(f"q{qpu_id}"),
+        indices=[[ast.IntegerLiteral(slot_idx)]],
+    )
+
+
+def _replace_qubit_declarations(
+    statements: list[CleanedStatement],
+    schedule: list[dict[QPU, set[int]]],
+) -> list[CleanedStatement]:
+    """Replace original qubit declaration with new declarations for each QPU.
+
+    Args:
+        statements: List of cleaned statements to process.
+        schedule: Mapping of QPUs to sets of statement indices for each scheduling step.
+
+    Returns:
+        Updated list of cleaned statements with new qubit declarations.
+    """
+    if not schedule:
+        raise ValueError("schedule must contain at least one window.")
+
+    qpu_qubits = {qpu: set(qubits) for qpu, qubits in schedule[0].items()}
+    new_declarations: list[CleanedStatement] = []
+    for qpu, qubits in sorted(qpu_qubits.items(), key=lambda item: item[0].id):
+        size = len(qubits)
+        size_expr = ast.IntegerLiteral(size) if size != 1 else None
+        node = clone_statement_node(
+            ast.QubitDeclaration(
+                qubit=ast.Identifier(f"q{qpu.id}"),
+                size=size_expr,
+            )
+        )
+        new_declarations.append(
+            CleanedQubitDeclaration(
+                statement_type=ast.QubitDeclaration,
+                node=node,
+                is_op=False,
+                name=f"q{qpu.id}",
+                size=size,
+            )
+        )
+
+    filtered = [
+        statement
+        for statement in statements
+        if not isinstance(statement, CleanedQubitDeclaration)
+    ]
+
+    insert_idx = 0
+    while insert_idx < len(filtered) and isinstance(
+        filtered[insert_idx], CleanedIncludeStatement
+    ):
+        insert_idx += 1
+    return filtered[:insert_idx] + new_declarations + filtered[insert_idx:]
+
+
+def _build_swap_gate(
+    swap: SwapOp,
+) -> tuple[ast.QuantumGate, list[Qubit]]:
+    q0_qpu, q0_slot = swap.pos0
+    q1_qpu, q1_slot = swap.pos1
+    qubits = [
+        Qubit(register_name=f"q{q0_qpu}", index=q0_slot),
+        Qubit(register_name=f"q{q1_qpu}", index=q1_slot),
+    ]
+    node = clone_statement_node(
+        ast.QuantumGate(
+            modifiers=[],
+            name=ast.Identifier("rswap"),
+            arguments=[],
+            qubits=[
+                ast.IndexedIdentifier(
+                    name=ast.Identifier(f"q{q0_qpu}"),
+                    indices=[[ast.IntegerLiteral(q0_slot)]],
+                ),
+                ast.IndexedIdentifier(
+                    name=ast.Identifier(f"q{q1_qpu}"),
+                    indices=[[ast.IntegerLiteral(q1_slot)]],
+                ),
+            ],
+        )
+    )
+    return node, qubits

@@ -5,9 +5,12 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Partitioner interfaces. Goal of partitioner is to create standardized
+"""Partitioner interfaces.
+
+Goal of partitioner is to create standardized
 entry point for different partitioning algorithms, providing them with all
-of the necessary data to perform partitioning."""
+of the necessary data to perform partitioning.
+"""
 
 from __future__ import annotations
 
@@ -16,10 +19,12 @@ from typing import Any, TypeVar
 
 from openqasm3 import ast
 
-from memq_dqc.circuit import CircuitDAG, Op
+from memq_dqc.circuit.dag import CircuitDAG
+from memq_dqc.circuit.ops import Op
 from memq_dqc.graph import NetworkGraph
+from memq_dqc.partition.types import QPU
 
-PartitionSchedule = list[list[set[int]]]
+PartitionSchedule = list[dict[QPU, set[int]]]
 PartitionWindows = list[list[Op]]
 
 _Algorithm = TypeVar("_Algorithm", bound="BasePartitioner")
