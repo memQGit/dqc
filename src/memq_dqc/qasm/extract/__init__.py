@@ -9,10 +9,14 @@
 
 from memq_dqc.qasm.extract.extract_utils import (
     identify_remote_gates,
-    identify_state_tele_ops,
+    logical_physical_map,
+    synthesize_state_teleportation_swaps,
+    window_final_op_id_map,
 )
 
 __all__ = [
     "identify_remote_gates",
-    "identify_state_tele_ops",
+    "synthesize_state_teleportation_swaps",
+    "window_final_op_id_map",
+    "logical_physical_map",
 ]

@@ -7,8 +7,8 @@
 
 from memq_dqc.circuit import CircuitDAG
 from memq_dqc.graph import NetworkGraph
-from memq_dqc.partition import Partitioner
 from memq_dqc.io.qasm import load_qasm_program
+from memq_dqc.partition import Partitioner
 from memq_dqc.utils import get_windows
 
 
@@ -49,5 +49,5 @@ def test_partitioner_large_circuit(
     assert schedule
     # Make sure each window of schedule has correct number of qubits
     for window in schedule:
-        total_qubits = sum(len(part) for part in window)
+        total_qubits = sum(len(part) for part in window.values())
         assert total_qubits == network.num_comp_qubits
