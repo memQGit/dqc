@@ -10,7 +10,7 @@ from dataclasses import fields, is_dataclass
 import openqasm3
 from openqasm3 import ast
 
-from memq_dqc.preprocessing.qasm import extract_cleaned_statements
+from memq_dqc.preprocessing.qasm import ast_utils, extract_cleaned_statements
 
 
 def _assert_no_spans(node) -> None:
@@ -68,3 +68,26 @@ def test_cleaned_statements_clone_nodes_without_spans() -> None:
     ):
         assert cleaned_statement.node is not original
         _assert_no_spans(cleaned_statement.node)
+
+
+def test_clone_ast_node_non_dataclass_does_not_mutate_original(
+    monkeypatch,
+) -> None:
+    qasm_source = (
+        'OPENQASM 3.0;\ninclude "stdgates.inc";\nqubit[1] q;\nh q[0];\n'
+    )
+    program = openqasm3.parser.parse(qasm_source)
+    original = program.statements[-1]
+    original_span_before = original.span
+    original_qubit_span_before = original.qubits[0].span
+
+    monkeypatch.setattr(ast_utils, "is_dataclass", lambda _: False)
+    cloned = ast_utils._clone_ast_node(original)
+
+    assert isinstance(cloned, ast.QuantumGate)
+    assert cloned is not original
+    assert cloned.span is None
+    assert cloned.qubits[0].span is None
+
+    assert original.span is original_span_before
+    assert original.qubits[0].span is original_qubit_span_before

@@ -25,7 +25,7 @@ def verify_distributed_circuit(
     """Verify the correctness of a distributed circuit.
 
     Evaluates distributed circuit as a single, monolithic circuit where remote
-    operations are assumed to operate perfectly
+    operations are assumed to operate perfectly.
 
     Args:
         original_circuit_path: Path to the original circuit file.
@@ -35,7 +35,9 @@ def verify_distributed_circuit(
             circuit to be considered correct (Hellinger fidelity).
 
     Returns:
-        True if the distributed circuit gives.
+        True if the distributed circuit gives nearly identical results to the
+        original circuit, False otherwise - as determined by Hellinger fidelity
+        between the two output distributions.
     """
     qc_orig = qiskit.qasm3.load(original_circuit_path)
     orig_counts = get_counts(qc_orig, shots=shots)
@@ -43,6 +45,7 @@ def verify_distributed_circuit(
     qc_dist_mono = qiskit.qasm3.loads(str(mono_circuit))
     mono_counts = get_counts(qc_dist_mono, shots=shots)
     fidelity = hellinger_fidelity(orig_counts, mono_counts)
+    # TODO: replace print with proper logging (and update commented-out prints throughout)
     if fidelity < fidelity_threshold:
         print(
             f"Verification failed: fidelity {fidelity} is below threshold {fidelity_threshold}"
@@ -83,7 +86,7 @@ def get_counts(circuit: QuantumCircuit, shots: int) -> dict[str, int]:
 def dist_to_mono_circuit(dist_circuit_path: str) -> str:
     """Convert a distributed circuit to a monolithic QuantumCircuit.
 
-    Rudementiary tool that takes distributed circuit and replaces remote
+    Rudimentary tool that takes distributed circuit and replaces remote
     gates with local equivalent gates. Specifically RSWAP gates (TODO:
     must get rid of RSWAPS and fix this function) are replaced with SWAP gates,
     and R2Q gates (TODO: right now this is just (R)CX) are replaced with
@@ -96,6 +99,7 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> str:
         A qasm string representing the monolithic version of the distributed
         circuit.
     """
+    # TODO: must be tested!
     # TODO: use qasm.py in io to deal with this rather than repeat code
     dist_path = Path(dist_circuit_path)  # TODO: use PATH objects everywhere
     dist_prog = openqasm3.parser.parse(dist_path.read_text(encoding="utf-8"))
