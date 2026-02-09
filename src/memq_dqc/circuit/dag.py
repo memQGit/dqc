@@ -243,6 +243,21 @@ class DistributedCircuitDAG(CircuitDAG):
         swaps_schedule: list[list[SwapOp]],
         schedule: list[dict[QPU, set[int]]],
     ) -> list[CleanedStatement]:
+        if not windows:
+            raise ValueError("windows must contain at least one window.")
+        if len(schedule) != len(windows):
+            raise ValueError(
+                "schedule/windows length mismatch: "
+                f"len(schedule)={len(schedule)} != len(windows)={len(windows)}."
+            )
+        expected_swaps_windows = len(windows) - 1
+        if len(swaps_schedule) != expected_swaps_windows:
+            raise ValueError(
+                "swaps_schedule length mismatch: "
+                f"len(swaps_schedule)={len(swaps_schedule)} != "
+                f"len(windows)-1={expected_swaps_windows}."
+            )
+
         # Get list of all ids to insert swaps (final op of each window except last)
         num_swaps = sum(len(swaps) for swaps in swaps_schedule)
         final_ops_in_windows = set(window_final_op_id_map(windows).values())

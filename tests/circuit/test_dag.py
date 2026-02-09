@@ -232,3 +232,25 @@ def test_distributed_dag_counts_remote_gates(
     assert remote_gate_count + swap_gate_count == (
         len(remote_statement_ids) + num_swaps
     )
+
+
+def test_distributed_dag_validates_schedule_and_swaps_shape(
+    request: pytest.FixtureRequest,
+) -> None:
+    qasm_path = request.getfixturevalue("bell_circuit_path")
+    base_dag = _build_memq_dag(qasm_path)
+    remote_statement_ids: set[int] = set()
+    qpu0 = QPU(id=0)
+    all_qubits = {q.index for op in base_dag.ops for q in op.qubits}
+    windows = [base_dag.ops[:1], base_dag.ops[1:]]
+    schedule = [{qpu0: all_qubits}]
+    swaps_schedule: list[list[SwapOp]] = []
+
+    with pytest.raises(ValueError, match="schedule/windows length mismatch"):
+        DistributedCircuitDAG(
+            base_dag,
+            remote_statement_ids,
+            swaps_schedule=swaps_schedule,
+            windows=windows,
+            schedule=schedule,
+        )
