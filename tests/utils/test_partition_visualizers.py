@@ -12,18 +12,21 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pytest
 
+from memq_dqc.partition.types import QPU
 from memq_dqc.visualization.partition_visualizer import (
     plot_migration_timeline,
     plot_partition_heatmap,
 )
 
 
-def _sample_partition() -> list[list[set[int]]]:
+def _sample_partition() -> list[dict[QPU, set[int]]]:
+    qpu0 = QPU(id=0)
+    qpu1 = QPU(id=1)
     return [
-        [{0, 1}, {2, 3}],
-        [{0, 2}, {1, 3}],
-        [{0, 2}, {1, 3}],
-        [{0, 1}, {2, 3}],
+        {qpu0: {0, 1}, qpu1: {2, 3}},
+        {qpu0: {0, 2}, qpu1: {1, 3}},
+        {qpu0: {0, 2}, qpu1: {1, 3}},
+        {qpu0: {0, 1}, qpu1: {2, 3}},
     ]
 
 

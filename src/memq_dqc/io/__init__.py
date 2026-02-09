@@ -1,5 +1,3 @@
-"""Circuit-level data structures."""
-
 # ============================================================================
 # Copyright (c) 2026 memQ Inc.
 #
@@ -7,9 +5,8 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-from memq_dqc.circuit.builders import build_dag
-from memq_dqc.circuit.dag import CircuitDAG, DistributedCircuitDAG
-from memq_dqc.circuit.layers import Layer
-from memq_dqc.circuit.ops import Op
+"""Input/output helpers for memq-dqc."""
 
-__all__ = ["CircuitDAG", "DistributedCircuitDAG", "Layer", "Op", "build_dag"]
+from memq_dqc.io.qasm import load_qasm_program
+
+__all__ = ["load_qasm_program"]

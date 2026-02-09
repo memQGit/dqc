@@ -1,68 +1,44 @@
-## Code Style
+# Contributing to memq-dqc
 
-### Type Hints
+Thanks for contributing! This repo values correctness, reproducibility, and
+clean public APIs.
 
-This codebase uses [PEP 484](https://peps.python.org/pep-0484/) type hints. See example below:
+## Quickstart
 
-```python
-def greeting(name: str) -> str:
-    return 'Hello ' + name
-```
+1. Create a virtual environment with Python 3.11.
+2. Install dependencies as needed for your workflow.
 
-### Docstrings
+## Commands
 
-This library uses [Google-style docstrings](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings). All modules, functions, and classes must have an appropriate
-docstrings, though module-level docstrings for test files are not required. Note, since
-we use type hints, type information should not be included in the docstrings. See example below:
+- Lint: `tox -e lint`
+- Format check: `tox -e format`
+- Tests + coverage: `tox -e test`
+- Type checking: `pyright`
 
-```python
-"""Example function with PEP 484 type annotations.
+If you need to auto-format:
 
-Args:
-    param1: The first parameter.
-    param2: The second parameter.
+- `ruff format .`
+- Then re-run: `tox -e lint -e format -e test`
 
-Returns:
-    The return value. True for success, False otherwise.
+## Project layout
 
-"""
-```
+- Library code: `src/memq_dqc/`
+- Tests: `tests/`
+- Scripts: `scripts/`
+- Docs: `docs/`
 
-## Implementing new partitioning algorithms
+## Contribution guidelines
 
-The partitioning framework is built around `BasePartitioner` and the
-`Partitioner` orchestrator in `src/memq_dqc/partition/partitioner.py`.
-New algorithms should implement the same contract so they can be used in
-the existing integration points.
+- Keep diffs focused and reviewable.
+- Do not change public APIs unless explicitly requested.
+- Add tests for behavior changes and new features.
+- Update docstrings when behavior changes.
+- Use type hints and Google-style docstrings for public modules, classes, and
+  functions.
 
-### Required interface
+## Pull request checklist
 
-- Subclass `BasePartitioner`.
-- Implement `run()` to return a `(entanglement_cost, schedule)` tuple.
-- The schedule is a `list[list[set[int]]]`:
-  - outer list = windows
-  - inner list = QPUs
-  - each set = qubits assigned to that QPU in that window
-
-### How users can plug in an algorithm
-
-The `Partitioner` accepts three forms of `algo`:
-
-- Registry name (string). Add your algorithm to `_get_algorithm_class`
-  and refer to it by name:
-  `Partitioner(..., algo="my_algo")`.
-- Class (type). Pass the class directly to avoid registry wiring:
-  `Partitioner(..., algo=MyPartitioner, algo_kwargs={...})`.
-- Instance. Pass a fully configured object:
-  `Partitioner(..., algo=MyPartitioner(...))`.
-
-### Testing a new algorithm
-
-When adding an algorithm:
-
-- Write unit tests under `tests/partition/` that validate the schedule
-  structure and cost output for small, deterministic inputs.
-- Prefer fixtures from `tests/fixtures/` and keep the inputs minimal.
-- Add regression tests for any non-trivial bug fix or edge case.
-- Run `tox -e test` (and `tox -e lint` / `tox -e format` if you add new
-  files).
+- Tests pass (`tox -e test`).
+- Lint and format checks pass (`tox -e lint`, `tox -e format`).
+- Type checking passes (`pyright`).
+- New/changed behavior is covered by tests.

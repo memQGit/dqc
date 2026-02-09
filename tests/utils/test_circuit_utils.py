@@ -10,17 +10,19 @@ import pytest
 from openqasm3 import ast
 
 from memq_dqc.circuit import CircuitDAG
-from memq_dqc.utils import (
+from memq_dqc.io.qasm import load_qasm_program
+from memq_dqc.preprocessing.qasm import (
     count_total_qubits,
+    extract_qubit_index,
+    extract_two_qubit_gates,
+)
+from memq_dqc.utils import (
     count_two_qubit_pairs,
     create_initial_subcircuit_graph,
     distribute,
-    extract_qubit_index,
-    extract_two_qubit_gates,
     get_windows,
-    load_qasm_program,
     movement_cost,
-    qubit_partition_set_to_map,
+    qubit_partition_map,
 )
 from memq_dqc.utils.circuit_utils import build_window_interaction_graph
 
@@ -204,10 +206,10 @@ def test_movement_cost() -> None:
     assert movement_cost(new_partition, old_partition) == 2.0
 
 
-def test_qubit_partition_set_to_map() -> None:
+def test_qubit_partition_map() -> None:
     partition = [{0, 2}, {1}]
 
-    assert qubit_partition_set_to_map(partition) == {0: 0, 2: 0, 1: 1}
+    assert qubit_partition_map(partition) == {0: 0, 2: 0, 1: 1}
 
 
 def test_distribute() -> None:

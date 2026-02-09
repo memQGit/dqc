@@ -5,8 +5,15 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Circuit extraction utilities.
+"""Partitioning data types."""
 
-This module is intended to host helpers that extract circuit-level features
-and metadata for downstream compilation steps.
-"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class QPU:
+    """Represents a QPU identifier for partition assignments."""
+
+    id: int

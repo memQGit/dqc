@@ -5,4 +5,16 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Public entry points for circuit extraction utilities."""
+"""Shared OpenQASM data types."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class Qubit:
+    """Represents a qubit with register name and index."""
+
+    register_name: str
+    index: int
