@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import copy
 from dataclasses import fields, is_dataclass
 from typing import cast
 
@@ -62,12 +63,31 @@ def _clone_ast_node(node: object) -> object:
         }
         cloned = type(node)(**kwargs)
     else:
-        cloned = node
+        cloned = copy.copy(node)
+        if hasattr(node, "__dict__"):
+            for attr, value in vars(node).items():
+                if attr in {"annotations", "span"}:
+                    continue
+                setattr(cloned, attr, _clone_ast_node(value))
+        for attr in _slot_names(node):
+            if attr in {"annotations", "span"}:
+                continue
+            if hasattr(node, attr):
+                setattr(cloned, attr, _clone_ast_node(getattr(node, attr)))
 
     if hasattr(cloned, "annotations"):
+        annotations = node.annotations
         cloned.annotations = [
-            _clone_ast_node(annotation) for annotation in node.annotations
+            _clone_ast_node(annotation) for annotation in annotations
         ]
 
-    cloned.span = None
+    if hasattr(cloned, "span"):
+        cloned.span = None
     return cloned
+
+
+def _slot_names(node: object) -> list[str]:
+    slots = getattr(type(node), "__slots__", ())
+    if isinstance(slots, str):
+        return [slots]
+    return [slot for slot in slots if isinstance(slot, str)]
