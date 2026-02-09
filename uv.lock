@@ -507,6 +507,7 @@ dependencies = [
     { name = "matplotlib" },
     { name = "networkx" },
     { name = "openqasm3", extra = ["parser"] },
+    { name = "qiskit" },
     { name = "qiskit-aer" },
 ]
 
@@ -528,6 +529,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "networkx", specifier = ">=3.6.1" },
     { name = "openqasm3", extras = ["parser"], specifier = ">=1.0.1" },
+    { name = "qiskit", specifier = ">=2.3.0" },
     { name = "qiskit-aer", specifier = ">=0.17.2" },
 ]
 
