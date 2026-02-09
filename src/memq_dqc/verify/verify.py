@@ -80,7 +80,7 @@ def get_counts(circuit: QuantumCircuit, shots: int) -> dict[str, int]:
     return counts
 
 
-def dist_to_mono_circuit(dist_circuit_path: str) -> QuantumCircuit:
+def dist_to_mono_circuit(dist_circuit_path: str) -> str:
     """Convert a distributed circuit to a monolithic QuantumCircuit.
 
     Rudementiary tool that takes distributed circuit and replaces remote
@@ -93,19 +93,20 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> QuantumCircuit:
         dist_circuit_path: Path to the distributed circuit file.
 
     Returns:
-        A QuantumCircuit object representing the monolithic version of the
-        distributed circuit. TODO: should return qasm string or CUDAQ object
+        A qasm string representing the monolithic version of the distributed
+        circuit.
     """
     # TODO: use qasm.py in io to deal with this rather than repeat code
     dist_path = Path(dist_circuit_path)  # TODO: use PATH objects everywhere
     dist_prog = openqasm3.parser.parse(dist_path.read_text(encoding="utf-8"))
+    new_statements = []
     # iterate through program statements and remove remote gates
     for stmt in dist_prog.statements:
         # Remove custom library includes
         if isinstance(stmt, openqasm3.ast.Include):
             included_file = stmt.filename
             if "distgates.inc" in included_file:
-                dist_prog.statements.remove(stmt)
+                continue
         # Replace remote gates with local equivalents
         if isinstance(stmt, openqasm3.ast.QuantumGate):
             # replace RCX w/ CX
@@ -115,9 +116,9 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> QuantumCircuit:
             # replace RSWAP w/ SWAP
             elif name == "rswap":
                 stmt.name.name = "swap"
-    # create new qasm program with modified statements
+        new_statements.append(stmt)
     mono_prog = openqasm3.ast.Program(
-        version=dist_prog.version, statements=dist_prog.statements
+        version=dist_prog.version, statements=new_statements
     )
     mono_str = openqasm3.dumps(mono_prog)
     return mono_str
