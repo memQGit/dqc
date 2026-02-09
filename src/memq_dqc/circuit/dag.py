@@ -266,6 +266,7 @@ class DistributedCircuitDAG(CircuitDAG):
             if idx in remote_statement_ids and isinstance(
                 statement, CleanedQuantumGate
             ):
+                # TODO: must handle specific 2q gates
                 updated_node = rename_quantum_gate(
                     mapped_node,
                     f"r{statement.name}",
