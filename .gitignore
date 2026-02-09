@@ -30,6 +30,8 @@ coverage.xml
 scripts/
 results/
 
+# Local caching
+.cache/
 
 # Local notes
 notes.txt
