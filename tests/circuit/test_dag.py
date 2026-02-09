@@ -12,12 +12,12 @@ from qiskit import qasm3
 from qiskit.converters import circuit_to_dag
 from qiskit.dagcircuit import DAGCircuit, DAGOpNode
 
+from memq_dqc.builder.extract_utils import SwapOp
 from memq_dqc.circuit.dag import CircuitDAG as DAG
 from memq_dqc.circuit.dag import DistributedCircuitDAG
 from memq_dqc.io.qasm import load_qasm_program
 from memq_dqc.partition.types import QPU
-from memq_dqc.qasm.cleaning import CleanedQuantumGate
-from memq_dqc.qasm.extract.extract_utils import SwapOp
+from memq_dqc.preprocessing.qasm import CleanedQuantumGate
 
 
 def _build_memq_dag(qasm_path: Path) -> DAG:

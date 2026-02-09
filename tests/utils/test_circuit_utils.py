@@ -11,7 +11,7 @@ from openqasm3 import ast
 
 from memq_dqc.circuit import CircuitDAG
 from memq_dqc.io.qasm import load_qasm_program
-from memq_dqc.qasm import (
+from memq_dqc.preprocessing.qasm import (
     count_total_qubits,
     extract_qubit_index,
     extract_two_qubit_gates,

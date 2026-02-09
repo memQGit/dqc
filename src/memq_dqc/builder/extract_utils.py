@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 
 Pos = tuple[int, int]
+PartitionAssignment = dict["QPU", set[int]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,7 +35,7 @@ class SwapOp:
 
 
 def identify_state_tele_ops(
-    schedule: list[dict[QPU, set[int]]],
+    schedule: list[PartitionAssignment],
 ) -> list[dict[int, tuple[int, int]]]:
     """Identify state teleportation operations in the schedule.
 
@@ -47,10 +48,10 @@ def identify_state_tele_ops(
         starting with the 2nd time step.
     """
     tele_ops_per_timestep: list[dict[int, tuple[int, int]]] = []
-    for t in range(1, len(schedule)):
+    for step_idx in range(1, len(schedule)):
         tele_ops: dict[int, tuple[int, int]] = {}
-        prev_assignment = schedule[t - 1]
-        curr_assignment = schedule[t]
+        prev_assignment = schedule[step_idx - 1]
+        curr_assignment = schedule[step_idx]
         for qpu_src, src_qubits in prev_assignment.items():
             for qpu_dst, dst_qubits in curr_assignment.items():
                 if qpu_src.id == qpu_dst.id:
@@ -63,7 +64,7 @@ def identify_state_tele_ops(
 
 
 def synthesize_state_teleportation_swaps(
-    schedule: list[dict[QPU, set[int]]],
+    schedule: list[PartitionAssignment],
 ) -> list[list[SwapOp]]:
     """Synthesize swaps to realize the state teleportation schedule.
 
@@ -79,27 +80,27 @@ def synthesize_state_teleportation_swaps(
         RuntimeError: If swap synthesis fails to reach a target assignment.
     """
     swaps_per_timestep: list[list[SwapOp]] = []
-    for t in range(1, len(schedule)):
+    for step_idx in range(1, len(schedule)):
         swaps_per_timestep.append(
             _synthesize_swaps_for_timestep(
-                schedule[t - 1],
-                schedule[t],
+                schedule[step_idx - 1],
+                schedule[step_idx],
             )
         )
     return swaps_per_timestep
 
 
-def _canonical_lists(
-    assignment: dict[QPU, set[int]],
+def _assignment_to_sorted_lists(
+    assignment: PartitionAssignment,
 ) -> tuple[list[int], list[list[int]]]:
     items = sorted(assignment.items(), key=lambda item: item[0].id)
     qpu_ids = [qpu.id for qpu, _ in items]
-    return qpu_ids, [sorted(list(qubits)) for _, qubits in items]
+    return qpu_ids, [sorted(qubits) for _, qubits in items]
 
 
 def _synthesize_swaps_for_timestep(
-    prev_assignment: dict[QPU, set[int]],
-    curr_assignment: dict[QPU, set[int]],
+    prev_assignment: PartitionAssignment,
+    curr_assignment: PartitionAssignment,
 ) -> list[SwapOp]:
     """Produce swaps that transform prev_assignment to curr_assignment.
 
@@ -110,16 +111,17 @@ def _synthesize_swaps_for_timestep(
     if len(prev_assignment) != len(curr_assignment):
         raise ValueError("Number of QPUs changed between timesteps.")
 
-    prev_qpu_ids, prev_lists = _canonical_lists(prev_assignment)
-    curr_qpu_ids, curr_lists = _canonical_lists(curr_assignment)
+    prev_qpu_ids, prev_lists = _assignment_to_sorted_lists(prev_assignment)
+    curr_qpu_ids, curr_lists = _assignment_to_sorted_lists(curr_assignment)
     if prev_qpu_ids != curr_qpu_ids:
         raise ValueError("QPU identities changed between timesteps.")
 
-    for qpu in range(len(prev_lists)):
-        if len(prev_lists[qpu]) != len(curr_lists[qpu]):
+    for qpu_idx in range(len(prev_lists)):
+        if len(prev_lists[qpu_idx]) != len(curr_lists[qpu_idx]):
             raise ValueError(
                 "Partition size mismatch on QPU "
-                f"{qpu}: {len(prev_lists[qpu])} -> {len(curr_lists[qpu])}"
+                f"{qpu_idx}: {len(prev_lists[qpu_idx])} -> "
+                f"{len(curr_lists[qpu_idx])}"
             )
 
     current_qpu: dict[int, int] = {}
@@ -222,8 +224,12 @@ def identify_remote_gates(
     """
     ops = circuit_dag.ops
     windows = partition.windows
-    window_op_mapping = window_op_map(windows)
     schedule = partition.schedule
+    if windows is None or schedule is None:
+        raise ValueError(
+            "partition.run() must be called before identifying remote gates."
+        )
+    window_op_mapping = window_op_map(windows)
 
     remote_gates: list[tuple[Op, dict[str, int]]] = []
     for op in ops:
@@ -246,8 +252,8 @@ def identify_remote_gates(
     return remote_gates
 
 
-def window_final_op_id_map(windows: list[[list[Op]]]) -> dict[int, int]:
-    """Create a map from each window index to the id of final Op in that window.
+def window_final_op_id_map(windows: list[list[Op]]) -> dict[int, int]:
+    """Create a map from window index to final operation ID.
 
     This is useful to determine when we have reached the end of a given window,
     in order to insert swaps to prepare the correct partition for the next
@@ -258,7 +264,7 @@ def window_final_op_id_map(windows: list[[list[Op]]]) -> dict[int, int]:
         windows: List of operation windows.
 
     Returns:
-        A dictionary mapping window indices to the id of the final Op in that window.
+        A dictionary mapping window indices to the final operation ID.
     """
     window_final_op_id: dict[int, int] = {}
     for window_idx, window in enumerate(windows[:-1]):
@@ -270,7 +276,7 @@ def window_final_op_id_map(windows: list[[list[Op]]]) -> dict[int, int]:
 # TODO: determine if this should be placed somewhere else - perhaps in DAG
 def logical_physical_map(
     # TODO: this is not clean
-    schedule: list[dict[QPU, set[int]]],
+    schedule: list[PartitionAssignment],
     swaps: list[list[SwapOp]],
 ) -> list[dict[int, tuple[int, int]]]:
     """Create logical-to-physical qubit maps for each time interval.

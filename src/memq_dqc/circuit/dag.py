@@ -15,24 +15,24 @@ from typing import TYPE_CHECKING
 import networkx as nx
 from openqasm3 import ast
 
+from memq_dqc.builder.extract_utils import (
+    SwapOp,
+    logical_physical_map,
+    window_final_op_id_map,
+)
 from memq_dqc.circuit.layers import Layer
 from memq_dqc.circuit.ops import Op
-from memq_dqc.qasm import extract_cleaned_statements
-from memq_dqc.qasm.cleaning import (
+from memq_dqc.preprocessing.qasm import (
     CleanedIncludeStatement,
     CleanedQuantumGate,
     CleanedQuantumMeasurementStatement,
     CleanedQubitDeclaration,
     CleanedStatement,
     clone_statement_node,
+    extract_cleaned_statements,
+    extract_qubit_index,
     rename_quantum_gate,
 )
-from memq_dqc.qasm.extract.extract_utils import (
-    SwapOp,
-    logical_physical_map,
-    window_final_op_id_map,
-)
-from memq_dqc.qasm.extraction import extract_qubit_index
 from memq_dqc.qasm.types import Qubit
 from memq_dqc.utils.common import window_op_map
 
@@ -43,8 +43,8 @@ if TYPE_CHECKING:
 class CircuitDAG:
     """Directed Acyclic Graph (DAG) for an OpenQASM 3 circuit.
 
-    The DAG captures operation dependencies and provstatement_ides layered views
-    suitable f.or scheduling and partitioning.
+    The DAG captures operation dependencies and provides layered views suitable
+    for scheduling and partitioning.
     """
 
     def __init__(self, program: ast.Program) -> None:
@@ -80,27 +80,27 @@ class CircuitDAG:
         Returns:
             Directed acyclic graph of operation dependencies.
         """
-        g = nx.DiGraph()
+        graph = nx.DiGraph()
 
         for op in self.ops:
-            g.add_node(op.op_id, op=op, name=op.name, qubits=op.qubits)
+            graph.add_node(op.op_id, op=op, name=op.name, qubits=op.qubits)
 
-        # track last operation on each qubit
+        # Track the last operation touching each qubit.
         last_op_on_qubit: dict[Qubit, int] = {}
         for op in self.ops:
-            for q in op.qubits:
-                # Previous op exists on this qubit, so current op depends on it
-                if q in last_op_on_qubit:
-                    prev_op_id = last_op_on_qubit[q]
-                    # Check if edge already exists, add qubit to set of qubits
-                    if g.has_edge(prev_op_id, op.op_id):
-                        g[prev_op_id][op.op_id]["qubits"].add(q)
+            for qubit in op.qubits:
+                # Previous op exists on this qubit, so current op depends on it.
+                if qubit in last_op_on_qubit:
+                    prev_op_id = last_op_on_qubit[qubit]
+                    # If edge already exists, add qubit to dependency edge data.
+                    if graph.has_edge(prev_op_id, op.op_id):
+                        graph[prev_op_id][op.op_id]["qubits"].add(qubit)
                     # Otherwise, create new edge with set containing this qubit
                     else:
-                        g.add_edge(prev_op_id, op.op_id, qubits={q})
-                last_op_on_qubit[q] = op.op_id
+                        graph.add_edge(prev_op_id, op.op_id, qubits={qubit})
+                last_op_on_qubit[qubit] = op.op_id
 
-        return g
+        return graph
 
     def _extract_ops(self) -> list[Op]:
         """Extract operations from the program in source order.
@@ -109,42 +109,35 @@ class CircuitDAG:
             Operations extracted in program order.
         """
         ops: list[Op] = []
-        statements = self.statements
 
         # Extract operations (gates & measurements) from statements
-        for statement_id, statement in enumerate(statements):
-            if statement is None:
+        for statement_id, statement in enumerate(self.statements):
+            if not statement.is_op:
                 continue
-            if statement.is_op:
-                op_id = len(ops)
-                if statement.name == "measure":
-                    ops.append(
-                        Op(
-                            op_id=op_id,
-                            statement_id=statement_id,
-                            name=statement.name,
-                            qubits=(
-                                Qubit(
-                                    statement.qubit.register_name,
-                                    statement.qubit.index,
-                                ),
-                            ),
-                            node=statement.node,
-                        )
-                    )
-                else:
-                    ops.append(
-                        Op(
-                            op_id=op_id,
-                            statement_id=statement_id,
-                            name=statement.name,
-                            qubits=tuple(
-                                Qubit(q.register_name, q.index)
-                                for q in statement.qubits
-                            ),
-                            node=statement.node,
-                        )
-                    )
+            op_id = len(ops)
+            if statement.name == "measure":
+                if statement.qubit is None:
+                    raise ValueError("Measurement statement missing qubit.")
+                qubits: tuple[Qubit, ...] = (
+                    Qubit(
+                        statement.qubit.register_name,
+                        statement.qubit.index,
+                    ),
+                )
+            else:
+                qubits = tuple(
+                    Qubit(qubit.register_name, qubit.index)
+                    for qubit in statement.qubits
+                )
+            ops.append(
+                Op(
+                    op_id=op_id,
+                    statement_id=statement_id,
+                    name=statement.name,
+                    qubits=qubits,
+                    node=statement.node,
+                )
+            )
         return ops
 
     def _count_two_qubit_gates(self) -> int:
@@ -163,28 +156,28 @@ class CircuitDAG:
         """
         in_degree_map = dict(self.graph.in_degree())
         # Initial Nodes have in-degree of 0
-        degree_zero_nodes = [
-            node for node, degree in in_degree_map.items() if degree == 0
+        ready_nodes = [
+            node_id for node_id, degree in in_degree_map.items() if degree == 0
         ]
 
         layers: list[Layer] = []
 
-        while degree_zero_nodes:
+        while ready_nodes:
             current_layer: list[Op] = []
             next_layer_nodes: set[int] = set()
 
-            for node in degree_zero_nodes:
-                op = self.graph.nodes[node]["op"]
+            for node_id in ready_nodes:
+                op = self.graph.nodes[node_id]["op"]
                 current_layer.append(op)
 
                 # Move to next layer by reducing in-degrees of successor nodes
-                for _, succ in self.graph.edges(node):
-                    in_degree_map[succ] -= 1
-                    if in_degree_map[succ] == 0:
-                        next_layer_nodes.add(succ)
+                for successor in self.graph.successors(node_id):
+                    in_degree_map[successor] -= 1
+                    if in_degree_map[successor] == 0:
+                        next_layer_nodes.add(successor)
 
             layers.append(Layer(tuple(current_layer)))
-            degree_zero_nodes = list(next_layer_nodes)
+            ready_nodes = list(next_layer_nodes)
 
         return layers
 
@@ -342,13 +335,13 @@ class DistributedCircuitDAG(CircuitDAG):
         # Add custom distributed gateset if remote gates or swaps are present
         if remote_statement_ids or num_swaps > 0:
             include_node = clone_statement_node(
-                ast.Include(filename="distgates.inc")
+                ast.Include(filename="builder/distgates.inc")
             )
             dist_include = CleanedIncludeStatement(
                 statement_type=ast.Include,
                 node=include_node,
                 is_op=False,
-                filename="distgates.inc",
+                filename="builder/distgates.inc",
             )
             distributed_statements = [dist_include] + distributed_statements
         distributed_statements = _replace_qubit_declarations(

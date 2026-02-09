@@ -10,7 +10,7 @@ from dataclasses import fields, is_dataclass
 import openqasm3
 from openqasm3 import ast
 
-from memq_dqc.qasm.cleaning import extract_cleaned_statements
+from memq_dqc.preprocessing.qasm import extract_cleaned_statements
 
 
 def _assert_no_spans(node) -> None:
