@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING
 
 import networkx as nx
 
+from memq_dqc.utils.common import qubit_partition_map as _qubit_partition_map
+
 if TYPE_CHECKING:
     from memq_dqc.circuit.dag import CircuitDAG
     from memq_dqc.circuit.ops import Op
@@ -144,16 +146,7 @@ def qubit_partition_map(
     Returns:
         The partition index for each qubit index.
     """
-    qubit_to_partition: dict[int, int] = {}
-    if isinstance(partition, dict):
-        for qpu, qubit_set in partition.items():
-            for qubit in qubit_set:
-                qubit_to_partition[qubit] = qpu.id
-        return qubit_to_partition
-    for part_idx, qubit_set in enumerate(partition):
-        for qubit in qubit_set:
-            qubit_to_partition[qubit] = part_idx
-    return qubit_to_partition
+    return _qubit_partition_map(partition)
 
 
 def distribute(v: int, n: int) -> list[int]:

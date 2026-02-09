@@ -17,7 +17,7 @@ from memq_dqc.graph import NetworkGraph
 from memq_dqc.partition.algos import kl_partition
 from memq_dqc.partition.partitioner import QPU, BasePartitioner
 from memq_dqc.partition.utils import partition_cost
-from memq_dqc.qasm import count_total_qubits
+from memq_dqc.preprocessing.qasm import count_total_qubits
 from memq_dqc.utils import (
     create_initial_subcircuit_graph,
     get_windows,
@@ -35,7 +35,7 @@ class CiscoPartitioner(BasePartitioner):
         network: NetworkGraph,
         program: ast.Program,
         *,
-        window_length: int = None,
+        window_length: int | None = None,
     ) -> None:
         """Initialize the Cisco partitioner.
 
@@ -56,17 +56,17 @@ class CiscoPartitioner(BasePartitioner):
         num_qubits = count_total_qubits(self.program)
         partition_sizes = self.network.comp_qubits_per_qpu()
         dag = self.dag
-        num_2q_ops = dag.num_two_qubit_gates
+        num_two_qubit_ops = dag.num_two_qubit_gates
         # Determining optimal window size
         if self.window_length is None:
-            if num_2q_ops == 0:
+            if num_two_qubit_ops == 0:
                 self.window_length = 1
             else:
-                gate_density = num_2q_ops / max(1, num_qubits)
+                gate_density = num_two_qubit_ops / max(1, num_qubits)
                 density_scale = max(0.5, min(math.sqrt(gate_density), 2.0))
-                base_window = math.sqrt(num_2q_ops) * density_scale
-                min_window = 1 if num_2q_ops < 10 else 10
-                max_window = min(100, num_2q_ops)
+                base_window = math.sqrt(num_two_qubit_ops) * density_scale
+                min_window = 1 if num_two_qubit_ops < 10 else 10
+                max_window = min(100, num_two_qubit_ops)
                 self.window_length = max(
                     min_window, min(int(round(base_window)), max_window)
                 )
@@ -90,29 +90,36 @@ class CiscoPartitioner(BasePartitioner):
         window_partitions = [partition_result]
 
         for ops in windows[1:]:
-            p_old = window_partitions[-1]
-            partition_map = qubit_partition_map(p_old)
-            g, active_qubits = build_window_interaction_graph(
+            previous_partition = window_partitions[-1]
+            partition_map = qubit_partition_map(previous_partition)
+            window_graph, active_qubits = build_window_interaction_graph(
                 ops, partition_map
             )
             if not active_qubits:
-                window_partitions.append(p_old)
+                window_partitions.append(previous_partition)
                 continue
 
-            new_partition_sizes = [len(p & active_qubits) for p in p_old]
-            p_new_active = kl_partition(g, partitions=new_partition_sizes)
-            p_new = _merge_partitions_with_active(
-                p_old, p_new_active, active_qubits
+            active_partition_sizes = [
+                len(partition & active_qubits)
+                for partition in previous_partition
+            ]
+            active_partition = kl_partition(
+                window_graph, partitions=active_partition_sizes
+            )
+            candidate_partition = _merge_partitions_with_active(
+                previous_partition, active_partition, active_qubits
             )
 
-            old_cost = partition_cost(g, p_old)
-            new_cost = partition_cost(g, p_new) + movement_cost(p_new, p_old)
-            if new_cost <= old_cost:
-                window_partitions.append(p_new)
-                total_entanglement_cost += new_cost
+            previous_cost = partition_cost(window_graph, previous_partition)
+            candidate_cost = partition_cost(
+                window_graph, candidate_partition
+            ) + movement_cost(candidate_partition, previous_partition)
+            if candidate_cost <= previous_cost:
+                window_partitions.append(candidate_partition)
+                total_entanglement_cost += candidate_cost
             else:
-                window_partitions.append(p_old)
-                total_entanglement_cost += old_cost
+                window_partitions.append(previous_partition)
+                total_entanglement_cost += previous_cost
 
         self.cost = total_entanglement_cost
         self.schedule = _build_schedule(window_partitions, qpus)

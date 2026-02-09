@@ -5,8 +5,4 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Public entry points for circuit extraction utilities."""
-
-from .circuit_extractor import extract_distributed_circuit
-
-__all__ = ["extract_distributed_circuit"]
+"""Preprocessing utilities for memq_dqc."""

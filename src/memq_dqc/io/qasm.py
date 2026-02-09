@@ -36,10 +36,9 @@ def load_qasm_program(filename: str, from_cache: bool = False) -> ast.Program:
         raise FileNotFoundError(f"File not found: {filename}")
     if from_cache:
         return _load_program_from_cache(qasm_path)
-    qasm_source = qasm_path.read_text(encoding="utf-8")
-    program = openqasm3.parser.parse(qasm_source)
-    num_qbit_regs = _count_qubit_declarations(program)
-    if num_qbit_regs > 1:
+    program = _parse_qasm_source(qasm_path.read_text(encoding="utf-8"))
+    num_qubit_registers = _count_qubit_declarations(program)
+    if num_qubit_registers > 1:
         raise NotImplementedError(
             "Multiple qubit registers are not supported yet."
         )
@@ -62,11 +61,15 @@ def _load_program_from_cache(qasm_path: Path) -> ast.Program:
             except (pickle.UnpicklingError, EOFError):
                 pass
 
-    qasm_source = qasm_path.read_text(encoding="utf-8")
-    program = openqasm3.parser.parse(qasm_source)
+    program = _parse_qasm_source(qasm_path.read_text(encoding="utf-8"))
     with cache_path.open("wb") as handle:
         pickle.dump(program, handle)
     return program
+
+
+def _parse_qasm_source(qasm_source: str) -> ast.Program:
+    """Parse OpenQASM 3 source text into an AST program."""
+    return openqasm3.parser.parse(qasm_source)
 
 
 def _count_qubit_declarations(program: ast.Program) -> int:
