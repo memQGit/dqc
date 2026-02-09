@@ -490,7 +490,7 @@ def _replace_qubit_declarations(
 
     Args:
         statements: List of cleaned statements to process.
-        schedule: Mapping of QPUs to sets of statement indices for each scheduling step.
+        schedule: Partition schedule; for each window, a mapping of QPUs to sets of logical qubit indices.
 
     Returns:
         Updated list of cleaned statements with new qubit declarations.
