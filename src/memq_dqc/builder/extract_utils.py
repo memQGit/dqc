@@ -34,35 +34,6 @@ class SwapOp:
     pos1: Pos
 
 
-def identify_state_tele_ops(
-    schedule: list[PartitionAssignment],
-) -> list[dict[int, tuple[int, int]]]:
-    """Identify state teleportation operations in the schedule.
-
-    Args:
-        schedule: A list of time steps, each mapping QPUs to logical qubits.
-
-    Returns:
-        A list of dictionaries mapping logical qubits to a tuple of (source QPU,
-        destination QPU) for each state teleportation operation in each time step,
-        starting with the 2nd time step.
-    """
-    tele_ops_per_timestep: list[dict[int, tuple[int, int]]] = []
-    for step_idx in range(1, len(schedule)):
-        tele_ops: dict[int, tuple[int, int]] = {}
-        prev_assignment = schedule[step_idx - 1]
-        curr_assignment = schedule[step_idx]
-        for qpu_src, src_qubits in prev_assignment.items():
-            for qpu_dst, dst_qubits in curr_assignment.items():
-                if qpu_src.id == qpu_dst.id:
-                    continue
-                teleported_qubits = src_qubits.intersection(dst_qubits)
-                for logical_qubit in teleported_qubits:
-                    tele_ops[logical_qubit] = (qpu_src.id, qpu_dst.id)
-        tele_ops_per_timestep.append(tele_ops)
-    return tele_ops_per_timestep
-
-
 def synthesize_state_teleportation_swaps(
     schedule: list[PartitionAssignment],
 ) -> list[list[SwapOp]]:
