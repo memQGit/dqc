@@ -28,7 +28,10 @@ coverage.xml
 
 # Local testing / playground scripts
 scripts/
+results/
 
+# Local caching
+.cache/
 
 # Local notes
 notes.txt
