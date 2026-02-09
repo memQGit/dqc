@@ -21,7 +21,7 @@ from memq_dqc.io.qasm import load_qasm_program
 from memq_dqc.qasm.types import Qubit
 
 
-# TODO: come up with better naming for all of these instead of "Cleanned (...)"
+# TODO: come up with better naming for all of these instead of "Cleaned (...)"
 @dataclass(frozen=True, slots=True)
 class Cbit:
     """Represents a classical bit with register name and index."""
