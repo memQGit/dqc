@@ -218,7 +218,7 @@ class DistributedCircuitDAG(CircuitDAG):
             remote_statement_ids: Statement indices to rename as remote gates.
             swaps_schedule: List of swap operations organized by scheduling windows.
             windows: List of operation windows for distributed execution.
-            schedule: Mapping of QPUs to sets of statement indices for each scheduling step.
+            schedule: Mapping of QPUs to sets of qubit indices for each scheduling step.
         """
         self.program = base_dag.program
         self.statements = self._build_statements(
