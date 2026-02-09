@@ -1,5 +1,5 @@
-OPENQASM 2.0;
-include "qelib1.inc";
+OPENQASM 3.0;
+include "stdgates.inc";
 qreg q[100];
 creg meas[100];
 u3(2.090344536010263,0.682091840834901,-3.0416357164565166) q[0];
