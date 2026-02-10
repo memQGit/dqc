@@ -119,9 +119,9 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> str:
             name = stmt.name.name
             if name == "rcx":
                 stmt.name.name = "cx"
-            if name == "rcp":
+            elif name == "rcp":
                 stmt.name.name = "cp"
-            if name == "rcz":
+            elif name == "rcz":
                 stmt.name.name = "cz"
             # replace RSWAP w/ SWAP
             elif name == "rswap":
