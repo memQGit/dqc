@@ -39,3 +39,7 @@ notes.txt
 # CODEX
 .codex/
 AGENTS.md
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+*-checkpoint.ipynb
