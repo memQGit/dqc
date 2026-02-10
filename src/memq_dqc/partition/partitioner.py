@@ -43,8 +43,9 @@ class BasePartitioner(ABC):
         self.network = network
         self.program = program
         self.dag = CircuitDAG(program)
-        self.cost: float | None = None
+        # TODO: check correctness (should be total e-bits; not based on partition graph)
         self.schedule: PartitionSchedule | None = None
+        self.cost: float | None = None
         self.windows: PartitionWindows | None = None
 
     @abstractmethod
