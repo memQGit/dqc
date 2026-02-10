@@ -222,11 +222,12 @@ def test_distributed_dag_counts_remote_gates(
         if isinstance(statement, CleanedQuantumGate)
         and statement.name == "rswap"
     )
+    # TODO: must update with valid 2q gates!
     remote_gate_count = sum(
         1
         for statement in dist_dag.statements
         if isinstance(statement, CleanedQuantumGate)
-        and statement.name == "rcx"
+        and (statement.name == "rcx" or statement.name == "rcp")
     )
     assert swap_gate_count == num_swaps
     assert remote_gate_count + swap_gate_count == (

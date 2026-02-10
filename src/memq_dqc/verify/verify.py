@@ -16,6 +16,8 @@ from qiskit.quantum_info import hellinger_fidelity
 from qiskit_aer import AerSimulator
 
 
+# TODO: verifier should also perform some hardware verification, eg. ensuring
+# that local / remote gates reflect actual connectivity
 def verify_distributed_circuit(
     original_circuit_path: str,
     dist_circuit_path: str,
@@ -117,6 +119,10 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> str:
             name = stmt.name.name
             if name == "rcx":
                 stmt.name.name = "cx"
+            elif name == "rcp":
+                stmt.name.name = "cp"
+            elif name == "rcz":
+                stmt.name.name = "cz"
             # replace RSWAP w/ SWAP
             elif name == "rswap":
                 stmt.name.name = "swap"
