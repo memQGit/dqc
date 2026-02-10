@@ -7,7 +7,13 @@ gate rcx q0, q1 {
 }
 
 // remote controlled phase gate (placeholder)
-gate rcp q0, q1 {
+gate rcp q0, q1, theta {
+    id q0;
+    id q1;
+}
+
+// remote controlled Z gate (placeholder)
+gate rcz q0, q1 {
     id q0;
     id q1;
 }
