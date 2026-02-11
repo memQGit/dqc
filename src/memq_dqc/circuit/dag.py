@@ -518,39 +518,42 @@ def _replace_qubit_declarations(
 
     qpu_qubits = {qpu: set(qubits) for qpu, qubits in schedule[0].items()}
     qpu_ids = sorted(qpu.id for qpu in qpu_qubits)
-    if comp_qubits_per_qpu is not None:
-        missing_ids = [
-            qpu_id for qpu_id in qpu_ids if qpu_id >= len(comp_qubits_per_qpu)
-        ]
-        if missing_ids:
+    if comp_qubits_per_qpu is None:
+        comp_counts_by_qpu = {
+            qpu.id: len(qubits) for qpu, qubits in qpu_qubits.items()
+        }
+    else:
+        if len(comp_qubits_per_qpu) != len(qpu_ids):
             raise ValueError(
-                "comp_qubits_per_qpu is missing counts for QPU IDs: "
-                f"{missing_ids}"
+                "comp_qubits_per_qpu length must match the number of QPUs "
+                f"in schedule: {len(comp_qubits_per_qpu)} != {len(qpu_ids)}."
             )
-        for qpu, qubits in qpu_qubits.items():
-            capacity = comp_qubits_per_qpu[qpu.id]
-            if len(qubits) > capacity:
-                raise ValueError(
-                    "Schedule assigns more computation qubits than available "
-                    f"on QPU {qpu.id}: assigned={len(qubits)}, "
-                    f"capacity={capacity}."
-                )
-    if comm_qubits_per_qpu is not None:
-        missing_ids = [
-            qpu_id for qpu_id in qpu_ids if qpu_id >= len(comm_qubits_per_qpu)
-        ]
-        if missing_ids:
+        comp_counts_by_qpu = {
+            qpu_id: comp_qubits_per_qpu[idx]
+            for idx, qpu_id in enumerate(qpu_ids)
+        }
+
+    for qpu, qubits in qpu_qubits.items():
+        capacity = comp_counts_by_qpu[qpu.id]
+        if len(qubits) > capacity:
             raise ValueError(
-                "comm_qubits_per_qpu is missing counts for QPU IDs: "
-                f"{missing_ids}"
+                "Schedule assigns more computation qubits than available "
+                f"on QPU {qpu.id}: assigned={len(qubits)}, "
+                f"capacity={capacity}."
             )
 
-    comm_counts_by_qpu = {
-        qpu_id: (
-            0 if comm_qubits_per_qpu is None else comm_qubits_per_qpu[qpu_id]
-        )
-        for qpu_id in qpu_ids
-    }
+    if comm_qubits_per_qpu is None:
+        comm_counts_by_qpu = {qpu_id: 0 for qpu_id in qpu_ids}
+    else:
+        if len(comm_qubits_per_qpu) != len(qpu_ids):
+            raise ValueError(
+                "comm_qubits_per_qpu length must match the number of QPUs "
+                f"in schedule: {len(comm_qubits_per_qpu)} != {len(qpu_ids)}."
+            )
+        comm_counts_by_qpu = {
+            qpu_id: comm_qubits_per_qpu[idx]
+            for idx, qpu_id in enumerate(qpu_ids)
+        }
 
     def _build_declaration(
         register_name: str,
@@ -572,12 +575,10 @@ def _replace_qubit_declarations(
         )
 
     new_declarations: list[CleanedStatement] = []
-    for qpu, qubits in sorted(qpu_qubits.items(), key=lambda item: item[0].id):
-        comp_size = (
-            len(qubits)
-            if comp_qubits_per_qpu is None
-            else comp_qubits_per_qpu[qpu.id]
-        )
+    for qpu, _qubits in sorted(
+        qpu_qubits.items(), key=lambda item: item[0].id
+    ):
+        comp_size = comp_counts_by_qpu[qpu.id]
         new_declarations.append(_build_declaration(f"q{qpu.id}", comp_size))
 
     for qpu_id in qpu_ids:

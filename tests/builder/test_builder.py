@@ -11,7 +11,22 @@ from openqasm3 import ast
 from memq_dqc.builder import extract_distributed_circuit, identify_remote_gates
 from memq_dqc.graph import NetworkGraph
 from memq_dqc.io.qasm import load_qasm_program
-from memq_dqc.partition import Partitioner
+from memq_dqc.partition import QPU, Partitioner
+from memq_dqc.partition.partitioner import BasePartitioner
+from memq_dqc.utils import get_windows
+
+
+class _CustomQpuIdPartitioner(BasePartitioner):
+    """Partitioner used by tests to emit non-zero-based QPU IDs."""
+
+    def run(self) -> None:
+        """Populate schedule/windows with fixed assignments."""
+        windows = get_windows(self.dag, window_length=2)
+        self.windows = windows
+        self.schedule = [
+            {QPU(id=1): {0, 1, 2}, QPU(id=2): {3, 4, 5}} for _ in windows
+        ]
+        self.cost = 0.0
 
 
 def _declaration_size(statement: ast.QubitDeclaration) -> int:
@@ -123,3 +138,33 @@ def test_extract_distributed_circuit_uses_full_comp_register_capacity(
     assert declaration_sizes["q1"] == 4
     assert declaration_sizes["c0"] == 2
     assert declaration_sizes["c1"] == 2
+
+
+def test_extract_distributed_circuit_nonzero_based_qpu_ids(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo=_CustomQpuIdPartitioner(network, program),
+    )
+    partitioner.run()
+
+    distributed_program = extract_distributed_circuit(partitioner)
+    declarations = [
+        statement
+        for statement in distributed_program.statements
+        if isinstance(statement, ast.QubitDeclaration)
+    ]
+    declaration_sizes = {
+        statement.qubit.name: _declaration_size(statement)
+        for statement in declarations
+    }
+
+    assert declaration_sizes["q1"] == 3
+    assert declaration_sizes["q2"] == 3
+    assert declaration_sizes["c1"] == 1
+    assert declaration_sizes["c2"] == 1

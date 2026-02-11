@@ -236,11 +236,21 @@ class NetworkGraph:
             comp_ids: list[int | str] = []
             comm_ids: list[int | str] = []
             for qubit_id in _normalize_qubit_ids(qubits):
-                qubit_type = self._qubit_type_map.get(qubit_id)
+                if qubit_id not in self._qubit_type_map:
+                    raise ValueError(
+                        f"Processor references unknown qubit ID {qubit_id!r}."
+                    )
+                qubit_type = self._qubit_type_map[qubit_id]
                 if qubit_type == "computation":
                     comp_ids.append(qubit_id)
                 elif qubit_type == "communication":
                     comm_ids.append(qubit_id)
+                else:
+                    raise ValueError(
+                        "Invalid qubit type for qubit "
+                        f"{qubit_id!r}: {qubit_type!r}. Expected "
+                        "'computation' or 'communication'."
+                    )
             grouped.append(
                 {
                     "computation": comp_ids,
