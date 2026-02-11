@@ -1,0 +1,94 @@
+{
+  "processors": {
+    "0": {
+      "id": 0,
+      "qubits": {
+        "computation": ["q_0_0", "q_0_1", "q_0_2"],
+        "communication": ["c_0_0", "c_0_1"]
+      }
+    },
+    "1": {
+      "id": 1,
+      "qubits": {
+        "computation": ["q_1_0", "q_1_1", "q_1_2"],
+        "communication": ["c_1_0", "c_1_1"]
+      }
+    }
+  },
+  "qubits": {
+    "q_0_0": {
+      "id": "q_0_0",
+      "type": "computation",
+      "processorId": 0,
+      "localConnections": [],
+      "remoteConnections": []
+    },
+    "q_0_1": {
+      "id": "q_0_1",
+      "type": "computation",
+      "processorId": 0,
+      "localConnections": [],
+      "remoteConnections": []
+    },
+    "q_0_2": {
+      "id": "q_0_2",
+      "type": "computation",
+      "processorId": 0,
+      "localConnections": [],
+      "remoteConnections": []
+    },
+    "c_0_0": {
+      "id": "c_0_0",
+      "type": "communication",
+      "processorId": 0,
+      "localConnections": [],
+      "remoteConnections": ["c_1_0"]
+    },
+    "c_0_1": {
+      "id": "c_0_1",
+      "type": "communication",
+      "processorId": 0,
+      "localConnections": [],
+      "remoteConnections": ["c_1_1"]
+    },
+    "q_1_0": {
+      "id": "q_1_0",
+      "type": "computation",
+      "processorId": 1,
+      "localConnections": [],
+      "remoteConnections": []
+    },
+    "q_1_1": {
+      "id": "q_1_1",
+      "type": "computation",
+      "processorId": 1,
+      "localConnections": [],
+      "remoteConnections": []
+    },
+    "q_1_2": {
+      "id": "q_1_2",
+      "type": "computation",
+      "processorId": 1,
+      "localConnections": [],
+      "remoteConnections": []
+    },
+    "c_1_0": {
+      "id": "c_1_0",
+      "type": "communication",
+      "processorId": 1,
+      "localConnections": [],
+      "remoteConnections": ["c_0_0"]
+    },
+    "c_1_1": {
+      "id": "c_1_1",
+      "type": "communication",
+      "processorId": 1,
+      "localConnections": [],
+      "remoteConnections": ["c_0_1"]
+    }
+  },
+  "connections": [
+    {"qubit1": "c_0_0", "qubit2": "c_1_0", "type": "remote"},
+    {"qubit1": "c_0_1", "qubit2": "c_1_1", "type": "remote"}
+  ]
+}
