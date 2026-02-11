@@ -210,6 +210,8 @@ class DistributedCircuitDAG(CircuitDAG):
         swaps_schedule: list[list[SwapOp]],
         windows: list[list[Op]],
         schedule: list[dict[QPU, set[int]]],
+        comp_qubits_per_qpu: list[int] | None = None,
+        comm_qubits_per_qpu: list[int] | None = None,
     ) -> None:
         """Initialize a distributed DAG from an existing DAG.
 
@@ -219,6 +221,10 @@ class DistributedCircuitDAG(CircuitDAG):
             swaps_schedule: List of swap operations organized by scheduling windows.
             windows: List of operation windows for distributed execution.
             schedule: Mapping of QPUs to sets of qubit indices for each scheduling step.
+            comp_qubits_per_qpu: Number of computation qubits for each QPU
+                indexed by QPU ID.
+            comm_qubits_per_qpu: Number of communication qubits for each QPU
+                indexed by QPU ID.
         """
         self.program = base_dag.program
         self.statements = self._build_statements(
@@ -227,6 +233,8 @@ class DistributedCircuitDAG(CircuitDAG):
             windows,
             swaps_schedule,
             schedule,
+            comp_qubits_per_qpu,
+            comm_qubits_per_qpu,
         )
         self.ops = self._build_ops(base_dag.ops, remote_statement_ids)
         self.num_remote_gates = self._count_remote_gates(remote_statement_ids)
@@ -242,6 +250,8 @@ class DistributedCircuitDAG(CircuitDAG):
         windows: list[list[Op]],
         swaps_schedule: list[list[SwapOp]],
         schedule: list[dict[QPU, set[int]]],
+        comp_qubits_per_qpu: list[int] | None = None,
+        comm_qubits_per_qpu: list[int] | None = None,
     ) -> list[CleanedStatement]:
         if not windows:
             raise ValueError("windows must contain at least one window.")
@@ -363,6 +373,8 @@ class DistributedCircuitDAG(CircuitDAG):
         distributed_statements = _replace_qubit_declarations(
             distributed_statements,
             schedule,
+            comp_qubits_per_qpu,
+            comm_qubits_per_qpu,
         )
         return distributed_statements
 
@@ -485,12 +497,18 @@ def _map_qubit_ref(
 def _replace_qubit_declarations(
     statements: list[CleanedStatement],
     schedule: list[dict[QPU, set[int]]],
+    comp_qubits_per_qpu: list[int] | None = None,
+    comm_qubits_per_qpu: list[int] | None = None,
 ) -> list[CleanedStatement]:
     """Replace original qubit declaration with new declarations for each QPU.
 
     Args:
         statements: List of cleaned statements to process.
         schedule: Partition schedule; for each window, a mapping of QPUs to sets of logical qubit indices.
+        comp_qubits_per_qpu: Number of computation qubits for each QPU
+            indexed by QPU ID.
+        comm_qubits_per_qpu: Number of communication qubits for each QPU
+            indexed by QPU ID.
 
     Returns:
         Updated list of cleaned statements with new qubit declarations.
@@ -499,25 +517,76 @@ def _replace_qubit_declarations(
         raise ValueError("schedule must contain at least one window.")
 
     qpu_qubits = {qpu: set(qubits) for qpu, qubits in schedule[0].items()}
-    new_declarations: list[CleanedStatement] = []
-    for qpu, qubits in sorted(qpu_qubits.items(), key=lambda item: item[0].id):
-        size = len(qubits)
+    qpu_ids = sorted(qpu.id for qpu in qpu_qubits)
+    if comp_qubits_per_qpu is None:
+        comp_counts_by_qpu = {
+            qpu.id: len(qubits) for qpu, qubits in qpu_qubits.items()
+        }
+    else:
+        if len(comp_qubits_per_qpu) != len(qpu_ids):
+            raise ValueError(
+                "comp_qubits_per_qpu length must match the number of QPUs "
+                f"in schedule: {len(comp_qubits_per_qpu)} != {len(qpu_ids)}."
+            )
+        comp_counts_by_qpu = {
+            qpu_id: comp_qubits_per_qpu[idx]
+            for idx, qpu_id in enumerate(qpu_ids)
+        }
+
+    for qpu, qubits in qpu_qubits.items():
+        capacity = comp_counts_by_qpu[qpu.id]
+        if len(qubits) > capacity:
+            raise ValueError(
+                "Schedule assigns more computation qubits than available "
+                f"on QPU {qpu.id}: assigned={len(qubits)}, "
+                f"capacity={capacity}."
+            )
+
+    if comm_qubits_per_qpu is None:
+        comm_counts_by_qpu = {qpu_id: 0 for qpu_id in qpu_ids}
+    else:
+        if len(comm_qubits_per_qpu) != len(qpu_ids):
+            raise ValueError(
+                "comm_qubits_per_qpu length must match the number of QPUs "
+                f"in schedule: {len(comm_qubits_per_qpu)} != {len(qpu_ids)}."
+            )
+        comm_counts_by_qpu = {
+            qpu_id: comm_qubits_per_qpu[idx]
+            for idx, qpu_id in enumerate(qpu_ids)
+        }
+
+    def _build_declaration(
+        register_name: str,
+        size: int,
+    ) -> CleanedQubitDeclaration:
         size_expr = ast.IntegerLiteral(size) if size != 1 else None
         node = clone_statement_node(
             ast.QubitDeclaration(
-                qubit=ast.Identifier(f"q{qpu.id}"),
+                qubit=ast.Identifier(register_name),
                 size=size_expr,
             )
         )
-        new_declarations.append(
-            CleanedQubitDeclaration(
-                statement_type=ast.QubitDeclaration,
-                node=node,
-                is_op=False,
-                name=f"q{qpu.id}",
-                size=size,
-            )
+        return CleanedQubitDeclaration(
+            statement_type=ast.QubitDeclaration,
+            node=node,
+            is_op=False,
+            name=register_name,
+            size=size,
         )
+
+    new_declarations: list[CleanedStatement] = []
+    for qpu, _qubits in sorted(
+        qpu_qubits.items(), key=lambda item: item[0].id
+    ):
+        comp_size = comp_counts_by_qpu[qpu.id]
+        new_declarations.append(_build_declaration(f"q{qpu.id}", comp_size))
+
+    for qpu_id in qpu_ids:
+        comm_size = comm_counts_by_qpu[qpu_id]
+        if comm_size > 0:
+            new_declarations.append(
+                _build_declaration(f"c{qpu_id}", comm_size)
+            )
 
     filtered = [
         statement

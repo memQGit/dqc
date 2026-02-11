@@ -5,6 +5,8 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import pytest
+
 from memq_dqc.circuit import CircuitDAG
 from memq_dqc.graph import NetworkGraph
 from memq_dqc.io.qasm import load_qasm_program
@@ -51,3 +53,37 @@ def test_partitioner_large_circuit(
     for window in schedule:
         total_qubits = sum(len(part) for part in window.values())
         assert total_qubits == network.num_comp_qubits
+
+
+def test_partitioner_supports_extra_comp_capacity(
+    simple1_circuit_path,
+    simple1_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network_path = simple1_network_path.parent / "simple_8comp_4comm.json"
+    network = NetworkGraph(str(network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+
+    assert partitioner.schedule
+    for window in partitioner.schedule:
+        total_qubits = sum(len(part) for part in window.values())
+        assert total_qubits == 6
+
+
+def test_partitioner_raises_on_insufficient_comp_capacity(
+    simple1_circuit_path,
+    simple1_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(simple1_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+
+    with pytest.raises(
+        ValueError, match="Insufficient computation-qubit capacity"
+    ):
+        partitioner.run()
