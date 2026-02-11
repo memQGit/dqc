@@ -109,6 +109,11 @@ class Partitioner:
         """Return the circuit DAG for the configured program."""
         return self._algorithm.dag
 
+    @property
+    def network(self) -> NetworkGraph:
+        """Return the network graph used by the configured algorithm."""
+        return self._algorithm.network
+
     def _resolve_algorithm(
         self,
         network: NetworkGraph,

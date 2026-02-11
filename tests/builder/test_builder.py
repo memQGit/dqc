@@ -14,6 +14,15 @@ from memq_dqc.io.qasm import load_qasm_program
 from memq_dqc.partition import Partitioner
 
 
+def _declaration_size(statement: ast.QubitDeclaration) -> int:
+    """Return the declared qubit register size."""
+    if statement.size is None:
+        return 1
+    if isinstance(statement.size, ast.IntegerLiteral):
+        return statement.size.value
+    raise TypeError("Qubit declaration size must be an integer literal.")
+
+
 def test_extract_distributed_circuit_requires_run(
     simple1_circuit_path,
     three_comp_one_comm_x2_network_path,
@@ -57,3 +66,60 @@ def test_extract_distributed_circuit_returns_program(
 
     assert isinstance(distributed_program, ast.Program)
     assert distributed_program.statements
+
+
+def test_extract_distributed_circuit_adds_comm_registers(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+
+    distributed_program = extract_distributed_circuit(partitioner)
+    declarations = [
+        statement
+        for statement in distributed_program.statements
+        if isinstance(statement, ast.QubitDeclaration)
+    ]
+    declaration_sizes = {
+        statement.qubit.name: _declaration_size(statement)
+        for statement in declarations
+    }
+
+    assert declaration_sizes["q0"] == 3
+    assert declaration_sizes["q1"] == 3
+    assert declaration_sizes["c0"] == 1
+    assert declaration_sizes["c1"] == 1
+
+
+def test_extract_distributed_circuit_uses_full_comp_register_capacity(
+    simple1_circuit_path,
+    simple1_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network_path = simple1_network_path.parent / "simple_8comp_4comm.json"
+    network = NetworkGraph(str(network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+
+    distributed_program = extract_distributed_circuit(partitioner)
+    declarations = [
+        statement
+        for statement in distributed_program.statements
+        if isinstance(statement, ast.QubitDeclaration)
+    ]
+    declaration_sizes = {
+        statement.qubit.name: _declaration_size(statement)
+        for statement in declarations
+    }
+
+    assert declaration_sizes["q0"] == 4
+    assert declaration_sizes["q1"] == 4
+    assert declaration_sizes["c0"] == 2
+    assert declaration_sizes["c1"] == 2
