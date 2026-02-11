@@ -54,7 +54,10 @@ class CiscoPartitioner(BasePartitioner):
             cost, schedule, and windows with the latest partitioning results.
         """
         num_qubits = count_total_qubits(self.program)
-        partition_sizes = self.network.comp_qubits_per_qpu()
+        partition_sizes = _effective_partition_sizes(
+            self.network.comp_qubits_per_qpu(),
+            num_qubits,
+        )
         dag = self.dag
         num_two_qubit_ops = dag.num_two_qubit_gates
         # Determining optimal window size
@@ -123,6 +126,43 @@ class CiscoPartitioner(BasePartitioner):
 
         self.cost = total_entanglement_cost
         self.schedule = _build_schedule(window_partitions, qpus)
+
+
+def _effective_partition_sizes(
+    qpu_comp_capacities: list[int],
+    num_logical_qubits: int,
+) -> list[int]:
+    """Build partition sizes that fit logical qubits within QPU capacities.
+
+    Args:
+        qpu_comp_capacities: Available computation-qubit capacities per QPU.
+        num_logical_qubits: Number of logical qubits in the input circuit.
+
+    Returns:
+        Effective partition sizes for logical-qubit partitioning.
+
+    Raises:
+        ValueError: If network capacity is insufficient for logical qubits.
+    """
+    total_capacity = sum(qpu_comp_capacities)
+    if total_capacity < num_logical_qubits:
+        raise ValueError(
+            "Insufficient computation-qubit capacity in network: "
+            f"required={num_logical_qubits}, available={total_capacity}."
+        )
+    if total_capacity == num_logical_qubits:
+        return list(qpu_comp_capacities)
+
+    effective_sizes = list(qpu_comp_capacities)
+    excess = total_capacity - num_logical_qubits
+    for idx in reversed(range(len(effective_sizes))):
+        if excess == 0:
+            break
+        removable = min(effective_sizes[idx], excess)
+        effective_sizes[idx] -= removable
+        excess -= removable
+
+    return effective_sizes
 
 
 def _merge_partitions_with_active(

@@ -13,6 +13,7 @@ The resulting graph reflects local and remote connectivity between qubits.
 """
 
 import json
+from collections.abc import Iterable
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -42,7 +43,7 @@ class NetworkGraph:
             self._network_data = json.load(f)
 
         self._graph = nx.Graph()
-        self._qubit_type_map: dict[int, str] = {}
+        self._qubit_type_map: dict[int | str, str] = {}
         self._build_network_graph()
 
     def _build_network_graph(self) -> None:
@@ -53,20 +54,26 @@ class NetworkGraph:
         """
         qubits = self._network_data["qubits"]
         for qubit, data in qubits.items():
+            qubit_id = _normalize_qubit_id(qubit)
             # Mark qubit type (computation or communication)
-            self._qubit_type_map[int(qubit)] = data.get("type")
+            self._qubit_type_map[qubit_id] = data.get("type")
             # Add qubit in graph and unpack its attributes to store as node data
-            self._graph.add_node(int(qubit), **data)
+            self._graph.add_node(qubit_id, **data)
         for qubit, data in qubits.items():
+            qubit_id = _normalize_qubit_id(qubit)
             local_connects = data.get("localConnections", [])
             remote_connects = data.get("remoteConnections", [])
             for local in local_connects:
                 self._graph.add_edge(
-                    int(qubit), int(local), connection_type="local"
+                    qubit_id,
+                    _normalize_qubit_id(local),
+                    connection_type="local",
                 )
             for remote in remote_connects:
                 self._graph.add_edge(
-                    int(qubit), int(remote), connection_type="remote"
+                    qubit_id,
+                    _normalize_qubit_id(remote),
+                    connection_type="remote",
                 )
 
     @property
@@ -75,7 +82,7 @@ class NetworkGraph:
         return self._graph
 
     @property
-    def qubit_type_map(self) -> dict[int, str]:
+    def qubit_type_map(self) -> dict[int | str, str]:
         """Return the mapping of qubit IDs to their types."""
         return self._qubit_type_map
 
@@ -113,22 +120,10 @@ class NetworkGraph:
         Returns:
             Counts of computation qubits per QPU, ordered by processor ID.
         """
-        processors = self._network_data["processors"]
-        # Sort by processor ID to ensure consistent ordering
-        sorted_processor_ids = sorted(int(pid) for pid in processors.keys())
-
-        comp_qubits_count = []
-        for proc_id in sorted_processor_ids:
-            processor = processors[str(proc_id)]
-            qubit_ids = processor["qubits"]
-            comp_count = sum(
-                1
-                for qid in qubit_ids
-                if self._qubit_type_map[qid] == "computation"
-            )
-            comp_qubits_count.append(comp_count)
-
-        return comp_qubits_count
+        return [
+            len(qubit_groups["computation"])
+            for qubit_groups in self._processor_qubit_groups()
+        ]
 
     def comm_qubits_per_qpu(self) -> list[int]:
         """Return the number of communication qubits for each QPU.
@@ -136,22 +131,10 @@ class NetworkGraph:
         Returns:
             Counts of communication qubits per QPU, ordered by processor ID.
         """
-        processors = self._network_data["processors"]
-        # Sort by processor ID to ensure consistent ordering
-        sorted_processor_ids = sorted(int(pid) for pid in processors.keys())
-
-        comm_qubits_count = []
-        for proc_id in sorted_processor_ids:
-            processor = processors[str(proc_id)]
-            qubit_ids = processor["qubits"]
-            comm_count = sum(
-                1
-                for qid in qubit_ids
-                if self._qubit_type_map[qid] == "communication"
-            )
-            comm_qubits_count.append(comm_count)
-
-        return comm_qubits_count
+        return [
+            len(qubit_groups["communication"])
+            for qubit_groups in self._processor_qubit_groups()
+        ]
 
     @property
     def is_homogeneous(self) -> bool:
@@ -199,7 +182,7 @@ class NetworkGraph:
 
         plt.show()
 
-    def _get_local_edges(self) -> list[tuple[int, int]]:
+    def _get_local_edges(self) -> list[tuple[int | str, int | str]]:
         """Get all local connection edges from the graph.
 
         Returns:
@@ -211,7 +194,7 @@ class NetworkGraph:
             if data.get("connection_type") == "local"
         ]
 
-    def _get_remote_edges(self) -> list[tuple[int, int]]:
+    def _get_remote_edges(self) -> list[tuple[int | str, int | str]]:
         """Get all remote connection edges from the graph.
 
         Returns:
@@ -222,3 +205,70 @@ class NetworkGraph:
             for u, v, data in self._graph.edges(data=True)
             if data.get("connection_type") == "remote"
         ]
+
+    def _processor_qubit_groups(
+        self,
+    ) -> list[dict[str, list[int | str]]]:
+        """Return computation and communication qubits for each processor."""
+        processors = self._network_data["processors"]
+        sorted_processor_ids = sorted(
+            processors.keys(),
+            key=_processor_sort_key,
+        )
+
+        grouped: list[dict[str, list[int | str]]] = []
+        for proc_id in sorted_processor_ids:
+            processor = processors[proc_id]
+            qubits = processor.get("qubits", [])
+            if isinstance(qubits, dict):
+                grouped.append(
+                    {
+                        "computation": _normalize_qubit_ids(
+                            qubits.get("computation", [])
+                        ),
+                        "communication": _normalize_qubit_ids(
+                            qubits.get("communication", [])
+                        ),
+                    }
+                )
+                continue
+
+            comp_ids: list[int | str] = []
+            comm_ids: list[int | str] = []
+            for qubit_id in _normalize_qubit_ids(qubits):
+                qubit_type = self._qubit_type_map.get(qubit_id)
+                if qubit_type == "computation":
+                    comp_ids.append(qubit_id)
+                elif qubit_type == "communication":
+                    comm_ids.append(qubit_id)
+            grouped.append(
+                {
+                    "computation": comp_ids,
+                    "communication": comm_ids,
+                }
+            )
+
+        return grouped
+
+
+def _normalize_qubit_ids(
+    qubit_ids: Iterable[object],
+) -> list[int | str]:
+    """Normalize a list of qubit IDs into int-or-string values."""
+    return [_normalize_qubit_id(qubit_id) for qubit_id in qubit_ids]
+
+
+def _normalize_qubit_id(qubit_id: object) -> int | str:
+    """Normalize a qubit ID, preserving non-numeric string IDs."""
+    if isinstance(qubit_id, int):
+        return qubit_id
+    if isinstance(qubit_id, str) and qubit_id.isdigit():
+        return int(qubit_id)
+    return str(qubit_id)
+
+
+def _processor_sort_key(processor_id: str) -> tuple[int, int | str]:
+    """Sort processor IDs numerically when possible, then lexically."""
+    if processor_id.isdigit():
+        return (0, int(processor_id))
+    return (1, processor_id)
