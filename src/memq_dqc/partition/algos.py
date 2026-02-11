@@ -17,7 +17,6 @@ import random
 import networkx as nx
 
 from memq_dqc.partition.utils import (
-    generate_equal_partitions,
     get_edge_weight,
     verify_partition_sizes,
 )
@@ -26,7 +25,6 @@ from memq_dqc.partition.utils import (
 # TODO: how to implement these algorithms in a plug-and-play way?
 def kl_partition(
     graph: nx.Graph,
-    # TODO: re-implement support for # partitions for uniform partitions
     partitions: int | list[int],
     n_iter: int = 100,
     seed: int | None = 42,
@@ -48,8 +46,20 @@ def kl_partition(
     nodes = [int(n) for n in graph.nodes()]
 
     if isinstance(partitions, int):
-        # Generate equal partitions if only number specified
-        partitions = generate_equal_partitions(partitions, len(nodes))
+        num_nodes = len(nodes)
+        if partitions <= 0:
+            raise ValueError("partitions must be > 0 when provided as an int.")
+        if partitions > num_nodes:
+            raise ValueError(
+                "partitions must be <= number of graph nodes when "
+                "provided as an int."
+            )
+
+        base_size, remainder = divmod(num_nodes, partitions)
+        partition_sizes = [base_size] * partitions
+        for i in range(remainder):
+            partition_sizes[i] += 1
+        partitions = partition_sizes
     verify_partition_sizes(graph, partitions)
 
     num_partitions = len(partitions)

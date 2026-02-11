@@ -45,6 +45,9 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
     swap_schedule = synthesize_state_teleportation_swaps(schedule)
     num_swaps = sum(len(timestep_swaps) for timestep_swaps in swap_schedule)
     remote_statement_ids = {op.statement_id for op, _ in remote_gates}
+    comp_qubits_per_qpu = partitioner.network.comp_qubits_per_qpu()
+    comm_qubits_per_qpu = partitioner.network.comm_qubits_per_qpu()
+    num_comm_registers = sum(1 for count in comm_qubits_per_qpu if count > 0)
     # TODO: update DAG to take partitioner object directly for cleaner footprint
     distributed_dag = DistributedCircuitDAG(
         dag,
@@ -52,6 +55,8 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
         swap_schedule,
         windows,
         schedule,
+        comp_qubits_per_qpu,
+        comm_qubits_per_qpu,
     )
 
     # Number of QPUs should equal number of partitions
@@ -67,6 +72,7 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
         + int(include_dist_gates)
         + num_swaps
         + num_qpus
+        + num_comm_registers
         - num_qubit_registers
     )
 

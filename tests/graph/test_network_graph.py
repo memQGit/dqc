@@ -5,6 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import json
 from pathlib import Path
 
 import networkx as nx
@@ -146,3 +147,66 @@ def test_is_homogeneous_nonuniform_1(simple1_network_path: Path) -> None:
     assert network_path.exists()
     network = NetworkGraph(str(network_path))
     assert network.is_homogeneous is False
+
+
+def test_dict_qubits_schema_with_string_ids(
+    simple1_network_path: Path,
+) -> None:
+    network_path = simple1_network_path.parent / "dict_qubits_string_ids.json"
+    assert network_path.exists()
+    network = NetworkGraph(str(network_path))
+
+    assert network.num_total_qubits == 10
+    assert network.num_comp_qubits == 6
+    assert network.num_comm_qubits == 4
+    assert network.comp_qubits_per_qpu() == [3, 3]
+    assert network.comm_qubits_per_qpu() == [2, 2]
+    assert "q_0_0" in network.graph.nodes
+    assert "c_1_1" in network.graph.nodes
+    assert network.graph.has_edge("c_0_0", "c_1_0")
+    assert network.graph.has_edge("c_0_1", "c_1_1")
+    assert network.graph.number_of_edges() == 2
+
+
+def test_list_schema_unknown_qubit_id_raises(tmp_path: Path) -> None:
+    network_data = {
+        "processors": {"1": {"id": 1, "qubits": [1, 99]}},
+        "qubits": {
+            "1": {
+                "id": 1,
+                "type": "computation",
+                "processorId": 1,
+                "localConnections": [],
+                "remoteConnections": [],
+            }
+        },
+        "connections": [],
+    }
+    path = tmp_path / "unknown_qubit.json"
+    path.write_text(json.dumps(network_data), encoding="utf-8")
+
+    network = NetworkGraph(str(path))
+    with pytest.raises(ValueError, match="unknown qubit ID"):
+        network.comp_qubits_per_qpu()
+
+
+def test_list_schema_invalid_qubit_type_raises(tmp_path: Path) -> None:
+    network_data = {
+        "processors": {"1": {"id": 1, "qubits": [1]}},
+        "qubits": {
+            "1": {
+                "id": 1,
+                "type": "auxiliary",
+                "processorId": 1,
+                "localConnections": [],
+                "remoteConnections": [],
+            }
+        },
+        "connections": [],
+    }
+    path = tmp_path / "invalid_type.json"
+    path.write_text(json.dumps(network_data), encoding="utf-8")
+
+    network = NetworkGraph(str(path))
+    with pytest.raises(ValueError, match="Invalid qubit type"):
+        network.comp_qubits_per_qpu()
