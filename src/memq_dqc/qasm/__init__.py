@@ -5,8 +5,8 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""OpenQASM 3 type definitions."""
+"""OpenQASM 3 qubit type definitions."""
 
-from memq_dqc.qasm.types import Qubit
+from memq_dqc.qasm.types import LogicalQubit
 
-__all__ = ["Qubit"]
+__all__ = ["LogicalQubit"]

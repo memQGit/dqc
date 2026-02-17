@@ -14,6 +14,13 @@ import pytest
 from memq_dqc.graph.network_graph import NetworkGraph
 
 
+def _node_by_label(network: NetworkGraph, label: str):
+    for node in network.graph.nodes:
+        if node.label == label:
+            return node
+    raise AssertionError(f"Node with label {label!r} was not found.")
+
+
 def test_build_network_graph_returns_graph(simple1_network_path: Path) -> None:
     network = NetworkGraph(str(simple1_network_path))
 
@@ -161,10 +168,14 @@ def test_dict_qubits_schema_with_string_ids(
     assert network.num_comm_qubits == 4
     assert network.comp_qubits_per_qpu() == [3, 3]
     assert network.comm_qubits_per_qpu() == [2, 2]
-    assert "q_0_0" in network.graph.nodes
-    assert "c_1_1" in network.graph.nodes
-    assert network.graph.has_edge("c_0_0", "c_1_0")
-    assert network.graph.has_edge("c_0_1", "c_1_1")
+    labels = {node.label for node in network.graph.nodes}
+    assert "q_0_0" in labels
+    assert "c_1_1" in labels
+    edge_labels = {
+        tuple(sorted((u.label, v.label))) for u, v in network.graph.edges
+    }
+    assert tuple(sorted(("c_0_0", "c_1_0"))) in edge_labels
+    assert tuple(sorted(("c_0_1", "c_1_1"))) in edge_labels
     assert network.graph.number_of_edges() == 2
 
 
@@ -207,6 +218,70 @@ def test_list_schema_invalid_qubit_type_raises(tmp_path: Path) -> None:
     path = tmp_path / "invalid_type.json"
     path.write_text(json.dumps(network_data), encoding="utf-8")
 
-    network = NetworkGraph(str(path))
     with pytest.raises(ValueError, match="Invalid qubit type"):
-        network.comp_qubits_per_qpu()
+        NetworkGraph(str(path))
+
+
+def test_get_shortest_path_returns_nearest_comm_path(
+    simple1_network_path: Path,
+) -> None:
+    network = NetworkGraph(str(simple1_network_path))
+    source = _node_by_label(network, "q_1_0")
+    destination = _node_by_label(network, "c_1_0")
+
+    assert network._get_shortest_path(source) == [source, destination]
+
+
+def test_local_swap_dict_property(simple1_network_path: Path) -> None:
+    network = NetworkGraph(str(simple1_network_path))
+    q_1_0 = _node_by_label(network, "q_1_0")
+    q_1_1 = _node_by_label(network, "q_1_1")
+    c_1_0 = _node_by_label(network, "c_1_0")
+    c_1_1 = _node_by_label(network, "c_1_1")
+
+    swap_map = network.local_swap_dict
+
+    assert isinstance(swap_map, dict)
+    assert swap_map[q_1_0] == (0, [q_1_0, c_1_0])
+    assert swap_map[q_1_1] == (0, [q_1_1, c_1_1])
+
+
+def test_qubit_type_accessors(simple1_network_path: Path) -> None:
+    network = NetworkGraph(str(simple1_network_path))
+
+    comp_qubits = network.computation_qubits()
+    comm_qubits = network.communication_qubits()
+
+    assert len(comp_qubits) == network.num_comp_qubits
+    assert len(comm_qubits) == network.num_comm_qubits
+    assert all(qubit.is_computation for qubit in comp_qubits)
+    assert all(qubit.is_communication for qubit in comm_qubits)
+    assert [qubit.label for qubit in comp_qubits] == [
+        "q_1_0",
+        "q_1_1",
+        "q_2_0",
+        "q_2_1",
+    ]
+
+
+def test_get_comm_pair_paths_are_local_to_source_qpu(
+    three_comp_one_comm_x2_network_path: Path,
+) -> None:
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    qubit_a = _node_by_label(network, "q_1_0")
+    qubit_b = _node_by_label(network, "q_0_0")
+
+    _cost, (comm_a, comm_b), (path_a, path_b) = network.get_comm_pair(
+        qubit_a, qubit_b
+    )
+
+    assert path_a[0] == qubit_a
+    assert path_b[0] == qubit_b
+    assert path_a[-1] == comm_a
+    assert path_b[-1] == comm_b
+    assert comm_a.qpu_id == qubit_a.qpu_id
+    assert comm_b.qpu_id == qubit_b.qpu_id
+    assert sum(node.is_communication for node in path_a) == 1
+    assert sum(node.is_communication for node in path_b) == 1
+    assert all(node.qpu_id == qubit_a.qpu_id for node in path_a)
+    assert all(node.qpu_id == qubit_b.qpu_id for node in path_b)

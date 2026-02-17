@@ -39,6 +39,8 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
     Returns:
         Distributed OpenQASM 3 program with remote gate names applied.
     """
+    # TODO: figure out cleaner way of abstraction ... probably shouldn't all
+    # ... be handled in circuit DAG
     dag, schedule, windows = _validated_partitioner_outputs(partitioner)
 
     remote_gates = identify_remote_gates(dag, partitioner)
@@ -57,6 +59,7 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
         schedule,
         comp_qubits_per_qpu,
         comm_qubits_per_qpu,
+        partitioner.network,
     )
 
     # Number of QPUs should equal number of partitions
@@ -64,7 +67,7 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
 
     # TODO: handle any number of input registers (or enforce 1)
     num_qubit_registers = 1
-
+    local_swaps_added = distributed_dag.num_local_swaps_added
     include_dist_gates = len(remote_gates) > 0 or num_swaps > 0
     # Add statement for each swap and replace one qubit register per QPU.
     expected_statement_count = (
@@ -74,6 +77,7 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
         + num_qpus
         + num_comm_registers
         - num_qubit_registers
+        + local_swaps_added
     )
 
     assert len(distributed_dag.statements) == expected_statement_count
