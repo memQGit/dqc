@@ -15,7 +15,7 @@ from qiskit.dagcircuit import DAGCircuit, DAGOpNode
 from memq_dqc.builder.extract_utils import SwapOp
 from memq_dqc.circuit.dag import CircuitDAG as DAG
 from memq_dqc.circuit.dag import DistributedCircuitDAG
-from memq_dqc.graph import PhysicalQubit
+from memq_dqc.graph import NetworkGraph, PhysicalQubit
 from memq_dqc.io.qasm import load_qasm_program
 from memq_dqc.partition.types import QPU
 from memq_dqc.preprocessing.qasm import CleanedQuantumGate
@@ -283,6 +283,53 @@ def test_distributed_dag_remote_gate_uses_final_swapped_qubits(
         LogicalQubit("q0", 1),
         LogicalQubit("q1", 2),
     ]
+
+
+def test_distributed_dag_routes_remote_gate_through_intermediary_qpu(
+    tmp_path: Path,
+    simple1_network_path: Path,
+) -> None:
+    network_path = simple1_network_path.parent / "nonuniform_1.json"
+    network = NetworkGraph(str(network_path))
+
+    qasm_path = tmp_path / "single_remote.qasm"
+    qasm_path.write_text(
+        "OPENQASM 3.0;\nqubit[2] q;\ncx q[0], q[1];\n",
+        encoding="utf-8",
+    )
+    base_dag = _build_memq_dag(qasm_path)
+    remote_statement_ids = {base_dag.ops[0].statement_id}
+    schedule = [{QPU(id=0): {0}, QPU(id=1): set(), QPU(id=2): {1}}]
+    windows = [base_dag.ops]
+
+    distributed_dag = DistributedCircuitDAG(
+        base_dag=base_dag,
+        remote_statement_ids=remote_statement_ids,
+        swaps_schedule=[],
+        windows=windows,
+        schedule=schedule,
+        comp_qubits_per_qpu=network.comp_qubits_per_qpu(),
+        comm_qubits_per_qpu=network.comm_qubits_per_qpu(),
+        network=network,
+    )
+
+    routed_rswaps = [
+        statement
+        for statement in distributed_dag.statements
+        if isinstance(statement, CleanedQuantumGate)
+        and statement.name == "rswap"
+    ]
+    routed_remote_gates = [
+        statement
+        for statement in distributed_dag.statements
+        if isinstance(statement, CleanedQuantumGate)
+        and statement.name == "rcx"
+    ]
+
+    assert len(routed_rswaps) == 2
+    assert all(len(statement.qubits) == 6 for statement in routed_rswaps)
+    assert len(routed_remote_gates) == 1
+    assert len(routed_remote_gates[0].qubits) == 4
 
 
 def test_distributed_dag_remote_swaps_require_network(

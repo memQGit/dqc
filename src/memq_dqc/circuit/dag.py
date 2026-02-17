@@ -290,6 +290,7 @@ class DistributedCircuitDAG(CircuitDAG):
         Raises:
             ValueError: If window, schedule, or swap dimensions are invalid.
         """
+        # TODO: this needs to be thoroughly fixed and refactored ... messy
         if not windows:
             raise ValueError("windows must contain at least one window.")
         if len(schedule) != len(windows):
@@ -315,12 +316,25 @@ class DistributedCircuitDAG(CircuitDAG):
         final_ops_in_windows = set(window_final_op_id_map(windows).values())
         window_map = window_op_map(windows)
         logical_to_physical = logical_physical_map(schedule, swaps_schedule)
+        schedule_qpu_ids = _sorted_qpu_ids(
+            [qpu.id for qpu in schedule[0].keys()]
+        )
+        comp_capacity_by_schedule_qpu: dict[int, int] | None = None
+        if comp_qubits_per_qpu is not None:
+            if len(comp_qubits_per_qpu) != len(schedule_qpu_ids):
+                raise ValueError(
+                    "comp_qubits_per_qpu length must match the number of "
+                    "QPUs in schedule: "
+                    f"{len(comp_qubits_per_qpu)} != "
+                    f"{len(schedule_qpu_ids)}."
+                )
+            comp_capacity_by_schedule_qpu = {
+                schedule_qpu_id: comp_qubits_per_qpu[idx]
+                for idx, schedule_qpu_id in enumerate(schedule_qpu_ids)
+            }
         schedule_to_network_qpu_id: dict[int, int] = {}
         network_to_schedule_qpu_id: dict[int, int] = {}
         if network is not None:
-            schedule_qpu_ids = _sorted_qpu_ids(
-                [qpu.id for qpu in schedule[0].keys()]
-            )
             network_qpu_ids = _ordered_network_qpu_ids(network)
             if len(schedule_qpu_ids) != len(network_qpu_ids):
                 raise ValueError(
@@ -357,6 +371,10 @@ class DistributedCircuitDAG(CircuitDAG):
             if idx in remote_statement_ids and isinstance(
                 statement, CleanedQuantumGate
             ):
+                if network is None:
+                    raise ValueError(
+                        "Network graph is required to build remote gates."
+                    )
                 # get the physical qubits mapped to appropriate logical qubits
                 gate_qubits = _remap_cleaned_qubits(
                     statement.qubits,
@@ -372,132 +390,58 @@ class DistributedCircuitDAG(CircuitDAG):
                     gate_qubits[1],
                     schedule_to_network_qpu_id,
                 )
-                # Determine the pair of comm qubits to use / path to them
-                _, raw_comm_pair, local_paths = network.get_comm_pair(
-                    network_qubit_a, network_qubit_b
-                )
-                # The new gate qubits will be the phys qubits adjacent to comm
-                # TODO: clean this up
-                updated_gate_qubit_a = (
-                    local_paths[0][-2] if local_paths[0] else network_qubit_a
-                )
-                updated_gate_qubit_b = (
-                    local_paths[1][-2] if local_paths[1] else network_qubit_b
-                )
-                remote_gate_qubits = [
-                    _physical_to_logical_qubit(
-                        updated_gate_qubit_a, network_to_schedule_qpu_id
-                    ),
-                    _physical_to_logical_qubit(
-                        updated_gate_qubit_b, network_to_schedule_qpu_id
-                    ),
-                ]
-                # store swap gate staments so we can reverse them
-                swap_gate_statements = []
-                # Add local swaps to get to adjacent comm qubit
-                for local_path in local_paths:
-                    # Comp qubit is already adjacent to comm qubit
-                    if len(local_path) <= 2:
-                        continue
-
-                    # Track the computation qubit as it moves through the path
-                    current_path = list(local_path)
-                    comp_qubit_pos = (
-                        0  # Computation qubit starts at position 0
-                    )
-
-                    # Move qubit through swap path
-                    for _ in range(len(local_path) - 2):
-                        q0 = _physical_to_logical_qubit(
-                            current_path[comp_qubit_pos],
-                            network_to_schedule_qpu_id,
-                        )
-                        q1 = _physical_to_logical_qubit(
-                            current_path[comp_qubit_pos + 1],
-                            network_to_schedule_qpu_id,
-                        )
-                        # ensure the two qubits are on same QPU (local)
-                        _validate_local_swap_pair(q0, q1)
-                        # create ast node / qubit payload for statement
-                        swap_node, swap_qubits = _build_local_swap_gate(q0, q1)
-                        swap_gate_statement = CleanedQuantumGate(
-                            statement_type=ast.QuantumGate,
-                            node=swap_node,
-                            is_op=True,
-                            name="swap",
-                            qubits=swap_qubits,
-                        )
-                        # add swap statement to list
-                        distributed_statements.append(swap_gate_statement)
-                        swap_gate_statements.append(swap_gate_statement)
-                        # track local swaps for cost accounting
-                        local_swaps_added += 1
-
-                        # Update the path to reflect the swap
-                        (
-                            current_path[comp_qubit_pos],
-                            current_path[comp_qubit_pos + 1],
-                        ) = (
-                            current_path[comp_qubit_pos + 1],
-                            current_path[comp_qubit_pos],
-                        )
-                        comp_qubit_pos += (
-                            1  # Computation qubit moves one step closer
-                        )
-
-                # update gate qubits to physical qubits adjacent to comm qubits
-
-                # ensures communication pair is properly ordered before gate
-                comm_pair = _order_comm_pair(
-                    gate_qubits,
-                    raw_comm_pair,
-                    network_to_schedule_qpu_id,
-                )
-                # TODO: this logic is very confusing right now
-                # add comm qubits to remote gate
-                if comm_pair is not None:
-                    remote_gate_qubits.extend(
-                        [
-                            _physical_to_logical_qubit(
-                                comm_pair[0], network_to_schedule_qpu_id
+                try:
+                    remote_gate_statements, added_local_swaps = (
+                        _build_remote_gate_statements(
+                            statement=statement,
+                            mapped_node=mapped_node,
+                            network_qubit_a=network_qubit_a,
+                            network_qubit_b=network_qubit_b,
+                            gate_qubits=gate_qubits,
+                            network=network,
+                            network_to_schedule_qpu_id=(
+                                network_to_schedule_qpu_id
                             ),
-                            _physical_to_logical_qubit(
-                                comm_pair[1], network_to_schedule_qpu_id
-                            ),
-                        ]
+                        )
                     )
-                remote_gate_name = _REMOTE_TWO_QUBIT_GATE_NAME_MAP.get(
-                    statement.name
-                )
-                if remote_gate_name is None:
-                    raise ValueError(
-                        "Unsupported remote two-qubit gate "
-                        f"{statement.name!r}. Supported gates are: "
-                        f"{sorted(_REMOTE_TWO_QUBIT_GATE_NAME_MAP)}."
-                    )
-                # construct ast-compatible remote gate
-                updated_node = rename_quantum_gate(
-                    mapped_node,
-                    remote_gate_name,
-                )
-                updated_node.qubits = [
-                    _to_ast_qubit_ref(qubit) for qubit in remote_gate_qubits
-                ]
-                distributed_statements.append(
-                    CleanedQuantumGate(
-                        statement_type=statement.statement_type,
-                        node=updated_node,
-                        is_op=statement.is_op,
-                        name=remote_gate_name,
-                        qubits=remote_gate_qubits,
-                    )
-                )
-                # TODO: eventually we should not always swap there and back
-                # Add local swaps to move qubits back to original position
-                swap_gate_statements.reverse()
-                for swap_gate_statement in swap_gate_statements:
-                    distributed_statements.append(swap_gate_statement)
-                    local_swaps_added += 1
+                    distributed_statements.extend(remote_gate_statements)
+                    local_swaps_added += added_local_swaps
+                except ValueError as direct_gate_error:
+                    routed_error: ValueError | None = None
+                    routed_built = False
+                    for moving_operand_idx in (0, 1):
+                        try:
+                            routed_statements, added_local_swaps = (
+                                _build_routed_remote_gate_statements(
+                                    statement=statement,
+                                    mapped_node=mapped_node,
+                                    gate_qubits=gate_qubits,
+                                    logical_to_physical_window=(
+                                        logical_to_physical[current_window_idx]
+                                    ),
+                                    comp_capacity_by_schedule_qpu=(
+                                        comp_capacity_by_schedule_qpu
+                                    ),
+                                    network=network,
+                                    schedule_to_network_qpu_id=(
+                                        schedule_to_network_qpu_id
+                                    ),
+                                    network_to_schedule_qpu_id=(
+                                        network_to_schedule_qpu_id
+                                    ),
+                                    moving_operand_idx=moving_operand_idx,
+                                )
+                            )
+                            distributed_statements.extend(routed_statements)
+                            local_swaps_added += added_local_swaps
+                            routed_built = True
+                            break
+                        except ValueError as route_err:
+                            routed_error = route_err
+                    if not routed_built:
+                        if routed_error is not None:
+                            raise routed_error from direct_gate_error
+                        raise direct_gate_error
             # Insert non-remote gates
             else:
                 if isinstance(statement, CleanedQuantumGate):
@@ -1062,6 +1006,298 @@ def _replace_qubit_declarations(
     ):
         insert_idx += 1
     return filtered[:insert_idx] + new_declarations + filtered[insert_idx:]
+
+
+def _build_remote_gate_statements(
+    statement: CleanedQuantumGate,
+    mapped_node: ast.Statement,
+    network_qubit_a: PhysicalQubit,
+    network_qubit_b: PhysicalQubit,
+    gate_qubits: list[LogicalQubit],
+    network: NetworkGraph,
+    network_to_schedule_qpu_id: dict[int, int],
+) -> tuple[list[CleanedStatement], int]:
+    """Build statements for one remote two-qubit gate execution."""
+    _, raw_comm_pair, local_paths = network.get_comm_pair(
+        network_qubit_a, network_qubit_b
+    )
+    updated_gate_qubit_a = (
+        local_paths[0][-2] if len(local_paths[0]) > 1 else network_qubit_a
+    )
+    updated_gate_qubit_b = (
+        local_paths[1][-2] if len(local_paths[1]) > 1 else network_qubit_b
+    )
+    remote_gate_qubits = [
+        _physical_to_logical_qubit(
+            updated_gate_qubit_a, network_to_schedule_qpu_id
+        ),
+        _physical_to_logical_qubit(
+            updated_gate_qubit_b, network_to_schedule_qpu_id
+        ),
+    ]
+
+    gate_statements: list[CleanedStatement] = []
+    swap_gate_statements: list[CleanedStatement] = []
+    local_swaps_added = 0
+    for local_path in local_paths:
+        if len(local_path) <= 2:
+            continue
+
+        current_path = list(local_path)
+        comp_qubit_pos = 0
+        for _ in range(len(local_path) - 2):
+            q0 = _physical_to_logical_qubit(
+                current_path[comp_qubit_pos],
+                network_to_schedule_qpu_id,
+            )
+            q1 = _physical_to_logical_qubit(
+                current_path[comp_qubit_pos + 1],
+                network_to_schedule_qpu_id,
+            )
+            _validate_local_swap_pair(q0, q1)
+            swap_node, swap_qubits = _build_local_swap_gate(q0, q1)
+            swap_gate_statement = CleanedQuantumGate(
+                statement_type=ast.QuantumGate,
+                node=swap_node,
+                is_op=True,
+                name="swap",
+                qubits=swap_qubits,
+            )
+            gate_statements.append(swap_gate_statement)
+            swap_gate_statements.append(swap_gate_statement)
+            local_swaps_added += 1
+
+            (
+                current_path[comp_qubit_pos],
+                current_path[comp_qubit_pos + 1],
+            ) = (
+                current_path[comp_qubit_pos + 1],
+                current_path[comp_qubit_pos],
+            )
+            comp_qubit_pos += 1
+
+    comm_pair = _order_comm_pair(
+        gate_qubits,
+        raw_comm_pair,
+        network_to_schedule_qpu_id,
+    )
+    remote_gate_qubits.extend(
+        [
+            _physical_to_logical_qubit(
+                comm_pair[0], network_to_schedule_qpu_id
+            ),
+            _physical_to_logical_qubit(
+                comm_pair[1], network_to_schedule_qpu_id
+            ),
+        ]
+    )
+    remote_gate_name = _REMOTE_TWO_QUBIT_GATE_NAME_MAP.get(statement.name)
+    if remote_gate_name is None:
+        raise ValueError(
+            "Unsupported remote two-qubit gate "
+            f"{statement.name!r}. Supported gates are: "
+            f"{sorted(_REMOTE_TWO_QUBIT_GATE_NAME_MAP)}."
+        )
+    updated_node = rename_quantum_gate(mapped_node, remote_gate_name)
+    updated_node.qubits = [
+        _to_ast_qubit_ref(qubit) for qubit in remote_gate_qubits
+    ]
+    gate_statements.append(
+        CleanedQuantumGate(
+            statement_type=statement.statement_type,
+            node=updated_node,
+            is_op=statement.is_op,
+            name=remote_gate_name,
+            qubits=remote_gate_qubits,
+        )
+    )
+
+    swap_gate_statements.reverse()
+    for swap_gate_statement in swap_gate_statements:
+        gate_statements.append(swap_gate_statement)
+        local_swaps_added += 1
+
+    return gate_statements, local_swaps_added
+
+
+def _build_routed_remote_gate_statements(
+    statement: CleanedQuantumGate,
+    mapped_node: ast.Statement,
+    gate_qubits: list[LogicalQubit],
+    logical_to_physical_window: dict[int, tuple[int, int]],
+    comp_capacity_by_schedule_qpu: dict[int, int] | None,
+    network: NetworkGraph,
+    schedule_to_network_qpu_id: dict[int, int],
+    network_to_schedule_qpu_id: dict[int, int],
+    moving_operand_idx: int,
+) -> tuple[list[CleanedStatement], int]:
+    """Build statements for a routed remote gate via intermediary QPUs."""
+    static_operand_idx = 1 - moving_operand_idx
+    moving_gate_qubit = gate_qubits[moving_operand_idx]
+    static_gate_qubit = gate_qubits[static_operand_idx]
+    moving_network_qubit = _logical_to_physical_qubit(
+        moving_gate_qubit,
+        schedule_to_network_qpu_id,
+    )
+    static_network_qubit = _logical_to_physical_qubit(
+        static_gate_qubit,
+        schedule_to_network_qpu_id,
+    )
+    route_qpu_ids = network.get_directional_remote_gate_qpu_route(
+        moving_network_qubit.qpu_id,
+        static_network_qubit.qpu_id,
+    )
+    if len(route_qpu_ids) <= 2:
+        raise ValueError(
+            "Routed remote-gate execution requires at least one intermediary "
+            f"QPU for directional movement {route_qpu_ids!r}."
+        )
+
+    moved_pos = (
+        _qpu_id_from_register_name(moving_gate_qubit.register_name),
+        moving_gate_qubit.index,
+    )
+    static_pos = (
+        _qpu_id_from_register_name(static_gate_qubit.register_name),
+        static_gate_qubit.index,
+    )
+    routed_statements: list[CleanedStatement] = []
+    forward_hop_positions: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    for hop_idx in range(len(route_qpu_ids) - 2):
+        next_network_qpu_id = route_qpu_ids[hop_idx + 1]
+        next_schedule_qpu_id = _map_qpu_id(
+            next_network_qpu_id, network_to_schedule_qpu_id
+        )
+        candidate_slots = _candidate_comp_slots_for_qpu(
+            qpu_id=next_schedule_qpu_id,
+            logical_to_physical_window=logical_to_physical_window,
+            comp_capacity_by_schedule_qpu=comp_capacity_by_schedule_qpu,
+        )
+        if not candidate_slots:
+            raise ValueError(
+                "No computation slot available on intermediary QPU "
+                f"{next_schedule_qpu_id} while routing remote gate."
+            )
+
+        hop_built = False
+        for candidate_slot in candidate_slots:
+            if (
+                next_schedule_qpu_id == static_pos[0]
+                and candidate_slot == static_pos[1]
+            ):
+                continue
+            try:
+                rswap_statement = _build_rswap_statement_from_positions(
+                    pos0=moved_pos,
+                    pos1=(next_schedule_qpu_id, candidate_slot),
+                    network=network,
+                    schedule_to_network_qpu_id=schedule_to_network_qpu_id,
+                    network_to_schedule_qpu_id=network_to_schedule_qpu_id,
+                )
+            except ValueError:
+                continue
+            routed_statements.append(rswap_statement)
+            forward_hop_positions.append(
+                (moved_pos, (next_schedule_qpu_id, candidate_slot))
+            )
+            moved_pos = (next_schedule_qpu_id, candidate_slot)
+            hop_built = True
+            break
+        if not hop_built:
+            raise ValueError(
+                "Unable to build routed remote gate hop from "
+                f"position {moved_pos} to QPU {next_schedule_qpu_id}."
+            )
+
+    moved_gate_qubit = LogicalQubit(
+        register_name=f"q{moved_pos[0]}",
+        index=moved_pos[1],
+    )
+    moved_network_qubit = _logical_to_physical_qubit(
+        moved_gate_qubit,
+        schedule_to_network_qpu_id,
+    )
+
+    if moving_operand_idx == 0:
+        ordered_gate_qubits = [moved_gate_qubit, static_gate_qubit]
+        network_gate_qubits = (moved_network_qubit, static_network_qubit)
+    else:
+        ordered_gate_qubits = [static_gate_qubit, moved_gate_qubit]
+        network_gate_qubits = (static_network_qubit, moved_network_qubit)
+
+    routed_gate_statements, added_local_swaps = _build_remote_gate_statements(
+        statement=statement,
+        mapped_node=mapped_node,
+        network_qubit_a=network_gate_qubits[0],
+        network_qubit_b=network_gate_qubits[1],
+        gate_qubits=ordered_gate_qubits,
+        network=network,
+        network_to_schedule_qpu_id=network_to_schedule_qpu_id,
+    )
+    routed_statements.extend(routed_gate_statements)
+
+    for pos0, pos1 in reversed(forward_hop_positions):
+        routed_statements.append(
+            _build_rswap_statement_from_positions(
+                pos0=pos0,
+                pos1=pos1,
+                network=network,
+                schedule_to_network_qpu_id=schedule_to_network_qpu_id,
+                network_to_schedule_qpu_id=network_to_schedule_qpu_id,
+            )
+        )
+
+    return routed_statements, added_local_swaps
+
+
+def _candidate_comp_slots_for_qpu(
+    qpu_id: int,
+    logical_to_physical_window: dict[int, tuple[int, int]],
+    comp_capacity_by_schedule_qpu: dict[int, int] | None,
+) -> list[int]:
+    """Return candidate computation slots on a schedule QPU."""
+    mapped_slots = sorted(
+        slot
+        for mapped_qpu_id, slot in logical_to_physical_window.values()
+        if mapped_qpu_id == qpu_id
+    )
+    mapped_slots_set = set(mapped_slots)
+
+    if comp_capacity_by_schedule_qpu is None:
+        return mapped_slots
+
+    if qpu_id not in comp_capacity_by_schedule_qpu:
+        raise ValueError(
+            f"Missing computation capacity for schedule QPU {qpu_id}."
+        )
+    capacity = comp_capacity_by_schedule_qpu[qpu_id]
+    return sorted(
+        range(capacity),
+        key=lambda slot: (slot not in mapped_slots_set, slot),
+    )
+
+
+def _build_rswap_statement_from_positions(
+    pos0: tuple[int, int],
+    pos1: tuple[int, int],
+    network: NetworkGraph,
+    schedule_to_network_qpu_id: dict[int, int],
+    network_to_schedule_qpu_id: dict[int, int],
+) -> CleanedQuantumGate:
+    """Build a routed ``rswap`` statement from two schedule-space positions."""
+    swap_node, swap_qubits = _build_swap_gate(
+        SwapOp(q0=-1, q1=-1, pos0=pos0, pos1=pos1),
+        network,
+        schedule_to_network_qpu_id,
+        network_to_schedule_qpu_id,
+    )
+    return CleanedQuantumGate(
+        statement_type=ast.QuantumGate,
+        node=swap_node,
+        is_op=True,
+        name="rswap",
+        qubits=swap_qubits,
+    )
 
 
 def _build_swap_gate(

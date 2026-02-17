@@ -14,7 +14,8 @@ from memq_dqc.builder import extract_distributed_circuit
 from memq_dqc.graph import NetworkGraph
 from memq_dqc.io.qasm import load_qasm_program
 from memq_dqc.partition import Partitioner
-from memq_dqc.verify import verify_distributed_circuit
+
+# TODO: add back - from memq_dqc.verify import verify_distributed_circuit
 from memq_dqc.verify.verify import dist_to_mono_circuit
 
 

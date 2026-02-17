@@ -14,6 +14,7 @@ The resulting graph reflects local and remote connectivity between qubits.
 
 import json
 import re
+from collections import deque
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -341,6 +342,174 @@ class NetworkGraph:
                 item[1][0].label,
                 item[1][1].label,
             ),
+        )
+
+    def get_directional_remote_gate_qpu_route(
+        self,
+        source_qpu_id: int,
+        target_qpu_id: int,
+    ) -> list[int]:
+        # TODO: go through this - relied on codex refactor for time crunch
+        """Return a directional QPU route for a routed remote gate.
+
+        The route moves the source operand through ``rswap`` hops until it is
+        on a QPU adjacent to the target operand. Internal hops must support
+        ``rswap`` (2 e-bit pairs), while the final hop to the target side
+        must support a remote gate (1 e-bit pair).
+
+        Args:
+            source_qpu_id: QPU ID of the operand selected to move.
+            target_qpu_id: QPU ID of the operand kept in place.
+
+        Returns:
+            Ordered QPU IDs from source to target.
+
+        Raises:
+            ValueError: If no directional route is available.
+        """
+        if source_qpu_id == target_qpu_id:
+            return [source_qpu_id]
+
+        pair_counts = self._remote_comm_pair_counts()
+        direct_key = _ordered_qpu_pair(source_qpu_id, target_qpu_id)
+        candidates: list[list[int]] = []
+
+        if pair_counts.get(direct_key, 0) >= 1:
+            candidates.append([source_qpu_id, target_qpu_id])
+
+        for neighbor_qpu in self._qpu_neighbors_with_min_pairs(
+            target_qpu_id,
+            min_pairs=1,
+            pair_counts=pair_counts,
+        ):
+            if neighbor_qpu == source_qpu_id:
+                continue
+            try:
+                path_to_neighbor = self._shortest_qpu_path_with_min_pairs(
+                    source_qpu_id,
+                    neighbor_qpu,
+                    min_pairs=2,
+                    pair_counts=pair_counts,
+                )
+            except ValueError:
+                continue
+            if target_qpu_id in path_to_neighbor[:-1]:
+                continue
+            candidates.append(path_to_neighbor + [target_qpu_id])
+
+        if not candidates:
+            raise ValueError(
+                "No routed remote-gate path found for directional movement: "
+                f"{source_qpu_id} -> {target_qpu_id}."
+            )
+
+        return min(
+            candidates,
+            key=lambda path: (
+                _directional_remote_route_ebit_cost(path),
+                tuple(path),
+            ),
+        )
+
+    def remote_gate_ebit_cost(
+        self,
+        qpu_a: int,
+        qpu_b: int,
+    ) -> int:
+        # TODO: go through this - relied on codex refactor for time crunch
+        """Return minimum raw e-bit pairs for a remote gate between two QPUs.
+
+        Args:
+            qpu_a: First QPU ID.
+            qpu_b: Second QPU ID.
+
+        Returns:
+            Minimum required e-bit pairs.
+
+        Raises:
+            ValueError: If no routed remote-gate path is available.
+        """
+        if qpu_a == qpu_b:
+            return 0
+
+        route_options: list[list[int]] = []
+        for source, target in ((qpu_a, qpu_b), (qpu_b, qpu_a)):
+            try:
+                route_options.append(
+                    self.get_directional_remote_gate_qpu_route(source, target)
+                )
+            except ValueError:
+                continue
+
+        if not route_options:
+            raise ValueError(
+                "No routed remote-gate path found between QPUs "
+                f"{qpu_a} and {qpu_b}."
+            )
+
+        return min(
+            _directional_remote_route_ebit_cost(path) for path in route_options
+        )
+
+    def _remote_comm_pair_counts(self) -> dict[tuple[int, int], int]:
+        """Count direct remote communication pairs between QPU pairs."""
+        pair_counts: dict[tuple[int, int], int] = {}
+        for qubit_a, qubit_b in self._get_remote_edges():
+            if not (qubit_a.is_communication and qubit_b.is_communication):
+                continue
+            key = _ordered_qpu_pair(qubit_a.qpu_id, qubit_b.qpu_id)
+            pair_counts[key] = pair_counts.get(key, 0) + 1
+        return pair_counts
+
+    def _qpu_neighbors_with_min_pairs(
+        # TODO: go through this - relied on codex refactor for time crunch
+        self,
+        qpu_id: int,
+        min_pairs: int,
+        pair_counts: dict[tuple[int, int], int],
+    ) -> list[int]:
+        """Return sorted neighboring QPU IDs meeting pair-count threshold."""
+        neighbors = []
+        for pair, count in pair_counts.items():
+            if count < min_pairs:
+                continue
+            qpu_left, qpu_right = pair
+            if qpu_left == qpu_id:
+                neighbors.append(qpu_right)
+            elif qpu_right == qpu_id:
+                neighbors.append(qpu_left)
+        return sorted(set(neighbors))
+
+    def _shortest_qpu_path_with_min_pairs(
+        # TODO: go through this - relied on codex refactor for time crunch
+        self,
+        source_qpu_id: int,
+        target_qpu_id: int,
+        min_pairs: int,
+        pair_counts: dict[tuple[int, int], int],
+    ) -> list[int]:
+        """Return shortest QPU path where each hop has enough e-bit pairs."""
+        if source_qpu_id == target_qpu_id:
+            return [source_qpu_id]
+
+        queue: deque[int] = deque([source_qpu_id])
+        predecessor: dict[int, int | None] = {source_qpu_id: None}
+        while queue:
+            current = queue.popleft()
+            for neighbor in self._qpu_neighbors_with_min_pairs(
+                current, min_pairs, pair_counts
+            ):
+                if neighbor in predecessor:
+                    continue
+                predecessor[neighbor] = current
+                if neighbor == target_qpu_id:
+                    return _reconstruct_qpu_path(predecessor, target_qpu_id)
+                queue.append(neighbor)
+
+        raise ValueError(
+            "No QPU path found with required e-bit pairs: "
+            f"{source_qpu_id} -> {target_qpu_id} "
+            f"(min_pairs={min_pairs})."
         )
 
     def _construct_path(
@@ -730,3 +899,42 @@ def _network_qubit_sort_key(
     """Sort qubits by QPU ID then local qubit index."""
     qpu_key: tuple[int, int] = (0, qubit.qpu_id)
     return (qpu_key, qubit.qubit_id)
+
+
+def _ordered_qpu_pair(qpu_a: int, qpu_b: int) -> tuple[int, int]:
+    # TODO: go through this - relied on codex refactor for time crunch
+    """Return a normalized ordered QPU pair key."""
+    if qpu_a <= qpu_b:
+        return qpu_a, qpu_b
+    return qpu_b, qpu_a
+
+
+def _reconstruct_qpu_path(
+    # TODO: go through this - relied on codex refactor for time crunch
+    predecessor: dict[int, int | None],
+    target_qpu_id: int,
+) -> list[int]:
+    """Reconstruct a QPU path from predecessor map."""
+    path = [target_qpu_id]
+    current = target_qpu_id
+    while predecessor[current] is not None:
+        prev = predecessor[current]
+        if prev is None:
+            break
+        path.append(prev)
+        current = prev
+    path.reverse()
+    return path
+
+
+def _directional_remote_route_ebit_cost(path: list[int]) -> int:
+    # TODO: go through this - relied on codex refactor for time crunch
+    """Return raw e-bit pair cost for directional routed remote operation."""
+    if len(path) <= 1:
+        return 0
+    # Cost model:
+    # - each forward rswap hop costs 2 e-bit pairs
+    # - final remote gate costs 1 e-bit pair
+    # - reverse rswap hops mirror forward hops
+    # total = 2 * (len(path) - 2) + 1
+    return (2 * max(0, len(path) - 2)) + 1
