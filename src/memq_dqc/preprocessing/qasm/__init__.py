@@ -30,7 +30,7 @@ from memq_dqc.preprocessing.qasm.cleaning import (
     clean_statement,
     extract_cleaned_statements,
 )
-from memq_dqc.qasm.types import Qubit
+from memq_dqc.qasm.types import LogicalQubit
 
 __all__ = [
     "Cbit",
@@ -41,7 +41,7 @@ __all__ = [
     "CleanedQuantumMeasurementStatement",
     "CleanedQubitDeclaration",
     "CleanedStatement",
-    "Qubit",
+    "LogicalQubit",
     "clean_statement",
     "clone_statement_node",
     "count_total_qubits",

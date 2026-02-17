@@ -13,10 +13,41 @@ The resulting graph reflects local and remote connectivity between qubits.
 """
 
 import json
+import re
 from collections.abc import Iterable
+from dataclasses import dataclass
 
 import matplotlib.pyplot as plt
 import networkx as nx
+
+
+@dataclass(frozen=True, slots=True)
+class PhysicalQubit:
+    """Structured identifier for a qubit in a network graph."""
+
+    qpu_id: int
+    qubit_id: int
+    qubit_type: str
+
+    @property
+    def is_communication(self) -> bool:
+        """Return True when this is a communication qubit."""
+        return self.qubit_type == "communication"
+
+    @property
+    def is_computation(self) -> bool:
+        """Return True when this is a computation qubit."""
+        return self.qubit_type == "computation"
+
+    @property
+    def label(self) -> str:
+        """Return display label in q/c_<qpu>_<id> format."""
+        prefix = "c" if self.is_communication else "q"
+        return f"{prefix}_{self.qpu_id}_{self.qubit_id}"
+
+    def __str__(self) -> str:
+        """Return compact display label."""
+        return self.label
 
 
 class NetworkGraph:
@@ -43,7 +74,8 @@ class NetworkGraph:
             self._network_data = json.load(f)
 
         self._graph = nx.Graph()
-        self._qubit_type_map: dict[int | str, str] = {}
+        self._qubit_type_map: dict[PhysicalQubit, str] = {}
+        self._raw_id_to_qubit: dict[int | str, PhysicalQubit] = {}
         self._build_network_graph()
 
     def _build_network_graph(self) -> None:
@@ -53,26 +85,55 @@ class NetworkGraph:
         connections as edges. Also builds the qubit type mapping.
         """
         qubits = self._network_data["qubits"]
+        next_local_idx: dict[tuple[int, str], int] = {}
         for qubit, data in qubits.items():
-            qubit_id = _normalize_qubit_id(qubit)
-            # Mark qubit type (computation or communication)
-            self._qubit_type_map[qubit_id] = data.get("type")
-            # Add qubit in graph and unpack its attributes to store as node data
-            self._graph.add_node(qubit_id, **data)
+            raw_id = _normalize_qubit_id(qubit)
+            qubit_type = data.get("type")
+            if qubit_type not in {"computation", "communication"}:
+                raise ValueError(
+                    "Invalid qubit type for qubit "
+                    f"{raw_id!r}: {qubit_type!r}. Expected "
+                    "'computation' or 'communication'."
+                )
+            if "processorId" not in data:
+                raise ValueError(
+                    f"Qubit {raw_id!r} is missing required 'processorId'."
+                )
+            qpu_id = _normalize_processor_id(data["processorId"])
+            local_idx = _resolve_local_qubit_index(
+                raw_id,
+                qpu_id,
+                qubit_type,
+                data.get("localIndex"),
+                next_local_idx,
+            )
+            network_qubit = PhysicalQubit(
+                qpu_id=qpu_id,
+                qubit_id=local_idx,
+                qubit_type=qubit_type,
+            )
+            self._raw_id_to_qubit[raw_id] = network_qubit
+            self._qubit_type_map[network_qubit] = qubit_type
+            node_data = dict(data)
+            node_data["id"] = network_qubit
+            node_data["processorId"] = qpu_id
+            node_data["label"] = network_qubit.label
+            self._graph.add_node(network_qubit, **node_data)
+
         for qubit, data in qubits.items():
-            qubit_id = _normalize_qubit_id(qubit)
+            source = self._resolve_qubit_node(qubit)
             local_connects = data.get("localConnections", [])
             remote_connects = data.get("remoteConnections", [])
             for local in local_connects:
                 self._graph.add_edge(
-                    qubit_id,
-                    _normalize_qubit_id(local),
+                    source,
+                    self._resolve_qubit_node(local),
                     connection_type="local",
                 )
             for remote in remote_connects:
                 self._graph.add_edge(
-                    qubit_id,
-                    _normalize_qubit_id(remote),
+                    source,
+                    self._resolve_qubit_node(remote),
                     connection_type="remote",
                 )
 
@@ -82,9 +143,9 @@ class NetworkGraph:
         return self._graph
 
     @property
-    def qubit_type_map(self) -> dict[int | str, str]:
+    def qubit_type_map(self) -> dict[PhysicalQubit, str]:
         """Return the mapping of qubit IDs to their types."""
-        return self._qubit_type_map
+        return dict(self._qubit_type_map)
 
     @property
     def num_qpus(self) -> int:
@@ -114,6 +175,47 @@ class NetworkGraph:
             if qubit_type == "communication"
         )
 
+    def computation_qubits(self) -> list[PhysicalQubit]:
+        """Return all computation qubit nodes in deterministic order."""
+        return sorted(
+            (
+                qubit
+                for qubit, qubit_type in self._qubit_type_map.items()
+                if qubit_type == "computation"
+            ),
+            key=_network_qubit_sort_key,
+        )
+
+    def communication_qubits(self) -> list[PhysicalQubit]:
+        """Return all communication qubit nodes in deterministic order."""
+        return sorted(
+            (
+                qubit
+                for qubit, qubit_type in self._qubit_type_map.items()
+                if qubit_type == "communication"
+            ),
+            key=_network_qubit_sort_key,
+        )
+
+    @property
+    def local_swap_dict(
+        self,
+    ) -> dict[PhysicalQubit, tuple[float, list[PhysicalQubit]]]:
+        """Return map from comp qubits to swaps toward nearest comm qubit."""
+        swap_mapping: dict[
+            PhysicalQubit, tuple[float, list[PhysicalQubit]]
+        ] = {}
+        for qubit, qubit_type in self._qubit_type_map.items():
+            if qubit_type != "computation":
+                continue
+            try:
+                path_to_comm = self._get_shortest_path(qubit)
+                num_swaps = max(0, len(path_to_comm) - 2)
+                swap_mapping[qubit] = (num_swaps, path_to_comm)
+            except ValueError:
+                swap_mapping[qubit] = (float("inf"), [])
+        return swap_mapping
+
     def comp_qubits_per_qpu(self) -> list[int]:
         """Return the number of computation qubits for each QPU.
 
@@ -136,6 +238,267 @@ class NetworkGraph:
             for qubit_groups in self._processor_qubit_groups()
         ]
 
+    def get_comm_pair(
+        self, qubit_a: PhysicalQubit, qubit_b: PhysicalQubit
+    ) -> tuple[
+        int,
+        tuple[PhysicalQubit, PhysicalQubit],
+        tuple[list[PhysicalQubit], list[PhysicalQubit]],
+    ]:
+        """Compute the lowest cost pair of comm qubits to perform a remote op.
+
+        Given two computation qubits, determine the lowest cost pair of
+        communication qubits that can be used to perform a remote operation
+        between them. The cost is defined as total number of local swaps
+        needed to move each computation qubit to an adjacent position to
+        its respective communication qubit. The two communication qubits must
+        share a direct remote connection.
+
+        Args:
+            qubit_a: The first computation qubit.
+            qubit_b: The second computation qubit.
+
+        Returns:
+            A triple containing:
+                - Cost for the best communication pair.
+                - The optimal pair of communication qubits (comm_a, comm_b).
+                - A tuple of the local swap paths from each computation qubit
+                  to its respective communication qubit.
+        """
+        pair_options = self.get_comm_pair_options(qubit_a, qubit_b)
+        return pair_options[0]
+
+    def get_comm_pair_options(
+        self, qubit_a: PhysicalQubit, qubit_b: PhysicalQubit
+    ) -> list[
+        tuple[
+            int,
+            tuple[PhysicalQubit, PhysicalQubit],
+            tuple[list[PhysicalQubit], list[PhysicalQubit]],
+        ]
+    ]:
+        """Return reachable communication-pair options sorted by cost.
+
+        Args:
+            qubit_a: The first computation qubit.
+            qubit_b: The second computation qubit.
+
+        Returns:
+            Ranked communication-pair options sorted by increasing cost and
+            deterministic label tie-breakers.
+
+        Raises:
+            ValueError: If no valid communication pairs exist or no pair is
+                reachable via local paths.
+        """
+        potential_pairs = self._valid_comm_pairs(qubit_a, qubit_b)
+        if not potential_pairs:
+            raise ValueError(
+                f"No communication pairs found to connect {qubit_a!r} and "
+                f"{qubit_b!r}."
+            )
+
+        local_graph = self._local_only_graph()
+        paths_a, path_len_a = nx.predecessor(
+            local_graph, qubit_a, return_seen=True
+        )
+        paths_b, path_len_b = nx.predecessor(
+            local_graph, qubit_b, return_seen=True
+        )
+        costs_a = {node: path_len - 1 for node, path_len in path_len_a.items()}
+        costs_b = {node: path_len - 1 for node, path_len in path_len_b.items()}
+
+        pair_options: list[
+            tuple[
+                int,
+                tuple[PhysicalQubit, PhysicalQubit],
+                tuple[list[PhysicalQubit], list[PhysicalQubit]],
+            ]
+        ] = []
+        for comm_a, comm_b in potential_pairs:
+            if comm_a not in costs_a or comm_b not in costs_b:
+                continue
+            path_a = self._construct_path(paths_a, qubit_a, comm_a)
+            path_b = self._construct_path(paths_b, qubit_b, comm_b)
+            if path_a is None or path_b is None:
+                continue
+            pair_options.append(
+                (
+                    costs_a[comm_a] + costs_b[comm_b],
+                    (comm_a, comm_b),
+                    (path_a, path_b),
+                )
+            )
+        if not pair_options:
+            raise ValueError(
+                f"No reachable communication pairs found to connect {qubit_a!r} "
+                f"and {qubit_b!r}."
+            )
+        return sorted(
+            pair_options,
+            key=lambda item: (
+                item[0],
+                item[1][0].label,
+                item[1][1].label,
+            ),
+        )
+
+    def _construct_path(
+        self, pred: dict, source: PhysicalQubit, target: PhysicalQubit
+    ) -> list[PhysicalQubit] | None:
+        """Reconstruct a shortest path from predecessor information.
+
+        Given a predecessor dictionary from NetworkX shortest path algorithms,
+        reconstructs the actual path from source to target by following the
+        predecessor links backwards from target to source.
+
+        Args:
+            pred: Predecessor dictionary mapping each node to a list of
+                predecessor nodes on shortest paths, as returned by
+                nx.predecessor().
+            source: The starting node of the path.
+            target: The destination node of the path.
+
+        Returns:
+            A list of nodes representing the path from source to target,
+            or None if no path exists.
+        """
+        if target == source:
+            return [source]
+        if target not in pred:  # unreachable
+            return None
+
+        path = [target]
+        cur = target
+        while cur != source:
+            # pred[cur] is a list of predecessors on shortest paths; pick one (e.g., first)
+            ps = pred[cur]
+            if not ps:
+                return None
+            cur = ps[0]
+            path.append(cur)
+        path.reverse()
+        return path
+
+    def _valid_comm_pairs(
+        self, qubit_a: PhysicalQubit, qubit_b: PhysicalQubit
+    ) -> list[tuple[PhysicalQubit, PhysicalQubit]]:
+        """Returns a list of communication qubit pairs to connect 2 qubits.
+
+        Takes two computation qubits on diffrent QPU's, determines the reachable
+        communication qubits for each via local swaps, then returns all pairs
+        of these reachable comm qubits that are connected via remote edge.
+
+        Args:
+            qubit_a: The first qubit ID.
+            qubit_b: The second qubit ID.
+
+        Returns:
+            A list of tuples, where each tuple contains a pair of communication
+            qubit IDs (comm_a, comm_b) that can be used to connect qubit_a and
+            qubit_b via remote operations.
+
+        Raises:
+            ValueError: If either qubit is unknown, if they are on the same QPU,
+                or if no communication pairs can be found to connect them.
+        """
+        # Ensure qubits are on different QPUs
+        if qubit_a.qpu_id == qubit_b.qpu_id:
+            raise ValueError(
+                "Qubits must be on different QPUs to find communication pairs."
+            )
+
+        # Ensure both qubits are computation qubits
+        if not qubit_a.is_computation or not qubit_b.is_computation:
+            raise ValueError(
+                "Both qubits must be computation qubits to find communication "
+                "pairs."
+            )
+
+        comms_a = self._get_reachable_comm_qubits(qubit_a)
+        comms_b = self._get_reachable_comm_qubits(qubit_b)
+
+        comm_pairs: set[tuple[PhysicalQubit, PhysicalQubit]] = set()
+        for comm_a in comms_a:
+            for comm_b in comms_b:
+                if (
+                    self._graph.has_edge(comm_a, comm_b)
+                    and self._graph.edges[comm_a, comm_b].get(
+                        "connection_type"
+                    )
+                    == "remote"
+                ):
+                    pair = (comm_a, comm_b)
+                    comm_pairs.add(pair)
+        return sorted(
+            comm_pairs,
+            key=lambda pair: (pair[0].label, pair[1].label),
+        )
+
+    def _get_shortest_path(self, source: PhysicalQubit) -> list[PhysicalQubit]:
+        """Return shortest path from source to nearest local comm qubit."""
+        source_qpu = source.qpu_id
+        paths_from_source = nx.single_source_shortest_path(self._graph, source)
+        reachable_candidates: list[
+            tuple[PhysicalQubit, list[PhysicalQubit]]
+        ] = [
+            (candidate, path)
+            for candidate, path in paths_from_source.items()
+            if candidate.qpu_id == source_qpu and candidate.is_communication
+        ]
+        if not reachable_candidates:
+            raise ValueError(
+                "No path found from source to any communication qubit on "
+                f"QPU {source_qpu!r}."
+            )
+        _, best_path = min(
+            reachable_candidates,
+            key=lambda item: (len(item[1]), item[0].label),
+        )
+        return best_path
+
+    def _get_reachable_comm_qubits(
+        self, source: PhysicalQubit
+    ) -> list[PhysicalQubit]:
+        """Return a list of communication qubits reachable from the source qubit.
+
+        Args:
+            source: Source qubit ID.
+
+        Returns:
+            A list of communication qubit IDs that are reachable from the source
+            qubit via local connections.
+
+        Raises:
+            ValueError: If source is unknown or no communication qubits are
+                reachable from the source.
+        """
+        local_graph = self._local_only_graph()
+        reachable_nodes = nx.single_source_shortest_path_length(
+            local_graph, source
+        )
+        comm_qubits = [
+            node_id
+            for node_id in reachable_nodes
+            if node_id.is_communication and node_id.qpu_id == source.qpu_id
+        ]
+        if not comm_qubits:
+            raise ValueError(
+                f"No communication qubits reachable from source {source!r}."
+            )
+        return sorted(comm_qubits, key=lambda qubit: qubit.label)
+
+    def _local_only_graph(self) -> nx.Graph:
+        """Return a view of the network graph that contains only local edges."""
+        local_graph = nx.Graph()
+        local_graph.add_nodes_from(self._graph.nodes(data=True))
+        local_graph.add_edges_from(
+            (u, v, data)
+            for u, v, data in self._graph.edges(data=True)
+            if data.get("connection_type") == "local"
+        )
+        return local_graph
+
     @property
     def is_homogeneous(self) -> bool:
         """Return True if all QPUs have identical comp and comm qubit counts.
@@ -157,8 +520,13 @@ class NetworkGraph:
 
         pos = nx.spring_layout(self._graph)
         nx.draw_networkx_nodes(self._graph, pos, node_size=700)
+        labels = {node: node.label for node in self._graph.nodes}
         nx.draw_networkx_labels(
-            self._graph, pos, font_size=12, font_family="sans-serif"
+            self._graph,
+            pos,
+            labels=labels,
+            font_size=12,
+            font_family="sans-serif",
         )
         nx.draw_networkx_edges(
             self._graph,
@@ -182,7 +550,9 @@ class NetworkGraph:
 
         plt.show()
 
-    def _get_local_edges(self) -> list[tuple[int | str, int | str]]:
+    def _get_local_edges(
+        self,
+    ) -> list[tuple[PhysicalQubit, PhysicalQubit]]:
         """Get all local connection edges from the graph.
 
         Returns:
@@ -194,7 +564,9 @@ class NetworkGraph:
             if data.get("connection_type") == "local"
         ]
 
-    def _get_remote_edges(self) -> list[tuple[int | str, int | str]]:
+    def _get_remote_edges(
+        self,
+    ) -> list[tuple[PhysicalQubit, PhysicalQubit]]:
         """Get all remote connection edges from the graph.
 
         Returns:
@@ -208,7 +580,7 @@ class NetworkGraph:
 
     def _processor_qubit_groups(
         self,
-    ) -> list[dict[str, list[int | str]]]:
+    ) -> list[dict[str, list[PhysicalQubit]]]:
         """Return computation and communication qubits for each processor."""
         processors = self._network_data["processors"]
         sorted_processor_ids = sorted(
@@ -216,35 +588,38 @@ class NetworkGraph:
             key=_processor_sort_key,
         )
 
-        grouped: list[dict[str, list[int | str]]] = []
+        grouped: list[dict[str, list[PhysicalQubit]]] = []
         for proc_id in sorted_processor_ids:
             processor = processors[proc_id]
             qubits = processor.get("qubits", [])
             if isinstance(qubits, dict):
                 grouped.append(
                     {
-                        "computation": _normalize_qubit_ids(
-                            qubits.get("computation", [])
-                        ),
-                        "communication": _normalize_qubit_ids(
-                            qubits.get("communication", [])
-                        ),
+                        "computation": [
+                            self._resolve_qubit_node(qubit_id)
+                            for qubit_id in qubits.get("computation", [])
+                        ],
+                        "communication": [
+                            self._resolve_qubit_node(qubit_id)
+                            for qubit_id in qubits.get("communication", [])
+                        ],
                     }
                 )
                 continue
 
-            comp_ids: list[int | str] = []
-            comm_ids: list[int | str] = []
+            comp_ids: list[PhysicalQubit] = []
+            comm_ids: list[PhysicalQubit] = []
             for qubit_id in _normalize_qubit_ids(qubits):
-                if qubit_id not in self._qubit_type_map:
+                if qubit_id not in self._raw_id_to_qubit:
                     raise ValueError(
                         f"Processor references unknown qubit ID {qubit_id!r}."
                     )
-                qubit_type = self._qubit_type_map[qubit_id]
+                network_qubit = self._raw_id_to_qubit[qubit_id]
+                qubit_type = self._qubit_type_map[network_qubit]
                 if qubit_type == "computation":
-                    comp_ids.append(qubit_id)
+                    comp_ids.append(network_qubit)
                 elif qubit_type == "communication":
-                    comm_ids.append(qubit_id)
+                    comm_ids.append(network_qubit)
                 else:
                     raise ValueError(
                         "Invalid qubit type for qubit "
@@ -259,6 +634,17 @@ class NetworkGraph:
             )
 
         return grouped
+
+    def _resolve_qubit_node(self, qubit_id: object) -> PhysicalQubit:
+        """Resolve raw or structured qubit identifier to a graph node."""
+        if isinstance(qubit_id, PhysicalQubit):
+            if qubit_id not in self._graph:
+                raise ValueError(f"Unknown qubit ID: {qubit_id!r}.")
+            return qubit_id
+        raw_id = _normalize_qubit_id(qubit_id)
+        if raw_id not in self._raw_id_to_qubit:
+            raise ValueError(f"Unknown qubit ID: {qubit_id!r}.")
+        return self._raw_id_to_qubit[raw_id]
 
 
 def _normalize_qubit_ids(
@@ -277,8 +663,70 @@ def _normalize_qubit_id(qubit_id: object) -> int | str:
     return str(qubit_id)
 
 
-def _processor_sort_key(processor_id: str) -> tuple[int, int | str]:
-    """Sort processor IDs numerically when possible, then lexically."""
-    if processor_id.isdigit():
-        return (0, int(processor_id))
-    return (1, processor_id)
+def _normalize_processor_id(processor_id: object) -> int:
+    """Normalize processor IDs to integers."""
+    if isinstance(processor_id, int):
+        return processor_id
+    if isinstance(processor_id, str) and processor_id.isdigit():
+        return int(processor_id)
+    raise ValueError(
+        "Processor IDs must be integers or numeric strings. "
+        f"Received {processor_id!r}."
+    )
+
+
+def _resolve_local_qubit_index(
+    qubit_id: int | str,
+    qpu_id: int,
+    qubit_type: str,
+    local_index: object,
+    next_local_idx: dict[tuple[int, str], int],
+) -> int:
+    """Resolve per-QPU per-type local index for a qubit."""
+    if isinstance(local_index, int):
+        key = (qpu_id, qubit_type)
+        next_local_idx[key] = max(next_local_idx.get(key, 0), local_index + 1)
+        return local_index
+    parsed = _parse_formatted_qubit_id(qubit_id)
+    if parsed is not None:
+        _, _, parsed_index = parsed
+        key = (qpu_id, qubit_type)
+        next_local_idx[key] = max(next_local_idx.get(key, 0), parsed_index + 1)
+        return parsed_index
+    key = (qpu_id, qubit_type)
+    resolved = next_local_idx.get(key, 0)
+    next_local_idx[key] = resolved + 1
+    return resolved
+
+
+def _parse_formatted_qubit_id(
+    qubit_id: int | str,
+) -> tuple[str, int, int] | None:
+    """Parse q/c_<qpu>_<idx> formatted IDs."""
+    if not isinstance(qubit_id, str):
+        return None
+    match = re.fullmatch(r"([qc])_(\d+)_(\d+)", qubit_id)
+    if match is None:
+        return None
+    prefix = match.group(1)
+    qpu_token = _normalize_processor_id(match.group(2))
+    local_idx = int(match.group(3))
+    return prefix, qpu_token, local_idx
+
+
+def _processor_sort_key(processor_id: str) -> tuple[int, int]:
+    """Sort processor IDs numerically."""
+    if not processor_id.isdigit():
+        raise ValueError(
+            "Processor IDs in network JSON must be numeric strings. "
+            f"Received {processor_id!r}."
+        )
+    return (0, int(processor_id))
+
+
+def _network_qubit_sort_key(
+    qubit: PhysicalQubit,
+) -> tuple[tuple[int, int], int]:
+    """Sort qubits by QPU ID then local qubit index."""
+    qpu_key: tuple[int, int] = (0, qubit.qpu_id)
+    return (qpu_key, qubit.qubit_id)

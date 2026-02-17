@@ -25,7 +25,7 @@ from memq_dqc.preprocessing.qasm.cleaned_types import (
     CleanedQubitDeclaration,
     CleanedStatement,
 )
-from memq_dqc.qasm.types import Qubit
+from memq_dqc.qasm.types import LogicalQubit
 
 
 def extract_cleaned_statements(
@@ -113,7 +113,7 @@ def clean_statement(statement: ast.Statement) -> CleanedStatement:
             extract_qubit_index(qubit, reg_name=True)
             for qubit in statement.qubits
         ]
-        qubits = [Qubit(name, index) for name, index in qubits]
+        qubits = [LogicalQubit(name, index) for name, index in qubits]
         return CleanedQuantumGate(
             statement_type=type(statement),
             node=clone_statement_node(statement),
@@ -138,7 +138,7 @@ def clean_statement(statement: ast.Statement) -> CleanedStatement:
             statement_type=type(statement),
             node=clone_statement_node(statement),
             is_op=True,
-            qubit=Qubit(q_name, q_idx),
+            qubit=LogicalQubit(q_name, q_idx),
             cbit=Cbit(c_name, c_idx),
         )
     if isinstance(statement, ast.QuantumBarrier):
