@@ -21,6 +21,7 @@ from memq_dqc.builder.extract_utils import (
 )
 from memq_dqc.circuit.dag import DistributedCircuitDAG
 from memq_dqc.partition import Partitioner
+from memq_dqc.preprocessing.qasm import CleanedQuantumGate
 
 if TYPE_CHECKING:
     from memq_dqc.circuit.dag import CircuitDAG
@@ -80,7 +81,10 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
         + local_swaps_added
     )
 
-    assert len(distributed_dag.statements) == expected_statement_count
+    # Routed remote gates may add additional ``rswap`` statements beyond
+    # schedule-synthesized swaps.
+    assert len(distributed_dag.statements) >= expected_statement_count
+    partitioner._algorithm.cost = _exact_entanglement_cost(distributed_dag)
     return ast.Program(
         version=distributed_dag.program.version,
         statements=[
@@ -109,3 +113,23 @@ def _validated_partitioner_outputs(
         )
 
     return dag, schedule, windows
+
+
+def _exact_entanglement_cost(distributed_dag: DistributedCircuitDAG) -> float:
+    """Return exact entanglement cost from emitted distributed statements.
+
+    Cost model:
+        - Remote two-qubit gates (``rcx``, ``rcp``, ``rcz``) cost 1 e-bit pair.
+        - ``rswap`` costs 2 e-bit pairs.
+    """
+    remote_gate_names = {"rcx", "rcp", "rcz"}
+    remote_gate_count = 0
+    remote_swap_count = 0
+    for statement in distributed_dag.statements:
+        if not isinstance(statement, CleanedQuantumGate):
+            continue
+        if statement.name in remote_gate_names:
+            remote_gate_count += 1
+        elif statement.name == "rswap":
+            remote_swap_count += 1
+    return float(remote_gate_count + (2 * remote_swap_count))

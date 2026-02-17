@@ -285,3 +285,24 @@ def test_get_comm_pair_paths_are_local_to_source_qpu(
     assert sum(node.is_communication for node in path_b) == 1
     assert all(node.qpu_id == qubit_a.qpu_id for node in path_a)
     assert all(node.qpu_id == qubit_b.qpu_id for node in path_b)
+
+
+def test_directional_remote_gate_qpu_route(
+    simple1_network_path: Path,
+) -> None:
+    network_path = simple1_network_path.parent / "nonuniform_1.json"
+    network = NetworkGraph(str(network_path))
+
+    assert network.get_directional_remote_gate_qpu_route(1, 3) == [1, 2, 3]
+    with pytest.raises(ValueError, match="No routed remote-gate path found"):
+        network.get_directional_remote_gate_qpu_route(3, 1)
+
+
+def test_remote_gate_ebit_cost_uses_best_direction(
+    simple1_network_path: Path,
+) -> None:
+    network_path = simple1_network_path.parent / "nonuniform_1.json"
+    network = NetworkGraph(str(network_path))
+
+    assert network.remote_gate_ebit_cost(1, 3) == 3
+    assert network.remote_gate_ebit_cost(1, 2) == 1

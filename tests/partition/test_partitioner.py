@@ -5,12 +5,14 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import networkx as nx
 import pytest
 
 from memq_dqc.circuit import CircuitDAG
 from memq_dqc.graph import NetworkGraph
 from memq_dqc.io.qasm import load_qasm_program
 from memq_dqc.partition import Partitioner
+from memq_dqc.partition.utils import partition_cost
 from memq_dqc.utils import get_windows
 
 
@@ -87,3 +89,40 @@ def test_partitioner_raises_on_insufficient_comp_capacity(
         ValueError, match="Insufficient computation-qubit capacity"
     ):
         partitioner.run()
+
+
+def test_partition_cost_supports_topology_aware_ebit_multiplier(
+    simple1_network_path,
+) -> None:
+    network_path = simple1_network_path.parent / "nonuniform_1.json"
+    network = NetworkGraph(str(network_path))
+    network_qpu_ids = sorted(
+        {qubit.qpu_id for qubit in network.qubit_type_map}
+    )
+
+    graph = nx.Graph()
+    graph.add_edge(0, 1, weight=2)
+
+    one_hop_partition = [{0}, {1}, set()]
+    one_hop_cost = partition_cost(
+        graph,
+        one_hop_partition,
+        edge_cost=lambda part_a, part_b: float(
+            network.remote_gate_ebit_cost(
+                network_qpu_ids[part_a], network_qpu_ids[part_b]
+            )
+        ),
+    )
+    assert one_hop_cost == 2.0
+
+    two_hop_partition = [{0}, set(), {1}]
+    two_hop_cost = partition_cost(
+        graph,
+        two_hop_partition,
+        edge_cost=lambda part_a, part_b: float(
+            network.remote_gate_ebit_cost(
+                network_qpu_ids[part_a], network_qpu_ids[part_b]
+            )
+        ),
+    )
+    assert two_hop_cost == 6.0
