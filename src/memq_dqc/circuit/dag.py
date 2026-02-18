@@ -484,11 +484,6 @@ class DistributedCircuitDAG(CircuitDAG):
                         "with communication qubits."
                     )
                 for swap in swaps:
-                    if network_graph is None:
-                        raise ValueError(
-                            "Network graph is required to build remote swaps "
-                            "with communication qubits."
-                        )
                     swap_node, swap_qubits = _build_swap_gate(
                         swap,
                         network_graph,
