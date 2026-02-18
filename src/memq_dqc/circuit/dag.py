@@ -670,8 +670,8 @@ def _physical_to_logical_qubit(
     qubit: PhysicalQubit,
     network_to_schedule_qpu_id: dict[int, int],
 ) -> LogicalQubit:
-    # TODO: this isn't totally accurate ... it just maps an object
-    # TODO: it is not converting to a logical qubit
+    # NOTE: This performs a representational mapping from a PhysicalQubit to
+    # a LogicalQubit reference; no additional semantic information is added.
     """Convert a physical network qubit to a logical register reference.
 
     Args:
