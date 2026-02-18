@@ -936,5 +936,5 @@ def _directional_remote_route_ebit_cost(path: list[int]) -> int:
     # - each forward rswap hop costs 2 e-bit pairs
     # - final remote gate costs 1 e-bit pair
     # - reverse rswap hops mirror forward hops
-    # total = 2 * (len(path) - 2) + 1
-    return (2 * max(0, len(path) - 2)) + 1
+    # total = 2 * (2 * (len(path) - 2)) + 1
+    return (4 * max(0, len(path) - 2)) + 1
