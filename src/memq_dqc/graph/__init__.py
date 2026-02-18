@@ -16,9 +16,10 @@ Typical usage example:
 """
 
 from .interaction_graph import InteractionGraph
-from .network_graph import NetworkGraph
+from .network_graph import NetworkGraph, PhysicalQubit
 
 __all__ = [
     "InteractionGraph",
     "NetworkGraph",
+    "PhysicalQubit",
 ]

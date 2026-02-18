@@ -119,16 +119,36 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> str:
             name = stmt.name.name
             if name == "rcx":
                 stmt.name.name = "cx"
+                stmt.qubits = _non_comm_qubits(stmt.qubits)[:2]
             elif name == "rcp":
                 stmt.name.name = "cp"
+                stmt.qubits = _non_comm_qubits(stmt.qubits)[:2]
             elif name == "rcz":
                 stmt.name.name = "cz"
+                stmt.qubits = _non_comm_qubits(stmt.qubits)[:2]
             # replace RSWAP w/ SWAP
             elif name == "rswap":
                 stmt.name.name = "swap"
+                stmt.qubits = _non_comm_qubits(stmt.qubits)[:2]
         new_statements.append(stmt)
     mono_prog = openqasm3.ast.Program(
         version=dist_prog.version, statements=new_statements
     )
     mono_str = openqasm3.dumps(mono_prog)
     return mono_str
+
+
+def _non_comm_qubits(
+    qubits: list[openqasm3.ast.IndexedIdentifier | openqasm3.ast.Identifier],
+) -> list[openqasm3.ast.IndexedIdentifier | openqasm3.ast.Identifier]:
+    """Return only non-communication qubit operands."""
+    return [qubit for qubit in qubits if not _is_comm_qubit_ref(qubit)]
+
+
+def _is_comm_qubit_ref(
+    qubit: openqasm3.ast.IndexedIdentifier | openqasm3.ast.Identifier,
+) -> bool:
+    """Return True when operand references a communication register."""
+    if isinstance(qubit, openqasm3.ast.Identifier):
+        return qubit.name.startswith("c")
+    return qubit.name.name.startswith("c")

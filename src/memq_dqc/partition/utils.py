@@ -9,15 +9,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import networkx as nx
 
 
-def partition_cost(graph: nx.Graph, partition: list[set[int]]) -> float:
+def partition_cost(
+    graph: nx.Graph,
+    partition: list[set[int]],
+    edge_cost: Callable[[int, int], float] | None = None,
+) -> float:
     """Sum edge weights for edges crossing partition boundaries.
 
     Args:
         graph: Graph to evaluate.
         partition: Partition of nodes into groups.
+        edge_cost: Optional multiplier callback for crossing edges receiving
+            source and destination partition IDs.
 
     Returns:
         The total weight of edges that connect different groups.
@@ -30,7 +38,13 @@ def partition_cost(graph: nx.Graph, partition: list[set[int]]) -> float:
     total = 0.0
     for u, v, weight in graph.edges(data="weight", default=1):
         if group_assignment[u] != group_assignment[v]:
-            total += weight
+            # TODO: check this (implemented by codex)
+            crossing_weight = float(weight)
+            if edge_cost is not None:
+                crossing_weight *= edge_cost(
+                    group_assignment[u], group_assignment[v]
+                )
+            total += crossing_weight
 
     return total
 
