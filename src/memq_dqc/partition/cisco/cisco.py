@@ -78,6 +78,17 @@ class CiscoPartitioner(BasePartitioner):
             raise ValueError(
                 "No operation windows generated from the circuit."
             )
+        network_qpu_ids = sorted(
+            {qubit.qpu_id for qubit in self.network.qubit_type_map}
+        )
+
+        def _remote_ebit_multiplier(part_a: int, part_b: int) -> float:
+            # TODO: go through this - relied on codex refactor for time crunch
+            # TODO: remove redunancy, and no nested functions
+            qpu_a = network_qpu_ids[part_a]
+            qpu_b = network_qpu_ids[part_b]
+            return float(self.network.remote_gate_ebit_cost(qpu_a, qpu_b))
+
         self.windows = windows
         qpus = [QPU(id=idx) for idx in range(len(partition_sizes))]
         initial_subcircuit = create_initial_subcircuit_graph(
@@ -88,7 +99,10 @@ class CiscoPartitioner(BasePartitioner):
         )
 
         total_entanglement_cost = partition_cost(
-            initial_subcircuit, partition_result
+            initial_subcircuit,
+            partition_result,
+            # TODO: go through this - relied on codex refactor for time crunch
+            edge_cost=_remote_ebit_multiplier,
         )
         window_partitions = [partition_result]
 
@@ -113,9 +127,15 @@ class CiscoPartitioner(BasePartitioner):
                 previous_partition, active_partition, active_qubits
             )
 
-            previous_cost = partition_cost(window_graph, previous_partition)
+            previous_cost = partition_cost(
+                window_graph,
+                previous_partition,
+                edge_cost=_remote_ebit_multiplier,
+            )
             candidate_cost = partition_cost(
-                window_graph, candidate_partition
+                window_graph,
+                candidate_partition,
+                edge_cost=_remote_ebit_multiplier,
             ) + movement_cost(candidate_partition, previous_partition)
             if candidate_cost <= previous_cost:
                 window_partitions.append(candidate_partition)

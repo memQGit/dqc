@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from openqasm3 import ast
 
-from memq_dqc.qasm.types import Qubit
+from memq_dqc.qasm.types import LogicalQubit
 
 
 # TODO: come up with better naming for all of these instead of "Cleaned (...)"
@@ -62,7 +62,7 @@ class CleanedQuantumGate(CleanedStatement):
     """Cleaned quantum gate statement."""
 
     name: str
-    qubits: list[Qubit]
+    qubits: list[LogicalQubit]
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,5 +78,5 @@ class CleanedQuantumMeasurementStatement(CleanedStatement):
     """Cleaned quantum measurement statement."""
 
     name: str = "measure"
-    qubit: Qubit | None = None
+    qubit: LogicalQubit | None = None
     cbit: Cbit | None = None

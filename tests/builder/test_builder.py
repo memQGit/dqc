@@ -168,3 +168,32 @@ def test_extract_distributed_circuit_nonzero_based_qpu_ids(
     assert declaration_sizes["q2"] == 3
     assert declaration_sizes["c1"] == 1
     assert declaration_sizes["c2"] == 1
+
+
+def test_extract_distributed_circuit_sets_exact_entanglement_cost(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    class _SingleRemoteGatePartitioner(BasePartitioner):
+        def run(self) -> None:
+            self.windows = [self.dag.ops]
+            self.schedule = [{QPU(id=0): {0}, QPU(id=1): {1}}]
+            self.cost = 0.0
+
+    qasm_path = tmp_path / "single_remote.qasm"
+    qasm_path.write_text(
+        "OPENQASM 3.0;\nqubit[2] q;\ncx q[0], q[1];\n",
+        encoding="utf-8",
+    )
+    program = load_qasm_program(str(qasm_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo=_SingleRemoteGatePartitioner(network, program),
+    )
+    partitioner.run()
+
+    extract_distributed_circuit(partitioner)
+
+    assert partitioner.cost == 1.0

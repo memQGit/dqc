@@ -17,6 +17,7 @@ if TYPE_CHECKING:
         synthesize_state_teleportation_swaps,
         window_final_op_id_map,
     )
+    from .formatting import rename_comm_qubits  # TODO: remove
 
 __all__ = [
     "extract_distributed_circuit",
@@ -24,6 +25,7 @@ __all__ = [
     "logical_physical_map",
     "synthesize_state_teleportation_swaps",
     "window_final_op_id_map",
+    "rename_comm_qubits",  # TODO: remove
 ]
 
 

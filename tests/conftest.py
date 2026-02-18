@@ -15,6 +15,7 @@ def simple1_network_path() -> Path:
     return Path(__file__).parent / "fixtures" / "networks" / "simple1.json"
 
 
+# TODO: must replace all fixtures with update JSON (also in samples)
 @pytest.fixture()
 def three_comp_one_comm_x2_network_path() -> Path:
     return (
