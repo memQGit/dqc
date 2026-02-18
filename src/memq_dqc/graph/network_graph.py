@@ -919,8 +919,6 @@ def _reconstruct_qpu_path(
     current = target_qpu_id
     while predecessor[current] is not None:
         prev = predecessor[current]
-        if prev is None:
-            break
         path.append(prev)
         current = prev
     path.reverse()
