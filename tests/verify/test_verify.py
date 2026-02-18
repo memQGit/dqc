@@ -37,7 +37,7 @@ def test_verify_distributed_circuit_simple3(
     partitioner.run()
 
     # we expect this to fail and raise ValueError for now
-    # TOODO: fix this - right now it is failing because only 1 comm qubit
+    # TODO: fix this - right now it is failing because only 1 comm qubit
     with pytest.raises(ValueError):
         extract_distributed_circuit(partitioner)
 
