@@ -554,7 +554,7 @@ class NetworkGraph:
     ) -> list[tuple[PhysicalQubit, PhysicalQubit]]:
         """Returns a list of communication qubit pairs to connect 2 qubits.
 
-        Takes two computation qubits on diffrent QPU's, determines the reachable
+        Takes two computation qubits on different QPU's, determines the reachable
         communication qubits for each via local swaps, then returns all pairs
         of these reachable comm qubits that are connected via remote edge.
 
