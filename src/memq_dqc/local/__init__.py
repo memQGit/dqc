@@ -5,16 +5,11 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Verification helpers for memq-dqc outputs."""
+"""Local compilation passes."""
 
-from .verify import (
-    dist_to_mono_circuit,
-    manual_cost_verification,
-    verify_distributed_circuit,
-)
+from .local_pass import local_transpile
 
 __all__ = [
-    "dist_to_mono_circuit",
-    "manual_cost_verification",
-    "verify_distributed_circuit",
+    # TODO: change name to compile
+    "local_transpile",
 ]

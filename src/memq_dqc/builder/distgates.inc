@@ -1,5 +1,7 @@
 // distgates.inc
 
+// TODO: add all qasm 2q gates ... or figure out better way to do this
+
 //  NOTE: q{n} represents computation (or data) qubits, c{n} represents communication qubits, and q{n} is used when the distinction doesn't matter
 // remote CNOT gate (placeholder)
 gate rcx q0, q1, c0, c1 {
@@ -9,6 +11,12 @@ gate rcx q0, q1, c0, c1 {
 
 // remote controlled phase gate (placeholder)
 gate rcp q0, q1, c0, c1 theta {
+    id q0;
+    id q1;
+}
+
+// remote controlled RY gate (placeholder)
+gate rcry q0, q1, c0, c1 theta {
     id q0;
     id q1;
 }
