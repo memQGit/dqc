@@ -518,8 +518,11 @@ class NetworkGraph:
         """Reconstruct a shortest path from predecessor information.
 
         Given a predecessor dictionary from NetworkX shortest path algorithms,
-        reconstructs the actual path from source to target by following the
-        predecessor links backwards from target to source.
+        reconstructs the actual path from source to target.
+
+        When multiple shortest predecessor choices exist, this method
+        deterministically prefers paths that keep intermediate nodes on
+        computation qubits.
 
         Args:
             pred: Predecessor dictionary mapping each node to a list of
@@ -532,22 +535,48 @@ class NetworkGraph:
             A list of nodes representing the path from source to target,
             or None if no path exists.
         """
+        # TODO: review and cleanup this function
         if target == source:
             return [source]
         if target not in pred:  # unreachable
             return None
 
-        path = [target]
-        cur = target
-        while cur != source:
-            # pred[cur] is a list of predecessors on shortest paths; pick one (e.g., first)
-            ps = pred[cur]
-            if not ps:
+        memo: dict[PhysicalQubit, list[PhysicalQubit] | None] = {}
+
+        # TODO: remove nested function
+        def _path_key(
+            path: list[PhysicalQubit],
+        ) -> tuple[int, tuple[str, ...]]:
+            nonterminal_comm_count = sum(
+                node.is_communication for node in path[:-1]
+            )
+            return (
+                nonterminal_comm_count,
+                tuple(node.label for node in path),
+            )
+
+        def _build_path(node: PhysicalQubit) -> list[PhysicalQubit] | None:
+            if node == source:
+                return [source]
+            if node in memo:
+                return memo[node]
+
+            predecessors = pred.get(node, [])
+            candidate_paths: list[list[PhysicalQubit]] = []
+            for predecessor in predecessors:
+                predecessor_path = _build_path(predecessor)
+                if predecessor_path is None:
+                    continue
+                candidate_paths.append(predecessor_path + [node])
+
+            if not candidate_paths:
+                memo[node] = None
                 return None
-            cur = ps[0]
-            path.append(cur)
-        path.reverse()
-        return path
+
+            memo[node] = min(candidate_paths, key=_path_key)
+            return memo[node]
+
+        return _build_path(target)
 
     def _valid_comm_pairs(
         self, qubit_a: PhysicalQubit, qubit_b: PhysicalQubit

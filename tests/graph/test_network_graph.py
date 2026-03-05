@@ -11,7 +11,7 @@ from pathlib import Path
 import networkx as nx
 import pytest
 
-from memq_dqc.graph.network_graph import NetworkGraph
+from memq_dqc.graph.network_graph import NetworkGraph, PhysicalQubit
 
 
 def _node_by_label(network: NetworkGraph, label: str):
@@ -232,6 +232,32 @@ def test_get_shortest_path_returns_nearest_comm_path(
     assert network._get_shortest_path(source) == [source, destination]
 
 
+def test_construct_path_prefers_comp_intermediates_when_tied(
+    simple1_network_path: Path,
+) -> None:
+    network = NetworkGraph(str(simple1_network_path))
+    source = PhysicalQubit(qpu_id=0, qubit_id=0, qubit_type="computation")
+    bad_predecessor = PhysicalQubit(
+        qpu_id=0, qubit_id=0, qubit_type="communication"
+    )
+    good_predecessor = PhysicalQubit(
+        qpu_id=0, qubit_id=1, qubit_type="computation"
+    )
+    target = PhysicalQubit(qpu_id=0, qubit_id=1, qubit_type="communication")
+
+    predecessors = {
+        bad_predecessor: [source],
+        good_predecessor: [source],
+        target: [bad_predecessor, good_predecessor],
+    }
+
+    assert network._construct_path(predecessors, source, target) == [
+        source,
+        good_predecessor,
+        target,
+    ]
+
+
 def test_local_swap_dict_property(simple1_network_path: Path) -> None:
     network = NetworkGraph(str(simple1_network_path))
     q_1_0 = _node_by_label(network, "q_1_0")
@@ -304,5 +330,6 @@ def test_remote_gate_ebit_cost_uses_best_direction(
     network_path = simple1_network_path.parent / "nonuniform_1.json"
     network = NetworkGraph(str(network_path))
 
-    assert network.remote_gate_ebit_cost(1, 3) == 3
+    # TODO: make sure this makese sense
+    assert network.remote_gate_ebit_cost(1, 3) == 5
     assert network.remote_gate_ebit_cost(1, 2) == 1

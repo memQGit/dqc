@@ -29,7 +29,7 @@ coverage.xml
 # Local testing / playground scripts
 scripts/
 results/
-
+demo/
 # Local caching
 .cache/
 
