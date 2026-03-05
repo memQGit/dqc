@@ -30,6 +30,7 @@ PartitionWindows = list[list[Op]]
 _Algorithm = TypeVar("_Algorithm", bound="BasePartitioner")
 
 
+# TODO: add seed for randomness (eg cisco has some random components)
 class BasePartitioner(ABC):
     """Base class for partitioning algorithm implementations."""
 
@@ -88,6 +89,25 @@ class Partitioner:
             cost, schedule, and windows with the latest partitioning results.
         """
         self._algorithm.run()
+        schedule = self._algorithm.schedule
+        if not schedule:
+            print(
+                "[Partitioner] No partition schedule available to print "
+                "logical->physical mappings."
+            )
+            return
+
+        initial_mapping = _logical_to_physical_map(schedule[0])
+        final_mapping = _logical_to_physical_map(schedule[-1])
+        final_window_idx = len(schedule) - 1
+        print(
+            "[Partitioner] Initial logical->physical mapping "
+            f"(window 0): {initial_mapping}"
+        )
+        print(
+            "[Partitioner] Final logical->physical mapping "
+            f"(window {final_window_idx}): {final_mapping}"
+        )
 
     @property
     def cost(self) -> float | None:
@@ -118,6 +138,7 @@ class Partitioner:
         self,
         network: NetworkGraph,
         program: ast.Program,
+        # TODO: clean this up... unnecessary
         # Allow developers to pass custom algorithm implementations
         algo: str | type[_Algorithm] | _Algorithm,
         algo_kwargs: dict[str, Any] | None,
@@ -144,6 +165,36 @@ def _get_algorithm_class(name: str) -> type[BasePartitioner]:
         from memq_dqc.partition.cisco.cisco import CiscoPartitioner
 
         return CiscoPartitioner
+    if name in {"benchmark_static", "BenchmarkStatic"}:
+        from memq_dqc.partition.benchmark_static import (
+            BenchmarkStaticPartitioner,
+        )
+
+        return BenchmarkStaticPartitioner
+    if name in {"benchmark_random", "BenchmarkRandom"}:
+        from memq_dqc.partition.benchmark_random import (
+            BenchmarkRandomPartitioner,
+        )
+
+        return BenchmarkRandomPartitioner
     if name == "genetic":
         raise NotImplementedError("Genetic algorithm not yet implemented.")
     raise ValueError(f"Unknown partitioning algorithm: {name}")
+
+
+def _logical_to_physical_map(
+    assignment: dict[QPU, set[int]],
+) -> dict[int, tuple[int, int]]:
+    """Return a deterministic logical-to-physical map for one window.
+
+    The physical position is represented as ``(qpu_id, slot_idx)`` where
+    ``slot_idx`` is determined by sorted logical-qubit order within each QPU.
+    """
+    # TODO: check & simplify this
+    mapping: dict[int, tuple[int, int]] = {}
+    for qpu, logical_qubits in sorted(
+        assignment.items(), key=lambda kv: kv[0].id
+    ):
+        for slot_idx, logical_qubit in enumerate(sorted(logical_qubits)):
+            mapping[logical_qubit] = (qpu.id, slot_idx)
+    return dict(sorted(mapping.items(), key=lambda item: item[0]))

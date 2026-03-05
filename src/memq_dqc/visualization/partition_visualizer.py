@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -20,6 +21,8 @@ if TYPE_CHECKING:
 PartitionTimeline = list[dict["QPU", set[int]]]
 
 __all__ = ["plot_partition_heatmap", "plot_migration_timeline"]
+
+COLOR_SCHEME = ["#a558b5", "#222636", "#3b4171", "#3f5f81"]
 
 
 def plot_partition_heatmap(  # pragma: no cover
@@ -76,7 +79,19 @@ def plot_partition_heatmap(  # pragma: no cover
     if ax is None:
         _, ax = plt.subplots(figsize=(10, 6))
 
-    cmap_obj = plt.get_cmap(cmap, num_qpus)
+    # Create custom colormap using COLOR_SCHEME first, then fallback
+    if num_qpus <= len(COLOR_SCHEME):
+        # Use only COLOR_SCHEME colors
+        colors = COLOR_SCHEME[:num_qpus]
+    else:
+        # Use all COLOR_SCHEME colors, then fill with default colormap
+        fallback_cmap = plt.get_cmap(cmap, num_qpus - len(COLOR_SCHEME))
+        fallback_colors = [
+            fallback_cmap(i) for i in range(num_qpus - len(COLOR_SCHEME))
+        ]
+        colors = COLOR_SCHEME + [mcolors.to_hex(c) for c in fallback_colors]
+
+    cmap_obj = mcolors.ListedColormap(colors, N=num_qpus)
     cmap_obj.set_bad(color="#e0e0e0")
     img = ax.imshow(
         data,

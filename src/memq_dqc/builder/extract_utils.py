@@ -34,6 +34,7 @@ class SwapOp:
     pos1: Pos
 
 
+# TODO: this whole file, particular function below, needs review + cleanup
 def synthesize_state_teleportation_swaps(
     schedule: list[PartitionAssignment],
 ) -> list[list[SwapOp]]:
@@ -58,7 +59,30 @@ def synthesize_state_teleportation_swaps(
                 schedule[step_idx],
             )
         )
-    return swaps_per_timestep
+
+    # Rebase swap positions across timesteps so each swap references the
+    # current physical positions resulting from previously emitted swaps.
+    current_pos_by_qubit = _assignment_initial_positions(schedule[0])
+    rebased_swaps_per_timestep: list[list[SwapOp]] = []
+    for timestep_swaps in swaps_per_timestep:
+        rebased_timestep_swaps: list[SwapOp] = []
+        for swap in timestep_swaps:
+            pos0 = current_pos_by_qubit[swap.q0]
+            pos1 = current_pos_by_qubit[swap.q1]
+            rebased_swap = SwapOp(
+                q0=swap.q0,
+                q1=swap.q1,
+                pos0=pos0,
+                pos1=pos1,
+            )
+            rebased_timestep_swaps.append(rebased_swap)
+            current_pos_by_qubit[swap.q0], current_pos_by_qubit[swap.q1] = (
+                pos1,
+                pos0,
+            )
+        rebased_swaps_per_timestep.append(rebased_timestep_swaps)
+
+    return rebased_swaps_per_timestep
 
 
 def _assignment_to_sorted_lists(
@@ -69,16 +93,28 @@ def _assignment_to_sorted_lists(
     return qpu_ids, [sorted(qubits) for _, qubits in items]
 
 
+def _assignment_initial_positions(
+    assignment: PartitionAssignment,
+) -> dict[int, Pos]:
+    """Return initial physical positions for one partition assignment."""
+    qpu_ids, qubits_by_qpu = _assignment_to_sorted_lists(assignment)
+    pos_by_qubit: dict[int, Pos] = {}
+    for qpu_id, qubits in zip(qpu_ids, qubits_by_qpu, strict=True):
+        for slot_idx, qubit in enumerate(qubits):
+            pos_by_qubit[qubit] = (qpu_id, slot_idx)
+    return pos_by_qubit
+
+
 def _synthesize_swaps_for_timestep(
     prev_assignment: PartitionAssignment,
     curr_assignment: PartitionAssignment,
 ) -> list[SwapOp]:
     """Produce swaps that transform prev_assignment to curr_assignment.
 
-    Only cross-QPU swaps are emitted. The algorithm matches qubits that
-    must leave/enter each QPU and performs cycle decomposition on the
-    resulting qubit mapping.
+    Only cross-QPU swaps are emitted.
     """
+    # TODO (important): must have a list of possible swaps, and ensure partition doesnt move between unreachable qpus'
+    # TODO: clarify / clean this
     if len(prev_assignment) != len(curr_assignment):
         raise ValueError("Number of QPUs changed between timesteps.")
 
@@ -110,60 +146,46 @@ def _synthesize_swaps_for_timestep(
     if not moved_qubits:
         return []
 
-    outgoing: dict[int, list[int]] = {qpu_id: [] for qpu_id in prev_qpu_ids}
-    incoming: dict[int, list[int]] = {qpu_id: [] for qpu_id in prev_qpu_ids}
-    for qubit in moved_qubits:
-        src = current_qpu[qubit]
-        dst = target_qpu[qubit]
-        outgoing[src].append(qubit)
-        incoming[dst].append(qubit)
-
-    for qpu_id in prev_qpu_ids:
-        outgoing[qpu_id].sort()
-        incoming[qpu_id].sort()
-        if len(outgoing[qpu_id]) != len(incoming[qpu_id]):
-            raise ValueError(
-                "Unbalanced transfers on QPU "
-                f"{qpu_id}: {len(outgoing[qpu_id])} -> "
-                f"{len(incoming[qpu_id])}"
-            )
-
-    next_qubit: dict[int, int] = {}
-    for qpu_id in prev_qpu_ids:
-        for idx, in_qubit in enumerate(incoming[qpu_id]):
-            next_qubit[in_qubit] = outgoing[qpu_id][idx]
-
     pos_by_qubit: dict[int, Pos] = {}
-    qubit_by_pos: dict[Pos, int] = {}
     for qpu_id, qubits in zip(prev_qpu_ids, prev_lists, strict=True):
         for slot_idx, qubit in enumerate(qubits):
             pos = (qpu_id, slot_idx)
             pos_by_qubit[qubit] = pos
-            qubit_by_pos[pos] = qubit
 
     swaps: list[SwapOp] = []
 
+    # TODO: no nested functions
     def emit_swap(q0: int, q1: int) -> None:
         pos0 = pos_by_qubit[q0]
         pos1 = pos_by_qubit[q1]
         swaps.append(SwapOp(q0=q0, q1=q1, pos0=pos0, pos1=pos1))
         pos_by_qubit[q0], pos_by_qubit[q1] = pos1, pos0
-        qubit_by_pos[pos0], qubit_by_pos[pos1] = q1, q0
 
-    visited: set[int] = set()
-    for start in list(next_qubit.keys()):
-        if start in visited:
+    moved_remaining = set(moved_qubits)
+    while moved_remaining:
+        q0 = min(moved_remaining)
+        q0_current_qpu, _ = pos_by_qubit[q0]
+        q0_target_qpu = target_qpu[q0]
+        if q0_current_qpu == q0_target_qpu:
+            moved_remaining.remove(q0)
             continue
-        cycle: list[int] = []
-        cur = start
-        while cur not in visited:
-            visited.add(cur)
-            cycle.append(cur)
-            cur = next_qubit[cur]
-        if len(cycle) <= 1:
-            continue
-        for idx in range(len(cycle) - 1):
-            emit_swap(cycle[idx], cycle[idx + 1])
+
+        candidates = [
+            qubit
+            for qubit in moved_remaining
+            if pos_by_qubit[qubit][0] == q0_target_qpu
+        ]
+        if not candidates:
+            raise RuntimeError(
+                "Swap synthesis failed: no donor qubit found for "
+                f"destination QPU {q0_target_qpu}."
+            )
+        q1 = min(candidates)
+        emit_swap(q0, q1)
+
+        for qubit in (q0, q1):
+            if pos_by_qubit[qubit][0] == target_qpu[qubit]:
+                moved_remaining.discard(qubit)
 
     final_assignment: dict[int, set[int]] = {
         qpu_id: set() for qpu_id in prev_qpu_ids
@@ -175,7 +197,6 @@ def _synthesize_swaps_for_timestep(
     }
     if final_assignment != target_assignment:
         raise RuntimeError("Swap synthesis failed to reach target assignment.")
-
     return swaps
 
 

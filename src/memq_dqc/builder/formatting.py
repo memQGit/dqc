@@ -12,6 +12,7 @@ import re
 from openqasm3 import ast
 
 
+# TODO: this file probably shouldn't exist - move to utils or something
 def rename_comm_qubits(qasm_prog: ast.Program) -> ast.Program:
     """Adjust communication qubit names for compatibility with simulator.
 
@@ -19,7 +20,8 @@ def rename_comm_qubits(qasm_prog: ast.Program) -> ast.Program:
     ``c0`` and ``c1``, each with two qubits.
 
     Remote gate rewrites:
-        - ``rcx`` / ``rcp`` / ``rcz`` alternate communication pairs:
+        - ``rcx`` / ``rcp`` / ``rcry`` / ``rcz`` alternate communication
+          pairs:
           ``c0[0], c0[1]`` then ``c1[0], c1[1]`` and so on.
         - ``rswap`` always uses
           ``c0[0], c0[1], c1[0], c1[1]`` as its last four qubits.
@@ -62,7 +64,7 @@ def rename_comm_qubits(qasm_prog: ast.Program) -> ast.Program:
     ]
     statements[insertion_index:insertion_index] = canonical_declarations
 
-    remote_gate_names = {"rcx", "rcp", "rcz"}
+    remote_gate_names = {"rcx", "rcp", "rcry", "rcz"}
     remote_gate_count = 0
     for statement in statements:
         if not isinstance(statement, ast.QuantumGate):
