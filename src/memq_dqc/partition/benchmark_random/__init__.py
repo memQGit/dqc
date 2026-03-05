@@ -5,18 +5,8 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Partitioning algorithms for interaction and network graphs."""
+"""Benchmark random partitioning implementation."""
 
 from .benchmark_random import BenchmarkRandomPartitioner
-from .benchmark_static import BenchmarkStaticPartitioner
-from .cisco import CiscoPartitioner
-from .partitioner import Partitioner
-from .types import QPU
 
-__all__ = [
-    "BenchmarkRandomPartitioner",
-    "BenchmarkStaticPartitioner",
-    "CiscoPartitioner",
-    "Partitioner",
-    "QPU",
-]
+__all__ = ["BenchmarkRandomPartitioner"]

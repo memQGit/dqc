@@ -30,6 +30,7 @@ from memq_dqc.utils.circuit_utils import build_window_interaction_graph
 class CiscoPartitioner(BasePartitioner):
     """Partition qubits using the Cisco (TODO: cite) algorithm."""
 
+    # TODO: both state teleportation AND remote gates must account for required rswaps to get there
     def __init__(
         self,
         network: NetworkGraph,

@@ -87,6 +87,7 @@ def build_window_interaction_graph(
     Returns:
         The interaction graph for the window and the active qubits.
     """
+    # TODO: abstract hardcoded weights to user controls
     two_qubit_counts = count_two_qubit_pairs(
         op.qubit_indices for op in ops if len(op.qubits) == 2
     )
@@ -100,8 +101,10 @@ def build_window_interaction_graph(
         weight = count
         part_i = partition_map.get(i)
         part_j = partition_map.get(j)
+        # TODO: figure out why even if this is nearly infinity we still dont get static
+
         if part_i == part_j:
-            weight *= 2
+            weight *= 2.0
         graph.add_edge(i, j, weight=weight)
 
     return graph, active_qubits

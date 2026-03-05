@@ -40,6 +40,7 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
     Returns:
         Distributed OpenQASM 3 program with remote gate names applied.
     """
+    # TODO: MUST DEAL WITH CASE OF ORIGINAL REGISTERS NAMED C (EG CLASSICAL)
     # TODO: figure out cleaner way of abstraction ... probably shouldn't all
     # ... be handled in circuit DAG
     dag, schedule, windows = _validated_partitioner_outputs(partitioner)
@@ -119,10 +120,12 @@ def _exact_entanglement_cost(distributed_dag: DistributedCircuitDAG) -> float:
     """Return exact entanglement cost from emitted distributed statements.
 
     Cost model:
-        - Remote two-qubit gates (``rcx``, ``rcp``, ``rcz``) cost 1 e-bit pair.
+        - Remote two-qubit gates (``rcx``, ``rcp``, ``rcry``, ``rcz``) cost
+          1 e-bit pair.
         - ``rswap`` costs 2 e-bit pairs.
     """
-    remote_gate_names = {"rcx", "rcp", "rcz"}
+    # TODO: this needs to be made comprehensive
+    remote_gate_names = {"rcx", "rcp", "rcry", "rcz"}
     remote_gate_count = 0
     remote_swap_count = 0
     for statement in distributed_dag.statements:
