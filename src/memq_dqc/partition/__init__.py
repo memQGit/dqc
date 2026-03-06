@@ -11,12 +11,10 @@ from .benchmark_random import BenchmarkRandomPartitioner
 from .benchmark_static import BenchmarkStaticPartitioner
 from .cisco import CiscoPartitioner
 from .partitioner import Partitioner
-from .types import QPU
 
 __all__ = [
     "BenchmarkRandomPartitioner",
     "BenchmarkStaticPartitioner",
     "CiscoPartitioner",
     "Partitioner",
-    "QPU",
 ]

@@ -10,14 +10,30 @@
 from memq_dqc.preprocessing.qasm.analysis import (
     count_total_qubits,
     extract_qubit_index,
+    extract_qubit_register_sizes,
     extract_two_qubit_gates,
 )
 from memq_dqc.preprocessing.qasm.ast_utils import (
     clone_statement_node,
+    indexed_qubit_reference,
+    is_comm_qubit_declaration,
+    is_comm_qubit_reference,
+    non_comm_qubits,
     rename_quantum_gate,
 )
-from memq_dqc.preprocessing.qasm.cleaned_types import (
+from memq_dqc.preprocessing.qasm.cleaning import (
+    clean_statement,
+    extract_cleaned_statements,
+)
+from memq_dqc.preprocessing.qasm.io import (
+    dump_qasm_program,
+    load_qasm_program,
+    parse_qasm_file,
+    parse_qasm_source,
+)
+from memq_dqc.preprocessing.qasm.types import (
     Cbit,
+    CircuitQubit,
     CleanedClassicalDeclaration,
     CleanedIncludeStatement,
     CleanedQuantumGate,
@@ -26,14 +42,10 @@ from memq_dqc.preprocessing.qasm.cleaned_types import (
     CleanedQubitDeclaration,
     CleanedStatement,
 )
-from memq_dqc.preprocessing.qasm.cleaning import (
-    clean_statement,
-    extract_cleaned_statements,
-)
-from memq_dqc.qasm.types import LogicalQubit
 
 __all__ = [
     "Cbit",
+    "CircuitQubit",
     "CleanedClassicalDeclaration",
     "CleanedIncludeStatement",
     "CleanedQuantumGate",
@@ -41,12 +53,20 @@ __all__ = [
     "CleanedQuantumMeasurementStatement",
     "CleanedQubitDeclaration",
     "CleanedStatement",
-    "LogicalQubit",
     "clean_statement",
     "clone_statement_node",
     "count_total_qubits",
+    "dump_qasm_program",
     "extract_cleaned_statements",
+    "extract_qubit_register_sizes",
     "extract_qubit_index",
     "extract_two_qubit_gates",
+    "indexed_qubit_reference",
+    "is_comm_qubit_declaration",
+    "is_comm_qubit_reference",
+    "load_qasm_program",
+    "non_comm_qubits",
+    "parse_qasm_file",
+    "parse_qasm_source",
     "rename_quantum_gate",
 ]

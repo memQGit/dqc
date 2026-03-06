@@ -1,5 +1,0 @@
-Must figure out smart architecture: inputs to different algorithms will be 
-different, particularly different graph structures. Should we place all algos
-in a single, plug-and-play file, have different files for each potential graph 
-structure? The true replaceable part should be the combo of graph / algo method.
-We'll begin by throwing it in a single file.

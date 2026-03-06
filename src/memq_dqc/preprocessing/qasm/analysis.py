@@ -14,7 +14,7 @@ from collections.abc import Iterable
 
 from openqasm3 import ast
 
-from memq_dqc.io.qasm import load_qasm_program
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
 
 
 def count_total_qubits(qasm: str | ast.Program) -> int:
@@ -78,6 +78,33 @@ def extract_two_qubit_gates(
         for q0, q1 in [statement.qubits]
     )
     return _count_two_qubit_pairs(pairs)
+
+
+def extract_qubit_register_sizes(program: ast.Program) -> dict[str, int]:
+    """Extract declared qubit register sizes from a program.
+
+    Args:
+        program: OpenQASM 3 program to inspect.
+
+    Returns:
+        Mapping from qubit register name to declared size.
+
+    Raises:
+        ValueError: If a qubit declaration does not use an integer literal.
+    """
+    register_sizes: dict[str, int] = {}
+
+    for statement in program.statements:
+        if not isinstance(statement, ast.QubitDeclaration):
+            continue
+        if not isinstance(statement.size, ast.IntegerLiteral):
+            raise ValueError(
+                "Only integer literal qubit declarations are supported: "
+                f"{statement.qubit.name}"
+            )
+        register_sizes[statement.qubit.name] = statement.size.value
+
+    return register_sizes
 
 
 def _count_two_qubit_pairs(

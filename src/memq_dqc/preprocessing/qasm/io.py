@@ -36,7 +36,7 @@ def load_qasm_program(filename: str, from_cache: bool = False) -> ast.Program:
         raise FileNotFoundError(f"File not found: {filename}")
     if from_cache:
         return _load_program_from_cache(qasm_path)
-    program = _parse_qasm_source(qasm_path.read_text(encoding="utf-8"))
+    program = parse_qasm_source(qasm_path.read_text(encoding="utf-8"))
     num_qubit_registers = _count_qubit_declarations(program)
     if num_qubit_registers > 1:
         raise NotImplementedError(
@@ -44,6 +44,24 @@ def load_qasm_program(filename: str, from_cache: bool = False) -> ast.Program:
         )
     # TODO: is there a way to verify valid program here? (Recall pyqasm has this)
     return program
+
+
+def parse_qasm_file(filename: str) -> ast.Program:
+    """Parse an OpenQASM 3 file without additional structural constraints.
+
+    Args:
+        filename: Path to the OpenQASM 3 file.
+
+    Returns:
+        Parsed OpenQASM 3 program.
+
+    Raises:
+        FileNotFoundError: If ``filename`` does not exist.
+    """
+    qasm_path = Path(filename)
+    if not qasm_path.is_file():
+        raise FileNotFoundError(f"File not found: {filename}")
+    return parse_qasm_source(qasm_path.read_text(encoding="utf-8"))
 
 
 def _load_program_from_cache(qasm_path: Path) -> ast.Program:
@@ -61,15 +79,34 @@ def _load_program_from_cache(qasm_path: Path) -> ast.Program:
             except (pickle.UnpicklingError, EOFError):
                 pass
 
-    program = _parse_qasm_source(qasm_path.read_text(encoding="utf-8"))
+    program = parse_qasm_source(qasm_path.read_text(encoding="utf-8"))
     with cache_path.open("wb") as handle:
         pickle.dump(program, handle)
     return program
 
 
-def _parse_qasm_source(qasm_source: str) -> ast.Program:
-    """Parse OpenQASM 3 source text into an AST program."""
+def parse_qasm_source(qasm_source: str) -> ast.Program:
+    """Parse OpenQASM 3 source text into an AST program.
+
+    Args:
+        qasm_source: OpenQASM 3 source text.
+
+    Returns:
+        Parsed OpenQASM 3 program.
+    """
     return openqasm3.parser.parse(qasm_source)
+
+
+def dump_qasm_program(program: ast.Program) -> str:
+    """Serialize an OpenQASM 3 program to source text.
+
+    Args:
+        program: Program to serialize.
+
+    Returns:
+        OpenQASM 3 source text.
+    """
+    return openqasm3.dumps(program)
 
 
 def _count_qubit_declarations(program: ast.Program) -> int:

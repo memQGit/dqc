@@ -14,7 +14,7 @@ import random
 
 from openqasm3 import ast
 
-from memq_dqc.graph import NetworkGraph
+from memq_dqc.network import NetworkGraph
 from memq_dqc.partition.cisco.cisco import (
     _build_schedule,
     _effective_partition_sizes,

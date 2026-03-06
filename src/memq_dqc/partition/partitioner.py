@@ -15,14 +15,22 @@ of the necessary data to perform partitioning.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from openqasm3 import ast
 
 from memq_dqc.circuit.dag import CircuitDAG
 from memq_dqc.circuit.ops import Op
-from memq_dqc.graph import NetworkGraph
-from memq_dqc.partition.types import QPU
+from memq_dqc.network import NetworkGraph
+
+
+@dataclass(frozen=True, slots=True)
+class QPU:
+    """Represents a QPU identifier for partition assignments."""
+
+    id: int
+
 
 PartitionSchedule = list[dict[QPU, set[int]]]
 PartitionWindows = list[list[Op]]
