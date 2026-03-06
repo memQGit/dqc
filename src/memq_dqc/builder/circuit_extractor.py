@@ -21,7 +21,7 @@ from memq_dqc.builder.extract_utils import (
 )
 from memq_dqc.circuit.dag import DistributedCircuitDAG
 from memq_dqc.partition import Partitioner
-from memq_dqc.preprocessing.qasm import CleanedQuantumGate
+from memq_dqc.preprocessing.qasm.types import CleanedQuantumGate
 
 if TYPE_CHECKING:
     from memq_dqc.circuit.dag import CircuitDAG

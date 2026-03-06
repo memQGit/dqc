@@ -7,14 +7,21 @@
 
 """Verification of distributed circuit."""
 
-import re
-from pathlib import Path
-
-import openqasm3
 import qiskit.qasm3
+from openqasm3 import ast
 from qiskit import QuantumCircuit, transpile
 from qiskit.quantum_info import hellinger_fidelity
 from qiskit_aer import AerSimulator
+
+from memq_dqc.preprocessing.qasm import (
+    dump_qasm_program,
+    is_comm_qubit_declaration,
+    is_comm_qubit_reference,
+    non_comm_qubits,
+    parse_qasm_file,
+    parse_qasm_source,
+    rename_quantum_gate,
+)
 
 _REMOTE_OPERATION_COSTS: dict[str, int] = {
     "rswap": 2,
@@ -113,47 +120,47 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> str:
         circuit.
     """
     # TODO: must be tested!
-    # TODO: use qasm.py in io to deal with this rather than repeat code
-    dist_path = Path(dist_circuit_path)  # TODO: use PATH objects everywhere
-    dist_prog = openqasm3.parser.parse(dist_path.read_text(encoding="utf-8"))
+    dist_prog = parse_qasm_file(dist_circuit_path)
     new_statements = []
     # iterate through program statements and remove remote gates
     for stmt in dist_prog.statements:
+        if not isinstance(stmt, ast.Statement):
+            new_statements.append(stmt)
+            continue
         # Remove custom library includes
-        if isinstance(stmt, openqasm3.ast.Include):
+        if isinstance(stmt, ast.Include):
             included_file = stmt.filename
             if "distgates.inc" in included_file:
                 continue
-        if _is_comm_qubit_declaration(stmt):
+        if is_comm_qubit_declaration(stmt):
             continue
         # Replace remote gates with local equivalents
-        if isinstance(stmt, openqasm3.ast.QuantumGate):
+        if isinstance(stmt, ast.QuantumGate):
             # replace RCX w/ CX
             name = stmt.name.name
             if name == "rcx":
-                stmt.name.name = "cx"
-                stmt.qubits = _non_comm_qubits(stmt.qubits)[:2]
+                stmt = rename_quantum_gate(stmt, "cx")
+                stmt.qubits = non_comm_qubits(stmt.qubits)[:2]
             elif name == "rcp":
-                stmt.name.name = "cp"
-                stmt.qubits = _non_comm_qubits(stmt.qubits)[:2]
+                stmt = rename_quantum_gate(stmt, "cp")
+                stmt.qubits = non_comm_qubits(stmt.qubits)[:2]
             elif name == "rcry":
-                stmt.name.name = "cry"
-                stmt.qubits = _non_comm_qubits(stmt.qubits)[:2]
+                stmt = rename_quantum_gate(stmt, "cry")
+                stmt.qubits = non_comm_qubits(stmt.qubits)[:2]
             elif name == "rcz":
-                stmt.name.name = "cz"
-                stmt.qubits = _non_comm_qubits(stmt.qubits)[:2]
+                stmt = rename_quantum_gate(stmt, "cz")
+                stmt.qubits = non_comm_qubits(stmt.qubits)[:2]
             # replace RSWAP w/ SWAP
             elif name == "rswap":
-                stmt.name.name = "swap"
-                stmt.qubits = _non_comm_qubits(stmt.qubits)[:2]
-            elif any(_is_comm_qubit_ref(qubit) for qubit in stmt.qubits):
+                stmt = rename_quantum_gate(stmt, "swap")
+                stmt.qubits = non_comm_qubits(stmt.qubits)[:2]
+            elif any(is_comm_qubit_reference(qubit) for qubit in stmt.qubits):
                 continue
         new_statements.append(stmt)
-    mono_prog = openqasm3.ast.Program(
+    mono_prog = ast.Program(
         version=dist_prog.version, statements=new_statements
     )
-    mono_str = openqasm3.dumps(mono_prog)
-    return mono_str
+    return dump_qasm_program(mono_prog)
 
 
 def manual_cost_verification(qasm: str) -> int:
@@ -169,35 +176,12 @@ def manual_cost_verification(qasm: str) -> int:
     Returns:
         Sum of remote operation costs.
     """
-    program = openqasm3.parser.parse(qasm)
+    program = parse_qasm_source(qasm)
     total_cost = 0
 
     for statement in program.statements:
-        if not isinstance(statement, openqasm3.ast.QuantumGate):
+        if not isinstance(statement, ast.QuantumGate):
             continue
         total_cost += _REMOTE_OPERATION_COSTS.get(statement.name.name, 0)
 
     return total_cost
-
-
-def _non_comm_qubits(
-    qubits: list[openqasm3.ast.IndexedIdentifier | openqasm3.ast.Identifier],
-) -> list[openqasm3.ast.IndexedIdentifier | openqasm3.ast.Identifier]:
-    """Return only non-communication qubit operands."""
-    return [qubit for qubit in qubits if not _is_comm_qubit_ref(qubit)]
-
-
-def _is_comm_qubit_ref(
-    qubit: openqasm3.ast.IndexedIdentifier | openqasm3.ast.Identifier,
-) -> bool:
-    """Return True when operand references a communication register."""
-    if isinstance(qubit, openqasm3.ast.Identifier):
-        return qubit.name.startswith("c")
-    return qubit.name.name.startswith("c")
-
-
-def _is_comm_qubit_declaration(statement: openqasm3.ast.Statement) -> bool:
-    """Return True when statement declares a communication qubit register."""
-    return isinstance(statement, openqasm3.ast.QubitDeclaration) and bool(
-        re.fullmatch(r"c\d+", statement.qubit.name)
-    )

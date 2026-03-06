@@ -12,7 +12,7 @@ from __future__ import annotations
 from openqasm3 import ast
 
 from memq_dqc.circuit.dag import CircuitDAG
-from memq_dqc.io.qasm import load_qasm_program
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
 
 
 def build_dag(program_or_path: str | ast.Program) -> CircuitDAG:

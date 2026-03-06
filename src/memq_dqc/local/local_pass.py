@@ -12,12 +12,18 @@ from __future__ import annotations
 import copy
 from pathlib import Path
 
-import openqasm3
 import qiskit.qasm3
 from openqasm3 import ast
 from qiskit import QuantumCircuit, transpile
 
-from memq_dqc.preprocessing.qasm.ast_utils import clone_statement_node
+from memq_dqc.preprocessing.qasm import (
+    clone_statement_node,
+    dump_qasm_program,
+    extract_qubit_register_sizes,
+    indexed_qubit_reference,
+    parse_qasm_file,
+    parse_qasm_source,
+)
 
 # TODO: THIS ENTIRE THING NEEDS TO BE TESTED AND DEBUGGED AND CLEANED (all codex)
 _DISTRIBUTED_GATE_NAMES = frozenset({"rcx", "rcp", "rcry", "rcz", "rswap"})
@@ -83,8 +89,8 @@ def minimize_local_swaps_in_distributed_qasm(
             f"Distributed QASM file does not exist: {distributed_qasm_path}"
         )
 
-    program = openqasm3.parser.parse(source_path.read_text(encoding="utf-8"))
-    register_sizes = _extract_qubit_register_sizes(program)
+    program = parse_qasm_file(str(source_path))
+    register_sizes = extract_qubit_register_sizes(program)
 
     optimized_statements: list[ast.Statement | ast.Pragma] = []
     statements = list(program.statements)
@@ -128,7 +134,7 @@ def minimize_local_swaps_in_distributed_qasm(
         version=program.version,
         statements=optimized_statements,
     )
-    optimized_qasm = openqasm3.dumps(optimized_program)
+    optimized_qasm = dump_qasm_program(optimized_program)
 
     if output_path is not None:
         Path(output_path).write_text(optimized_qasm, encoding="utf-8")
@@ -150,24 +156,6 @@ def local_transpile(
         optimization_level=optimization_level,
         seed_transpiler=seed_transpiler,
     )
-
-
-def _extract_qubit_register_sizes(program: ast.Program) -> dict[str, int]:
-    """Extract declared qubit register sizes from a program."""
-    register_sizes: dict[str, int] = {}
-
-    for statement in program.statements:
-        if not isinstance(statement, ast.QubitDeclaration):
-            continue
-
-        if not isinstance(statement.size, ast.IntegerLiteral):
-            raise ValueError(
-                "Only integer literal qubit declarations are supported: "
-                f"{statement.qubit.name}"
-            )
-        register_sizes[statement.qubit.name] = statement.size.value
-
-    return register_sizes
 
 
 def _local_register_for_transpile(
@@ -223,7 +211,7 @@ def _transpile_local_gate_block(
         ],
     )
 
-    block_qasm = openqasm3.dumps(mini_program)
+    block_qasm = dump_qasm_program(mini_program)
 
     try:
         circuit = qiskit.qasm3.loads(block_qasm)
@@ -244,7 +232,7 @@ def _transpile_local_gate_block(
             f"{register_name}."
         ) from exc
 
-    transpiled_program = openqasm3.parser.parse(transpiled_qasm)
+    transpiled_program = parse_qasm_source(transpiled_qasm)
     remapped_gates: list[ast.Statement] = []
     for statement in transpiled_program.statements:
         if not isinstance(statement, ast.QuantumGate):
@@ -354,7 +342,7 @@ def _remap_qubit_reference(
             register_size=register_size,
             qubit_index=mapped_index,
         )
-        return _indexed_qubit_ref(register_name, mapped_index)
+        return indexed_qubit_reference(register_name, mapped_index)
 
     if not qubit.name.startswith("$"):
         return qubit
@@ -365,7 +353,7 @@ def _remap_qubit_reference(
         register_size=register_size,
         qubit_index=mapped_index,
     )
-    return _indexed_qubit_ref(register_name, mapped_index)
+    return indexed_qubit_reference(register_name, mapped_index)
 
 
 def _physical_qubit_index(operand: str) -> int:
@@ -392,17 +380,6 @@ def _validate_register_bounds(
     )
 
 
-def _indexed_qubit_ref(
-    register_name: str,
-    qubit_index: int,
-) -> ast.IndexedIdentifier:
-    """Build an indexed register qubit reference."""
-    return ast.IndexedIdentifier(
-        name=ast.Identifier(register_name),
-        indices=[[ast.IntegerLiteral(qubit_index)]],
-    )
-
-
 def _swap_gate_statement(
     register_name: str,
     left_index: int,
@@ -414,7 +391,7 @@ def _swap_gate_statement(
         name=ast.Identifier("swap"),
         arguments=[],
         qubits=[
-            _indexed_qubit_ref(register_name, left_index),
-            _indexed_qubit_ref(register_name, right_index),
+            indexed_qubit_reference(register_name, left_index),
+            indexed_qubit_reference(register_name, right_index),
         ],
     )

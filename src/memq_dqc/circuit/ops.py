@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from openqasm3 import ast
 
-from memq_dqc.qasm.types import LogicalQubit
+from memq_dqc.preprocessing.qasm.types import CircuitQubit
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +31,7 @@ class Op:
     op_id: int
     statement_id: int
     name: str
-    qubits: tuple[LogicalQubit, ...]
+    qubits: tuple[CircuitQubit, ...]
     node: ast.QASMNode
 
     @property
@@ -48,6 +48,6 @@ class Op:
         """Return the integer indices of the operation's qubits.
 
         Returns:
-            LogicalQubit indices in operation order.
+            CircuitQubit indices in operation order.
         """
         return tuple(q.index for q in self.qubits)

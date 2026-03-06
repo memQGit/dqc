@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 if TYPE_CHECKING:
-    from memq_dqc.partition.types import QPU
+    from memq_dqc.partition.partitioner import QPU
 
 PartitionTimeline = list[dict["QPU", set[int]]]
 

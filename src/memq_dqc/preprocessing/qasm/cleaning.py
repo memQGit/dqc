@@ -15,8 +15,9 @@ from openqasm3 import ast
 
 from memq_dqc.preprocessing.qasm.analysis import extract_qubit_index
 from memq_dqc.preprocessing.qasm.ast_utils import clone_statement_node
-from memq_dqc.preprocessing.qasm.cleaned_types import (
+from memq_dqc.preprocessing.qasm.types import (
     Cbit,
+    CircuitQubit,
     CleanedClassicalDeclaration,
     CleanedIncludeStatement,
     CleanedQuantumGate,
@@ -25,7 +26,6 @@ from memq_dqc.preprocessing.qasm.cleaned_types import (
     CleanedQubitDeclaration,
     CleanedStatement,
 )
-from memq_dqc.qasm.types import LogicalQubit
 
 
 def extract_cleaned_statements(
@@ -113,7 +113,7 @@ def clean_statement(statement: ast.Statement) -> CleanedStatement:
             extract_qubit_index(qubit, reg_name=True)
             for qubit in statement.qubits
         ]
-        qubits = [LogicalQubit(name, index) for name, index in qubits]
+        qubits = [CircuitQubit(name, index) for name, index in qubits]
         return CleanedQuantumGate(
             statement_type=type(statement),
             node=clone_statement_node(statement),
@@ -138,7 +138,7 @@ def clean_statement(statement: ast.Statement) -> CleanedStatement:
             statement_type=type(statement),
             node=clone_statement_node(statement),
             is_op=True,
-            qubit=LogicalQubit(q_name, q_idx),
+            qubit=CircuitQubit(q_name, q_idx),
             cbit=Cbit(c_name, c_idx),
         )
     if isinstance(statement, ast.QuantumBarrier):

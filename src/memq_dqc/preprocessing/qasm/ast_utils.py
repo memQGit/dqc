@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import copy
+import re
 from dataclasses import fields, is_dataclass
 from typing import cast
 
@@ -41,6 +42,69 @@ def rename_quantum_gate(gate: ast.QuantumGate, name: str) -> ast.QuantumGate:
     new_gate = cast(ast.QuantumGate, _clone_ast_node(gate))
     new_gate.name = ast.Identifier(name)
     return new_gate
+
+
+def is_comm_qubit_reference(
+    qubit: ast.IndexedIdentifier | ast.Identifier,
+) -> bool:
+    """Return whether a qubit operand references a communication register.
+
+    Args:
+        qubit: Qubit reference in gate operands.
+
+    Returns:
+        True when the operand refers to a ``c*`` register.
+    """
+    if isinstance(qubit, ast.Identifier):
+        return qubit.name.startswith("c")
+    return qubit.name.name.startswith("c")
+
+
+def is_comm_qubit_declaration(statement: ast.Statement) -> bool:
+    """Return whether a statement declares a communication register.
+
+    Args:
+        statement: Program statement.
+
+    Returns:
+        True when the statement is a ``qubit c<digits>[...]`` declaration.
+    """
+    return isinstance(statement, ast.QubitDeclaration) and bool(
+        re.fullmatch(r"c\d+", statement.qubit.name)
+    )
+
+
+def non_comm_qubits(
+    qubits: list[ast.IndexedIdentifier | ast.Identifier],
+) -> list[ast.IndexedIdentifier | ast.Identifier]:
+    """Return qubit operands excluding communication-register references.
+
+    Args:
+        qubits: Qubit operands to filter.
+
+    Returns:
+        Operands whose register names do not start with ``c``.
+    """
+    return [qubit for qubit in qubits if not is_comm_qubit_reference(qubit)]
+
+
+def indexed_qubit_reference(
+    register_name: str,
+    index: int,
+) -> ast.IndexedIdentifier:
+    """Build an indexed qubit reference for a named register.
+
+    Args:
+        register_name: Qubit register name.
+        index: Qubit index in the register.
+
+    Returns:
+        OpenQASM indexed identifier.
+    """
+    return ast.IndexedIdentifier(
+        name=ast.Identifier(register_name),
+        indices=[[ast.IntegerLiteral(index)]],
+    )
 
 
 def _clone_ast_node(node: object) -> object:
