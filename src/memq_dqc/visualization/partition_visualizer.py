@@ -5,7 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Partition visualization helpers."""
+"""Partition and schedule visualization helpers."""
 
 from __future__ import annotations
 
@@ -16,11 +16,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from memq_dqc.circuit.ops import Op
     from memq_dqc.partition.types import QPU
 
 PartitionTimeline = list[dict["QPU", set[int]]]
+PartitionWindows = list[list["Op"]]
 
-__all__ = ["plot_partition_heatmap", "plot_migration_timeline"]
+__all__ = [
+    "plot_partition_heatmap",
+    "plot_migration_timeline",
+    "plot_qubit_flow",
+    "plot_window_operation_profile",
+]
 
 COLOR_SCHEME = ["#a558b5", "#222636", "#3b4171", "#3f5f81"]
 
@@ -179,6 +188,190 @@ def plot_migration_timeline(  # pragma: no cover
         ax2.set_ylabel("Entanglement cost")
 
     ax.legend(loc="upper right")
+
+    if show:
+        plt.show()
+
+    return ax
+
+
+def plot_qubit_flow(  # pragma: no cover
+    partition: PartitionTimeline,
+    *,
+    qubits: Sequence[int] | None = None,
+    max_qubits: int | None = 20,
+    sort_by_movement: bool = True,
+    linewidth: float = 1.8,
+    alpha: float = 0.9,
+    show_legend: bool = True,
+    ax: plt.Axes | None = None,
+    cmap: str = "tab20",
+    show: bool = True,
+) -> plt.Axes:
+    """Plot a trajectory-style flow of qubit assignments over windows.
+
+    This is useful for quickly spotting churn and steady-state behavior in a
+    partition schedule. Every line corresponds to a logical qubit and its
+    y-position indicates the assigned QPU index at each window.
+
+    Args:
+        partition: Timeline of partitions (window -> QPU -> qubit set).
+        qubits: Optional explicit set/order of qubits to draw.
+        max_qubits: Maximum number of qubits to show when ``qubits`` is None.
+        sort_by_movement: Sort auto-selected qubits by movement count.
+        linewidth: Width of trajectory lines.
+        alpha: Line opacity.
+        show_legend: Whether to draw a legend for qubit labels.
+        ax: Optional matplotlib axes to draw on.
+        cmap: Matplotlib colormap used for qubit lines.
+        show: Whether to call matplotlib's show() at the end.
+
+    Returns:
+        The matplotlib axes containing the flow plot.
+    """
+    assignments, num_qpus = _assignments_and_qpu_count(partition)
+    available_qubits = _collect_qubits(assignments)
+
+    if qubits is None:
+        ordered = list(available_qubits)
+        if sort_by_movement:
+            movement = _qubit_movement_counts(ordered, assignments)
+            movement.sort(key=lambda item: (-item[1], item[0]))
+            ordered = [qubit for qubit, _ in movement]
+        selected_qubits = (
+            ordered if max_qubits is None else ordered[:max_qubits]
+        )
+    else:
+        selected_qubits = [
+            qubit for qubit in qubits if qubit in available_qubits
+        ]
+
+    if not selected_qubits:
+        raise ValueError("No valid qubits selected for plotting.")
+
+    if ax is None:
+        _, ax = plt.subplots(figsize=(10, 5))
+
+    color_map = plt.get_cmap(cmap, len(selected_qubits))
+    window_indices = np.arange(len(assignments))
+
+    for idx, qubit in enumerate(selected_qubits):
+        trajectory = [
+            assignment.get(qubit, np.nan) for assignment in assignments
+        ]
+        ax.plot(
+            window_indices,
+            trajectory,
+            marker="o",
+            linewidth=linewidth,
+            alpha=alpha,
+            color=color_map(idx),
+            label=f"q{qubit}",
+        )
+
+    ax.set_xlabel("Window")
+    ax.set_ylabel("QPU")
+    ax.set_title("Qubit Flow Across Partition Windows")
+    ax.set_yticks(range(num_qpus))
+    ax.grid(True, linestyle="--", alpha=0.25)
+
+    if show_legend:
+        ncol = max(1, min(4, len(selected_qubits) // 6 + 1))
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.14), ncol=ncol)
+
+    if show:
+        plt.show()
+
+    return ax
+
+
+def plot_window_operation_profile(  # pragma: no cover
+    partition: PartitionTimeline,
+    windows: PartitionWindows,
+    *,
+    ax: plt.Axes | None = None,
+    show: bool = True,
+) -> plt.Axes:
+    """Plot per-window operation mix for a partition schedule.
+
+    Categories:
+        - Single-qubit ops.
+        - Local two-qubit ops (both operands on same QPU).
+        - Remote two-qubit ops (operands on different QPUs).
+
+    Args:
+        partition: Timeline of partitions (window -> QPU -> qubit set).
+        windows: Operations grouped by compiler window.
+        ax: Optional matplotlib axes to draw on.
+        show: Whether to call matplotlib's show() at the end.
+
+    Returns:
+        The matplotlib axes containing the stacked bar chart.
+    """
+    assignments, _ = _assignments_and_qpu_count(partition)
+    if len(assignments) != len(windows):
+        raise ValueError("partition and windows must have matching lengths.")
+
+    single_counts: list[int] = []
+    local_two_counts: list[int] = []
+    remote_two_counts: list[int] = []
+
+    for window_idx, (window_ops, assignment) in enumerate(
+        zip(windows, assignments, strict=True)
+    ):
+        single = 0
+        local_two = 0
+        remote_two = 0
+        for op in window_ops:
+            qubits = op.qubit_indices
+            if len(qubits) <= 1:
+                single += 1
+                continue
+            if len(qubits) != 2:
+                continue
+
+            q1, q2 = qubits
+            qpu_1 = assignment.get(q1)
+            qpu_2 = assignment.get(q2)
+            if qpu_1 is None or qpu_2 is None:
+                raise ValueError(
+                    "Missing qubit assignment for op in window "
+                    f"{window_idx}: qubits={qubits}."
+                )
+            if qpu_1 == qpu_2:
+                local_two += 1
+            else:
+                remote_two += 1
+
+        single_counts.append(single)
+        local_two_counts.append(local_two)
+        remote_two_counts.append(remote_two)
+
+    x = np.arange(len(windows))
+    if ax is None:
+        _, ax = plt.subplots(figsize=(10, 5))
+
+    ax.bar(x, single_counts, label="1Q", color="#6baed6")
+    ax.bar(
+        x,
+        local_two_counts,
+        bottom=single_counts,
+        label="2Q local",
+        color="#74c476",
+    )
+    ax.bar(
+        x,
+        remote_two_counts,
+        bottom=np.array(single_counts) + np.array(local_two_counts),
+        label="2Q remote",
+        color="#fb6a4a",
+    )
+
+    ax.set_xlabel("Window")
+    ax.set_ylabel("Operation count")
+    ax.set_title("Per-Window Operation Profile")
+    ax.legend()
+    ax.grid(axis="y", alpha=0.25)
 
     if show:
         plt.show()

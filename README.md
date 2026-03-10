@@ -43,3 +43,55 @@ To automatically format files instead:
 #### Tests (pytest)
 
     uv run pytest -q
+
+## Visualization helpers
+
+The package includes plotting helpers for partition schedules and migration
+behavior:
+
+- `plot_partition_heatmap(...)`: qubit-vs-window assignment heatmap.
+- `plot_migration_timeline(...)`: moved-qubit counts per transition.
+- `plot_qubit_flow(...)`: trajectory-style qubit flow across windows.
+- `plot_window_operation_profile(...)`: stacked operation mix
+  (1Q/local-2Q/remote-2Q) per window.
+
+Example:
+
+```python
+from memq_dqc.visualization import (
+    plot_partition_heatmap,
+    plot_qubit_flow,
+    plot_window_operation_profile,
+)
+
+plot_partition_heatmap(partitioner.schedule, sort_by_final_qpu=True)
+plot_qubit_flow(partitioner.schedule, max_qubits=16)
+plot_window_operation_profile(partitioner.schedule, partitioner.windows)
+```
+
+
+### Visualization gallery
+
+You can preview representative outputs in `examples/visualizations/`:
+
+- Heatmap
+
+  ![partition heatmap example](examples/visualizations/partition_heatmap_example.svg)
+
+- Qubit flow
+
+  ![qubit flow example](examples/visualizations/qubit_flow_example.svg)
+
+- Migration timeline
+
+  ![migration timeline example](examples/visualizations/migration_timeline_example.svg)
+
+- Window operation profile
+
+  ![window operation profile example](examples/visualizations/window_operation_profile_example.svg)
+
+To regenerate these artifacts:
+
+```bash
+python examples/visualizations/generate_example_svgs.py
+```

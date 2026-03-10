@@ -11,11 +11,16 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import pytest
+from openqasm3 import ast
 
+from memq_dqc.circuit.ops import Op
 from memq_dqc.partition.types import QPU
+from memq_dqc.qasm.types import LogicalQubit
 from memq_dqc.visualization.partition_visualizer import (
     plot_migration_timeline,
     plot_partition_heatmap,
+    plot_qubit_flow,
+    plot_window_operation_profile,
 )
 
 
@@ -57,3 +62,52 @@ def test_migration_timeline_entanglement_length_mismatch() -> None:
             ax=ax,
             show=False,
         )
+
+
+def test_qubit_flow_invalid_qubit_selection() -> None:
+    partition = _sample_partition()
+    _, ax = plt.subplots()
+
+    with pytest.raises(ValueError, match="No valid qubits"):
+        plot_qubit_flow(partition, qubits=[100, 101], ax=ax, show=False)
+
+
+def _op(op_id: int, qubits: tuple[int, ...]) -> Op:
+    logical_qubits = tuple(LogicalQubit("q", idx) for idx in qubits)
+    return Op(
+        op_id=op_id,
+        statement_id=op_id,
+        name="cx" if len(qubits) == 2 else "x",
+        qubits=logical_qubits,
+        node=ast.Identifier(name=f"n{op_id}"),
+    )
+
+
+def test_window_operation_profile_stack() -> None:
+    partition = _sample_partition()
+    windows = [
+        [_op(0, (0,)), _op(1, (0, 1)), _op(2, (1, 2))],
+        [_op(3, (2,)), _op(4, (0, 2))],
+        [_op(5, (1, 3)), _op(6, (2, 3))],
+        [_op(7, (3,))],
+    ]
+
+    _, ax = plt.subplots()
+    ax = plot_window_operation_profile(
+        partition,
+        windows,
+        ax=ax,
+        show=False,
+    )
+
+    assert ax.patches
+    assert len(ax.patches) == len(partition) * 3
+
+
+def test_window_operation_profile_length_mismatch() -> None:
+    partition = _sample_partition()
+    windows = [[_op(0, (0,))]]
+    _, ax = plt.subplots()
+
+    with pytest.raises(ValueError, match="matching lengths"):
+        plot_window_operation_profile(partition, windows, ax=ax, show=False)

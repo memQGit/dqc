@@ -10,6 +10,13 @@
 from memq_dqc.visualization.partition_visualizer import (
     plot_migration_timeline,
     plot_partition_heatmap,
+    plot_qubit_flow,
+    plot_window_operation_profile,
 )
 
-__all__ = ["plot_partition_heatmap", "plot_migration_timeline"]
+__all__ = [
+    "plot_partition_heatmap",
+    "plot_migration_timeline",
+    "plot_qubit_flow",
+    "plot_window_operation_profile",
+]
