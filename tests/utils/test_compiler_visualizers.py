@@ -1,0 +1,162 @@
+# ============================================================================
+# Copyright (c) 2026 memQ Inc.
+#
+# This source code is licensed under the MIT License.
+# See the LICENSE file in the project root for full license information.
+# ============================================================================
+
+import pytest
+
+from memq_dqc.circuit import CircuitDAG
+from memq_dqc.graph import NetworkGraph
+from memq_dqc.io.qasm import load_qasm_program
+from memq_dqc.partition import Partitioner
+from memq_dqc.partition.types import QPU
+from memq_dqc.visualization import (
+    SvgDocument,
+    plot_distributed_circuit,
+    plot_partition_flow,
+    plot_window_activity,
+)
+
+
+def _sample_schedule() -> list[dict[QPU, set[int]]]:
+    qpu0 = QPU(id=0)
+    qpu1 = QPU(id=1)
+    return [
+        {qpu0: {0, 1}, qpu1: {2, 3}},
+        {qpu0: {0, 2}, qpu1: {1, 3}},
+        {qpu0: {0, 2}, qpu1: {1, 3}},
+        {qpu0: {0, 1}, qpu1: {2, 3}},
+    ]
+
+
+def test_plot_distributed_circuit_marks_remote_gates(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    dag = CircuitDAG(program)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo_kwargs={"window_length": 3},
+    )
+    partitioner.run()
+    assert partitioner.schedule is not None
+    assert partitioner.windows is not None
+
+    document = plot_distributed_circuit(
+        dag,
+        schedule=partitioner.schedule,
+        windows=partitioner.windows,
+    )
+
+    assert isinstance(document, SvgDocument)
+    assert "RCX" in document.svg
+    assert "State teleportation" in document.svg
+    assert "CBITS" not in document.svg
+
+
+def test_plot_distributed_circuit_renders_measurement_subscript() -> None:
+    program = load_qasm_program("examples/circuits/simple1.qasm")
+    dag = CircuitDAG(program)
+    network = NetworkGraph("examples/networks/3comp_1comm_x2.json")
+    partitioner = Partitioner(
+        network,
+        program,
+        algo_kwargs={"window_length": 3},
+    )
+    partitioner.run()
+    assert partitioner.schedule is not None
+    assert partitioner.windows is not None
+
+    document = plot_distributed_circuit(
+        dag,
+        schedule=partitioner.schedule,
+        windows=partitioner.windows,
+    )
+
+    assert isinstance(document, SvgDocument)
+    assert "CBITS" in document.svg
+    assert "b[0]" in document.svg
+    assert 'dasharray="3 5"' in document.svg
+    assert 'baseline-shift="sub"' in document.svg
+
+
+def test_plot_partition_flow_draws_paths() -> None:
+    document = plot_partition_flow(_sample_schedule())
+
+    assert isinstance(document, SvgDocument)
+    assert "<path" in document.svg
+    assert "QPU 0" in document.svg
+
+
+def test_plot_window_activity_returns_svg(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    dag = CircuitDAG(program)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo_kwargs={"window_length": 2},
+    )
+    partitioner.run()
+    assert partitioner.schedule is not None
+    assert partitioner.windows is not None
+
+    document = plot_window_activity(
+        dag,
+        partitioner.schedule,
+        partitioner.windows,
+    )
+
+    assert isinstance(document, SvgDocument)
+    assert "Single-qubit / measure" in document.svg
+    assert "Moved qubits" in document.svg
+
+
+def test_plot_window_activity_validates_schedule_and_windows(
+    bell_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(bell_circuit_path))
+    dag = CircuitDAG(program)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo_kwargs={"window_length": 1},
+    )
+    partitioner.run()
+    assert partitioner.schedule is not None
+    assert partitioner.windows is not None
+
+    with pytest.raises(ValueError, match="same length"):
+        plot_window_activity(
+            dag,
+            partitioner.schedule[:-1],
+            partitioner.windows,
+        )
+
+
+def test_svg_document_writes_interactive_html(tmp_path) -> None:
+    document = SvgDocument(
+        width=24,
+        height=24,
+        svg='<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+    )
+
+    output_path = document.write_html(
+        tmp_path / "viewer.html",
+        title="Viewer Smoke Test",
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert "Viewer Smoke Test" in html
+    assert 'data-action="fit"' in html
+    assert 'class="viewer__svg"' in html
