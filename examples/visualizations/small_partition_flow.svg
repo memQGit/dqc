@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="312" viewBox="0 0 760 312">
+<rect x="0" y="0" width="760" height="312" fill="#ffffff"/>
+<text x="380" y="40" fill="#102a43" font-size="26.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">Small Simple 1 partition flow</text>
+<text x="380" y="64" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="middle">QPU occupancy and migration between partition windows</text>
+<rect x="528" y="68" width="198" height="40" fill="#ffffff" stroke="#d8deea" stroke-width="0.9" rx="9" opacity="1"/>
+<line x1="540" y1="83" x2="562" y2="83" stroke="#4801b0" stroke-width="3" opacity="0.3" linecap="round"/>
+<text x="572" y="87" fill="#102a43" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">Migrating qubits</text>
+<rect x="540" y="90" width="18" height="10" fill="#ffffff" stroke="#6b7a90" stroke-width="0.9" rx="3" opacity="1"/>
+<text x="572" y="99" fill="#102a43" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">QPU occupancy</text>
+<line x1="344" y1="124" x2="724" y2="124" stroke="#e5e7eb" stroke-width="1" opacity="1" linecap="round"/>
+<text x="330" y="129" fill="#102a43" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">QPU 0</text>
+<line x1="344" y1="210" x2="724" y2="210" stroke="#e5e7eb" stroke-width="1" opacity="1" linecap="round"/>
+<text x="330" y="215" fill="#102a43" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">QPU 1</text>
+<path d="M 350.00 124.00 C 359.80 124.00, 368.20 124.00, 378.00 124.00" fill="none" stroke="#4801b0" stroke-width="2.2" opacity="0.18" linecap="round" linejoin="round"/>
+<path d="M 350.00 124.00 C 359.80 124.00, 368.20 210.00, 378.00 210.00" fill="none" stroke="#4801b0" stroke-width="1.55" opacity="0.42" linecap="round" linejoin="round"/>
+<path d="M 350.00 210.00 C 359.80 210.00, 368.20 124.00, 378.00 124.00" fill="none" stroke="#d702fe" stroke-width="1.55" opacity="0.42" linecap="round" linejoin="round"/>
+<path d="M 350.00 210.00 C 359.80 210.00, 368.20 210.00, 378.00 210.00" fill="none" stroke="#d702fe" stroke-width="2.2" opacity="0.18" linecap="round" linejoin="round"/>
+<path d="M 378.00 124.00 C 387.80 124.00, 396.20 124.00, 406.00 124.00" fill="none" stroke="#4801b0" stroke-width="2.85" opacity="0.18" linecap="round" linejoin="round"/>
+<path d="M 378.00 210.00 C 387.80 210.00, 396.20 210.00, 406.00 210.00" fill="none" stroke="#d702fe" stroke-width="2.85" opacity="0.18" linecap="round" linejoin="round"/>
+<rect x="343" y="108" width="14" height="32" fill="#ffffff" stroke="#4801b0" stroke-width="1" rx="4.5" opacity="1"/>
+<text x="350" y="128" fill="#102a43" font-size="9.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="middle">3</text>
+<rect x="343" y="194" width="14" height="32" fill="#ffffff" stroke="#d702fe" stroke-width="1" rx="4.5" opacity="1"/>
+<text x="350" y="214" fill="#102a43" font-size="9.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="middle">3</text>
+<rect x="371" y="108" width="14" height="32" fill="#ffffff" stroke="#4801b0" stroke-width="1" rx="4.5" opacity="1"/>
+<text x="378" y="128" fill="#102a43" font-size="9.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="middle">3</text>
+<rect x="371" y="194" width="14" height="32" fill="#ffffff" stroke="#d702fe" stroke-width="1" rx="4.5" opacity="1"/>
+<text x="378" y="214" fill="#102a43" font-size="9.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="middle">3</text>
+<rect x="399" y="108" width="14" height="32" fill="#ffffff" stroke="#4801b0" stroke-width="1" rx="4.5" opacity="1"/>
+<text x="406" y="128" fill="#102a43" font-size="9.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="middle">3</text>
+<rect x="399" y="194" width="14" height="32" fill="#ffffff" stroke="#d702fe" stroke-width="1" rx="4.5" opacity="1"/>
+<text x="406" y="214" fill="#102a43" font-size="9.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="middle">3</text>
+</svg>

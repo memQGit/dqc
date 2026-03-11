@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Distributed Small Simple 1 circuit</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --panel: #ffffff;
+      --panel-border: #d8deea;
+      --surface: #f6f3ff;
+      --surface-accent: rgba(72, 1, 176, 0.06);
+      --text: #102a43;
+      --muted: #52606d;
+      --accent: #4801b0;
+      --accent-bright: #d702fe;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, var(--surface-accent), transparent 32%),
+        linear-gradient(180deg, #fcfbff 0%, #f6f7fb 100%);
+    }
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 16px;
+      padding: 18px;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 18px;
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 14px 40px rgba(16, 42, 67, 0.08);
+    }
+    .title-block h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.2;
+    }
+    .title-block p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .controls button {
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 8px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    .controls button:hover {
+      border-color: var(--accent-bright);
+      color: var(--accent);
+    }
+    .viewport {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      background:
+        linear-gradient(90deg, rgba(72, 1, 176, 0.05) 1px, transparent 1px),
+        linear-gradient(rgba(72, 1, 176, 0.05) 1px, transparent 1px),
+        linear-gradient(180deg, #fffefe 0%, #f5f3ff 100%);
+      background-size: 28px 28px, 28px 28px, 100% 100%;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+      min-height: 640px;
+      touch-action: none;
+      cursor: grab;
+    }
+    .viewport.is-dragging {
+      cursor: grabbing;
+    }
+    .canvas {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+    .viewer__svg {
+      display: block;
+      overflow: visible;
+      box-shadow: 0 18px 44px rgba(16, 42, 67, 0.12);
+      border-radius: 16px;
+    }
+    @media (max-width: 900px) {
+      .toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .viewport {
+        min-height: 520px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="toolbar">
+      <div class="title-block">
+        <h1>Distributed Small Simple 1 circuit</h1>
+        <p>Drag to pan, scroll to zoom, or use the fit/reset controls.</p>
+      </div>
+      <div class="controls">
+        <button type="button" data-action="zoom-out">-</button>
+        <button type="button" data-action="zoom-in">+</button>
+        <button type="button" data-action="fit">Fit</button>
+        <button type="button" data-action="reset">100%</button>
+      </div>
+    </header>
+    <main class="viewport">
+      <div class="canvas">
+        <svg class="viewer__svg" xmlns="http://www.w3.org/2000/svg" width="1298" height="520" viewBox="0 0 1298 520">
+<rect x="0" y="0" width="1298" height="520" fill="#fffdfc"/>
+<text x="543" y="40" fill="#102a43" font-size="26.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">Distributed Small Simple 1 circuit</text>
+<text x="543" y="64" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="middle">Windows 0-2 of 2</text>
+<rect x="976" y="34" width="286" height="74" fill="#ffffff" stroke="#d8deea" stroke-width="0.9" rx="10" opacity="0.96"/>
+<rect x="990" y="45" width="20" height="12" fill="#f8fbff" stroke="#6b7a90" stroke-width="0.9" rx="3" opacity="1"/>
+<text x="1018" y="55" fill="#102a43" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">Local gate</text>
+<rect x="1114" y="45" width="20" height="12" fill="#faedff" stroke="#d702fe" stroke-width="0.9" rx="3" opacity="1"/>
+<text x="1142" y="55" fill="#102a43" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">Remote gate</text>
+<path d="M 990.00 72.00 C 1000.00 68.00, 1010.00 78.00, 1022.00 71.00" fill="none" stroke="#4801b0" stroke-width="1.7" opacity="1" linecap="round" linejoin="round"/>
+<circle cx="990" cy="72" r="2.4" fill="#4801b0" stroke="none"/>
+<circle cx="1022" cy="71" r="2.4" fill="#4801b0" stroke="none"/>
+<text x="1032" y="75" fill="#102a43" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">State teleportation</text>
+<line x1="1146" y1="69.5" x2="1178" y2="69.5" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<line x1="1146" y1="74.5" x2="1178" y2="74.5" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<text x="1188" y="75" fill="#102a43" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">Classical bit</text>
+<rect x="128" y="116" width="230" height="348" fill="#f8f5ff" stroke="none" rx="10" opacity="0.58"/>
+<rect x="416" y="116" width="146" height="348" fill="#f8f5ff" stroke="none" rx="10" opacity="0.58"/>
+<rect x="620" y="116" width="314" height="348" fill="#f8f5ff" stroke="none" rx="10" opacity="0.58"/>
+<text x="44" y="171" fill="#102a43" font-size="13.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="start">QPU 0</text>
+<text x="44" y="277" fill="#102a43" font-size="13.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="start">QPU 1</text>
+<text x="110" y="141" fill="#52606d" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">0</text>
+<text x="110" y="171" fill="#52606d" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">1</text>
+<text x="110" y="201" fill="#52606d" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">2</text>
+<text x="110" y="247" fill="#52606d" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">0</text>
+<text x="110" y="277" fill="#52606d" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">1</text>
+<text x="110" y="307" fill="#52606d" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">2</text>
+<line x1="56" y1="219" x2="948" y2="219" stroke="#4801b0" stroke-width="1" opacity="0.42" dasharray="2.5 7.5" linecap="round"/>
+<line x1="138" y1="136" x2="948" y2="136" stroke="#d3dae6" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="166" x2="948" y2="166" stroke="#d3dae6" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="196" x2="948" y2="196" stroke="#d3dae6" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="242" x2="948" y2="242" stroke="#d3dae6" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="272" x2="948" y2="272" stroke="#d3dae6" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="302" x2="948" y2="302" stroke="#d3dae6" stroke-width="0.9" opacity="1" linecap="round"/>
+<text x="22" y="409" fill="#102a43" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="start">CBITS</text>
+<text x="122" y="364" fill="#52606d" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">b[0]</text>
+<text x="122" y="386" fill="#52606d" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">b[1]</text>
+<text x="122" y="408" fill="#52606d" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">b[2]</text>
+<text x="122" y="430" fill="#52606d" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">b[3]</text>
+<text x="122" y="452" fill="#52606d" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">b[4]</text>
+<line x1="138" y1="357.5" x2="948" y2="357.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="362.5" x2="948" y2="362.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="379.5" x2="948" y2="379.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="384.5" x2="948" y2="384.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="401.5" x2="948" y2="401.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="406.5" x2="948" y2="406.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="423.5" x2="948" y2="423.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="428.5" x2="948" y2="428.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="445.5" x2="948" y2="445.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="450.5" x2="948" y2="450.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<text x="243" y="108" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">W0</text>
+<text x="489" y="108" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">W1</text>
+<text x="777" y="108" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">W2</text>
+<rect x="143" y="231" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="159" y="246" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">X</text>
+<rect x="185" y="155" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="201" y="170" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">H</text>
+<line x1="243" y1="136" x2="243" y2="242" stroke="#d702fe" stroke-width="1" opacity="1" dasharray="4 4" linecap="round"/>
+<circle cx="243" cy="242" r="3.4" fill="#d702fe" stroke="none"/>
+<circle cx="243" cy="136" r="3.4" fill="#d702fe" stroke="none"/>
+<rect x="225" y="178" width="36" height="22" fill="#faedff" stroke="#d702fe" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="243" y="193" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">RCX</text>
+<line x1="285" y1="136" x2="285" y2="166" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<circle cx="285" cy="136" r="3.4" fill="#6b7a90" stroke="none"/>
+<circle cx="285" cy="166" r="3.4" fill="#6b7a90" stroke="none"/>
+<rect x="267" y="140" width="36" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="285" y="155" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">CX</text>
+<line x1="327" y1="166" x2="327" y2="196" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<circle cx="327" cy="166" r="3.4" fill="#6b7a90" stroke="none"/>
+<circle cx="327" cy="196" r="3.4" fill="#6b7a90" stroke="none"/>
+<rect x="309" y="170" width="36" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="327" y="185" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">CX</text>
+<line x1="447" y1="242" x2="447" y2="272" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<circle cx="447" cy="242" r="3.4" fill="#6b7a90" stroke="none"/>
+<circle cx="447" cy="272" r="3.4" fill="#6b7a90" stroke="none"/>
+<rect x="429" y="246" width="36" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="447" y="261" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">CX</text>
+<line x1="489" y1="272" x2="489" y2="302" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<circle cx="489" cy="272" r="3.4" fill="#6b7a90" stroke="none"/>
+<circle cx="489" cy="302" r="3.4" fill="#6b7a90" stroke="none"/>
+<rect x="471" y="276" width="36" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="489" y="291" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">CX</text>
+<line x1="531" y1="136" x2="531" y2="166" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<circle cx="531" cy="166" r="3.4" fill="#6b7a90" stroke="none"/>
+<circle cx="531" cy="136" r="3.4" fill="#6b7a90" stroke="none"/>
+<rect x="513" y="140" width="36" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="531" y="155" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">CX</text>
+<line x1="651" y1="242" x2="651" y2="272" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<circle cx="651" cy="272" r="3.4" fill="#6b7a90" stroke="none"/>
+<circle cx="651" cy="242" r="3.4" fill="#6b7a90" stroke="none"/>
+<rect x="633" y="246" width="36" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="651" y="261" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">CX</text>
+<line x1="693" y1="136" x2="693" y2="302" stroke="#d702fe" stroke-width="1" opacity="1" dasharray="4 4" linecap="round"/>
+<circle cx="693" cy="302" r="3.4" fill="#d702fe" stroke="none"/>
+<circle cx="693" cy="136" r="3.4" fill="#d702fe" stroke="none"/>
+<rect x="675" y="208" width="36" height="22" fill="#faedff" stroke="#d702fe" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="693" y="223" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">RCX</text>
+<rect x="719" y="125" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="735" y="140" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle"><tspan>M</tspan><tspan baseline-shift="sub" font-size="7.5">z</tspan></text>
+<rect x="761" y="155" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="777" y="170" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle"><tspan>M</tspan><tspan baseline-shift="sub" font-size="7.5">z</tspan></text>
+<rect x="803" y="185" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="819" y="200" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle"><tspan>M</tspan><tspan baseline-shift="sub" font-size="7.5">z</tspan></text>
+<rect x="845" y="231" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="861" y="246" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle"><tspan>M</tspan><tspan baseline-shift="sub" font-size="7.5">z</tspan></text>
+<rect x="887" y="261" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="903" y="276" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle"><tspan>M</tspan><tspan baseline-shift="sub" font-size="7.5">z</tspan></text>
+<path d="M 377.00 242.00 Q 389.00 219.00 401.00 196.00" fill="none" stroke="#4801b0" stroke-width="1.7" opacity="0.92" linecap="round" linejoin="round"/>
+<circle cx="377" cy="242" r="2.8" fill="#4801b0" stroke="none"/>
+<circle cx="401" cy="196" r="2.8" fill="#4801b0" stroke="none"/>
+<path d="M 382.00 196.00 Q 394.00 219.00 406.00 242.00" fill="none" stroke="#4801b0" stroke-width="1.7" opacity="0.92" linecap="round" linejoin="round"/>
+<circle cx="382" cy="196" r="2.8" fill="#4801b0" stroke="none"/>
+<circle cx="406" cy="242" r="2.8" fill="#4801b0" stroke="none"/>
+<line x1="735" y1="147" x2="735" y2="353" stroke="#4801b0" stroke-width="1" opacity="1" dasharray="3 5" linecap="round"/>
+<path d="M 731.00 352.50 L 735.00 360.00 L 739.00 352.50 Z" fill="#4801b0" stroke="none" opacity="1" linecap="round" linejoin="round"/>
+<line x1="777" y1="177" x2="777" y2="375" stroke="#4801b0" stroke-width="1" opacity="1" dasharray="3 5" linecap="round"/>
+<path d="M 773.00 374.50 L 777.00 382.00 L 781.00 374.50 Z" fill="#4801b0" stroke="none" opacity="1" linecap="round" linejoin="round"/>
+<line x1="819" y1="207" x2="819" y2="397" stroke="#4801b0" stroke-width="1" opacity="1" dasharray="3 5" linecap="round"/>
+<path d="M 815.00 396.50 L 819.00 404.00 L 823.00 396.50 Z" fill="#4801b0" stroke="none" opacity="1" linecap="round" linejoin="round"/>
+<line x1="861" y1="253" x2="861" y2="419" stroke="#4801b0" stroke-width="1" opacity="1" dasharray="3 5" linecap="round"/>
+<path d="M 857.00 418.50 L 861.00 426.00 L 865.00 418.50 Z" fill="#4801b0" stroke="none" opacity="1" linecap="round" linejoin="round"/>
+<line x1="903" y1="283" x2="903" y2="441" stroke="#4801b0" stroke-width="1" opacity="1" dasharray="3 5" linecap="round"/>
+<path d="M 899.00 440.50 L 903.00 448.00 L 907.00 440.50 Z" fill="#4801b0" stroke="none" opacity="1" linecap="round" linejoin="round"/>
+</svg>
+      </div>
+    </main>
+  </div>
+  <script>
+    const viewport = document.querySelector(".viewport");
+    const canvas = document.querySelector(".canvas");
+    const baseWidth = 1298;
+    const baseHeight = 520;
+    const state = {
+      scale: 1,
+      x: 0,
+      y: 0,
+      minScale: 0.08,
+      maxScale: 8,
+      pointerId: null,
+      originX: 0,
+      originY: 0,
+    };
+
+    function applyTransform() {
+      canvas.style.transform =
+        `translate(${state.x}px, ${state.y}px) scale(${state.scale})`;
+    }
+
+    function fitToViewport() {
+      const padding = 32;
+      const scale = Math.min(
+        (viewport.clientWidth - padding * 2) / baseWidth,
+        (viewport.clientHeight - padding * 2) / baseHeight,
+      );
+      state.scale = Math.max(
+        state.minScale,
+        Math.min(state.maxScale, scale || 1),
+      );
+      state.x = (viewport.clientWidth - baseWidth * state.scale) / 2;
+      state.y = (viewport.clientHeight - baseHeight * state.scale) / 2;
+      applyTransform();
+    }
+
+    function resetZoom() {
+      state.scale = 1;
+      state.x = 24;
+      state.y = 24;
+      applyTransform();
+    }
+
+    function zoomAt(clientX, clientY, deltaScale) {
+      const rect = viewport.getBoundingClientRect();
+      const px = clientX - rect.left;
+      const py = clientY - rect.top;
+      const worldX = (px - state.x) / state.scale;
+      const worldY = (py - state.y) / state.scale;
+      const nextScale = Math.max(
+        state.minScale,
+        Math.min(state.maxScale, state.scale * deltaScale),
+      );
+      state.x = px - worldX * nextScale;
+      state.y = py - worldY * nextScale;
+      state.scale = nextScale;
+      applyTransform();
+    }
+
+    viewport.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      const deltaScale = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+      zoomAt(event.clientX, event.clientY, deltaScale);
+    }, { passive: false });
+
+    viewport.addEventListener("pointerdown", (event) => {
+      state.pointerId = event.pointerId;
+      state.originX = event.clientX - state.x;
+      state.originY = event.clientY - state.y;
+      viewport.classList.add("is-dragging");
+      viewport.setPointerCapture(event.pointerId);
+    });
+
+    viewport.addEventListener("pointermove", (event) => {
+      if (state.pointerId !== event.pointerId) {
+        return;
+      }
+      state.x = event.clientX - state.originX;
+      state.y = event.clientY - state.originY;
+      applyTransform();
+    });
+
+    function releasePointer(event) {
+      if (state.pointerId !== event.pointerId) {
+        return;
+      }
+      state.pointerId = null;
+      viewport.classList.remove("is-dragging");
+    }
+
+    viewport.addEventListener("pointerup", releasePointer);
+    viewport.addEventListener("pointercancel", releasePointer);
+    viewport.addEventListener("dblclick", fitToViewport);
+    window.addEventListener("resize", fitToViewport);
+
+    document
+      .querySelector('[data-action="zoom-in"]')
+      .addEventListener("click", () => {
+        const rect = viewport.getBoundingClientRect();
+        zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 1.16);
+      });
+    document
+      .querySelector('[data-action="zoom-out"]')
+      .addEventListener("click", () => {
+        const rect = viewport.getBoundingClientRect();
+        zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 1 / 1.16);
+      });
+    document
+      .querySelector('[data-action="fit"]')
+      .addEventListener("click", fitToViewport);
+    document
+      .querySelector('[data-action="reset"]')
+      .addEventListener("click", resetZoom);
+
+    fitToViewport();
+  </script>
+</body>
+</html>
