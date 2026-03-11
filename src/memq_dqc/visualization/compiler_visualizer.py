@@ -151,9 +151,7 @@ def plot_distributed_circuit(
     slot_layout = _build_slot_layout(schedule)
     classical_bits = _extract_classical_bits(dag)
     classical_layout = (
-        _build_classical_layout(classical_bits)
-        if classical_bits
-        else None
+        _build_classical_layout(classical_bits) if classical_bits else None
     )
     positions_by_window = [
         _assignment_positions(window) for window in schedule
@@ -191,7 +189,9 @@ def plot_distributed_circuit(
         + bottom_padding
     )
     canvas = SvgCanvas(width=width, height=height, background="#fffdfc")
-    classical_top = header_height + slot_layout.total_height + classical_section_gap
+    classical_top = (
+        header_height + slot_layout.total_height + classical_section_gap
+    )
     background_height = (
         slot_layout.total_height
         + 18.0
