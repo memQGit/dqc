@@ -190,7 +190,9 @@ def plot_migration_timeline(
     bottom = 44.0
     chart_height = 220.0
     window_step = 18.0 if len(window_indices) > 60 else 30.0
-    base_width = left + right + max(1, len(window_indices) - 1) * window_step + 48.0
+    base_width = (
+        left + right + max(1, len(window_indices) - 1) * window_step + 48.0
+    )
     width = int(max(base_width, 760.0))
     left += (width - base_width) / 2
     height = int(top + bottom + chart_height)

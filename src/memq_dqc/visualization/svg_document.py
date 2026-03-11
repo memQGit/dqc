@@ -311,7 +311,9 @@ class SvgDocument:
 </html>
 """
 
-    def write_html(self, path: str | Path, *, title: str = "Visualization") -> Path:
+    def write_html(
+        self, path: str | Path, *, title: str = "Visualization"
+    ) -> Path:
         """Write the interactive HTML viewer to disk.
 
         Args:
@@ -551,7 +553,9 @@ class SvgCanvas:
                 if span_attributes
                 else f"<tspan>{escape(text)}</tspan>"
             )
-        self._elements.append(f"<text {text_attributes}>{''.join(children)}</text>")
+        self._elements.append(
+            f"<text {text_attributes}>{''.join(children)}</text>"
+        )
 
     def group_start(
         self, *, opacity: float = 1.0, transform: str | None = None
