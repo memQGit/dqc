@@ -18,6 +18,6 @@ cx q[5], q[0];
 
 measure q[0] -> b[0];
 measure q[1] -> b[1];
-measure q[1] -> b[2];
+measure q[2] -> b[2];
 measure q[3] -> b[3];
 measure q[4] -> b[4];

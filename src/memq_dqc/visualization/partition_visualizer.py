@@ -1,19 +1,10 @@
-# ============================================================================
-# Copyright (c) 2026 memQ Inc.
-#
-# This source code is licensed under the MIT License.
-# See the LICENSE file in the project root for full license information.
-# ============================================================================
-
-"""Partition visualization helpers."""
+"""SVG-based partition visualization helpers."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import matplotlib.colors as mcolors
-import matplotlib.pyplot as plt
-import numpy as np
+from memq_dqc.visualization.svg_document import SvgCanvas, SvgDocument
 
 if TYPE_CHECKING:
     from memq_dqc.partition.types import QPU
@@ -22,46 +13,48 @@ PartitionTimeline = list[dict["QPU", set[int]]]
 
 __all__ = ["plot_partition_heatmap", "plot_migration_timeline"]
 
-COLOR_SCHEME = ["#a558b5", "#222636", "#3b4171", "#3f5f81"]
+_COLOR_SCHEME = ["#4801b0", "#d702fe", "#6a4cff", "#1e293b", "#38bdf8"]
+_TEXT_COLOR = "#102a43"
+_MUTED_TEXT = "#52606d"
 
 
-def plot_partition_heatmap(  # pragma: no cover
+def plot_partition_heatmap(
     partition: PartitionTimeline,
     *,
+    title: str | None = None,
     top_k_most_moved: int | None = None,
     sample_stride: int | None = None,
     sort_by_final_qpu: bool = False,
     x_tick_stride: int | None = 5,
-    x_tick_rotation: float = 30.0,
+    x_tick_rotation: float = 0.0,
     y_tick_fontsize: int = 8,
-    ax: plt.Axes | None = None,
+    ax: object | None = None,
     cmap: str = "tab20",
-    show: bool = True,
-) -> plt.Axes:
-    """Plot a qubit-vs-window heatmap of QPU assignments.
-
-    Rows correspond to qubits, columns correspond to windows, and the color
-    represents the QPU index for each qubit in each window.
+    show: bool = False,
+) -> SvgDocument:
+    """Render a qubit-vs-window partition heatmap as SVG.
 
     Args:
         partition: Timeline of partitions (window -> QPU -> qubit set).
+        title: Optional chart title.
         top_k_most_moved: If provided, keep only the qubits that moved most
             often across windows.
         sample_stride: If provided, keep every Nth qubit after filtering.
         sort_by_final_qpu: Whether to group rows by the final window QPU.
         x_tick_stride: Window tick spacing. If None, show every window.
-        x_tick_rotation: Rotation angle for x-axis tick labels.
-        y_tick_fontsize: Font size for y-axis tick labels.
-        ax: Optional matplotlib axes to draw on.
-        cmap: Matplotlib colormap to use.
-        show: Whether to call matplotlib's show() at the end.
+        x_tick_rotation: Ignored legacy parameter retained for compatibility.
+        y_tick_fontsize: Font size for y-axis labels.
+        ax: Ignored legacy parameter retained for compatibility.
+        cmap: Ignored legacy parameter retained for compatibility.
+        show: Ignored legacy parameter retained for compatibility.
 
     Returns:
-        The matplotlib axes containing the heatmap.
+        An SVG document containing the heatmap.
     """
+    del ax, cmap, show, x_tick_rotation
+
     assignments, num_qpus = _assignments_and_qpu_count(partition)
     qubits = _collect_qubits(assignments)
-
     qubit_order = _order_qubits(
         qubits,
         assignments,
@@ -70,120 +63,223 @@ def plot_partition_heatmap(  # pragma: no cover
         sort_by_final_qpu=sort_by_final_qpu,
     )
 
-    data = np.full((len(qubit_order), len(assignments)), np.nan)
-    for col_idx, window_assignment in enumerate(assignments):
-        for row_idx, qubit in enumerate(qubit_order):
-            if qubit in window_assignment:
-                data[row_idx, col_idx] = window_assignment[qubit]
+    cell_width = 10.0 if len(assignments) > 80 else 18.0
+    cell_height = 10.0 if len(qubit_order) > 50 else 16.0
+    left = 88.0
+    top = 112.0
+    right = 28.0
+    bottom = 48.0
+    legend_height = 36.0
+    base_width = left + right + len(assignments) * cell_width + 60.0
+    width = int(max(base_width, 640.0))
+    left += (width - base_width) / 2
+    height = int(top + bottom + len(qubit_order) * cell_height + legend_height)
+    canvas = SvgCanvas(width=width, height=height, background="#ffffff")
 
-    if ax is None:
-        _, ax = plt.subplots(figsize=(10, 6))
-
-    # Create custom colormap using COLOR_SCHEME first, then fallback
-    if num_qpus <= len(COLOR_SCHEME):
-        # Use only COLOR_SCHEME colors
-        colors = COLOR_SCHEME[:num_qpus]
-    else:
-        # Use all COLOR_SCHEME colors, then fill with default colormap
-        fallback_cmap = plt.get_cmap(cmap, num_qpus - len(COLOR_SCHEME))
-        fallback_colors = [
-            fallback_cmap(i) for i in range(num_qpus - len(COLOR_SCHEME))
-        ]
-        colors = COLOR_SCHEME + [mcolors.to_hex(c) for c in fallback_colors]
-
-    cmap_obj = mcolors.ListedColormap(colors, N=num_qpus)
-    cmap_obj.set_bad(color="#e0e0e0")
-    img = ax.imshow(
-        data,
-        aspect="auto",
-        interpolation="nearest",
-        cmap=cmap_obj,
+    _draw_title(
+        canvas,
+        width=width,
+        title=title or "Partition Heatmap",
+        subtitle="QPU assignment of each logical qubit across partition windows",
     )
-    ax.set_xlabel("Window")
-    ax.set_ylabel("Qubit")
-    ax.set_title("Qubit Assignments Over Windows")
-
-    tick_stride = max(1, len(qubit_order) // 50)
-    ax.set_yticks(list(range(0, len(qubit_order), tick_stride)))
-    ax.set_yticklabels(
-        [str(qubit_order[i]) for i in range(0, len(qubit_order), tick_stride)],
-        fontsize=y_tick_fontsize,
+    _draw_heatmap_legend(
+        canvas,
+        num_qpus=num_qpus,
+        x=max(left, width - (num_qpus * 86.0) - 44.0),
+        y=72.0,
     )
+
+    for row_index, qubit in enumerate(qubit_order):
+        y = top + row_index * cell_height
+        if row_index % 2 == 0:
+            canvas.rect(
+                x=left,
+                y=y,
+                width=len(assignments) * cell_width,
+                height=cell_height,
+                fill="#f8fafc",
+                opacity=0.9,
+            )
+        canvas.text(
+            x=left - 10.0,
+            y=y + cell_height * 0.72,
+            text=str(qubit),
+            fill=_TEXT_COLOR,
+            font_size=float(y_tick_fontsize),
+            anchor="end",
+        )
+        for col_index, assignment in enumerate(assignments):
+            value = assignment.get(qubit)
+            fill = "#e2e8f0" if value is None else _qpu_color(value)
+            canvas.rect(
+                x=left + col_index * cell_width,
+                y=y,
+                width=cell_width,
+                height=cell_height,
+                fill=fill,
+                stroke="#ffffff",
+                stroke_width=0.5,
+            )
 
     if x_tick_stride is None:
-        x_tick_indices = list(range(len(assignments)))
-    else:
-        stride = max(1, x_tick_stride)
-        x_tick_indices = list(range(0, len(assignments), stride))
+        x_tick_stride = 1
+    for window_index in range(0, len(assignments), max(1, x_tick_stride)):
+        x = left + window_index * cell_width + cell_width / 2
+        canvas.text(
+            x=x,
+            y=height - 18.0,
+            text=str(window_index),
+            fill=_MUTED_TEXT,
+            font_size=10.0,
+            anchor="middle",
+        )
 
-    ax.set_xticks(x_tick_indices)
-    ax.set_xticklabels(
-        [str(i) for i in x_tick_indices],
-        rotation=x_tick_rotation,
-        ha="right",
+    canvas.text(
+        x=width / 2,
+        y=height - 4.0,
+        text="Partition window",
+        fill=_MUTED_TEXT,
+        font_size=12.0,
+        anchor="middle",
     )
+    canvas.text(
+        x=18.0,
+        y=height / 2,
+        text="Logical qubit",
+        fill=_MUTED_TEXT,
+        font_size=12.0,
+    )
+    return canvas.to_document()
 
-    cbar = plt.colorbar(img, ax=ax, shrink=0.85)
-    cbar.set_label("QPU")
 
-    if show:
-        plt.show()
-
-    return ax
-
-
-def plot_migration_timeline(  # pragma: no cover
+def plot_migration_timeline(
     partition: PartitionTimeline,
     *,
+    title: str | None = None,
     window_entanglement_cost: list[float] | None = None,
-    ax: plt.Axes | None = None,
-    show: bool = True,
-) -> plt.Axes:
-    """Plot moved-qubits-per-window over time.
+    ax: object | None = None,
+    show: bool = False,
+) -> SvgDocument:
+    """Render moved-qubits-per-window as an SVG line chart.
 
     Args:
         partition: Timeline of partitions (window -> QPU -> qubit set).
+        title: Optional chart title.
         window_entanglement_cost: Optional series to plot on a secondary axis.
-        ax: Optional matplotlib axes to draw on.
-        show: Whether to call matplotlib's show() at the end.
+        ax: Ignored legacy parameter retained for compatibility.
+        show: Ignored legacy parameter retained for compatibility.
 
     Returns:
-        The matplotlib axes containing the plot.
+        An SVG document containing the migration timeline.
     """
+    del ax, show
+
     assignments, _ = _assignments_and_qpu_count(partition)
     movement = _movement_counts(assignments)
     window_indices = list(range(1, len(assignments)))
-
-    if ax is None:
-        _, ax = plt.subplots(figsize=(9, 4))
-
-    ax.plot(window_indices, movement, marker="o", label="Moved qubits")
-    ax.set_xlabel("Window")
-    ax.set_ylabel("Moved qubits")
-    ax.set_title("Qubit Migration Timeline")
-    ax.grid(True, alpha=0.3)
-
-    if window_entanglement_cost is not None:
-        if len(window_entanglement_cost) != len(movement):
-            raise ValueError(
-                "window_entanglement_cost must match number of transitions."
-            )
-        ax2 = ax.twinx()
-        ax2.plot(
-            window_indices,
-            window_entanglement_cost,
-            color="#d95f02",
-            marker="x",
-            label="Entanglement cost",
+    if window_entanglement_cost is not None and len(
+        window_entanglement_cost
+    ) != len(movement):
+        raise ValueError(
+            "window_entanglement_cost must match number of transitions."
         )
-        ax2.set_ylabel("Entanglement cost")
 
-    ax.legend(loc="upper right")
+    top = 112.0
+    left = 64.0
+    right = 60.0 if window_entanglement_cost is not None else 28.0
+    bottom = 44.0
+    chart_height = 220.0
+    window_step = 18.0 if len(window_indices) > 60 else 30.0
+    base_width = (
+        left + right + max(1, len(window_indices) - 1) * window_step + 48.0
+    )
+    width = int(max(base_width, 760.0))
+    left += (width - base_width) / 2
+    height = int(top + bottom + chart_height)
+    canvas = SvgCanvas(width=width, height=height, background="#ffffff")
 
-    if show:
-        plt.show()
+    _draw_title(
+        canvas,
+        width=width,
+        title=title or "Migration Timeline",
+        subtitle="Moved logical qubits across adjacent partition windows",
+    )
 
-    return ax
+    max_primary = max(movement, default=0)
+    max_secondary = max(window_entanglement_cost or [0.0], default=0.0)
+    chart_bottom = top + chart_height
+    for tick in range(5):
+        y = chart_bottom - chart_height * tick / 4
+        canvas.line(
+            x1=left,
+            y1=y,
+            x2=width - right,
+            y2=y,
+            stroke="#eef2f7",
+            stroke_width=1.0,
+        )
+        canvas.text(
+            x=left - 8.0,
+            y=y + 4.0,
+            text=f"{max_primary * tick / 4:.0f}",
+            fill=_MUTED_TEXT,
+            font_size=10.0,
+            anchor="end",
+        )
+        if window_entanglement_cost is not None:
+            canvas.text(
+                x=width - right + 8.0,
+                y=y + 4.0,
+                text=f"{max_secondary * tick / 4:.1f}",
+                fill=_MUTED_TEXT,
+                font_size=10.0,
+                anchor="start",
+            )
+
+    if movement:
+        points = []
+        for offset, value in enumerate(movement):
+            x = left + offset * window_step
+            y = chart_bottom - chart_height * value / max(1, max_primary)
+            points.append((x, y))
+        _draw_polyline(canvas, points, stroke="#4801b0", stroke_width=2.0)
+        for x, y in points:
+            canvas.circle(cx=x, cy=y, r=3.0, fill="#4801b0")
+
+    if window_entanglement_cost is not None and window_entanglement_cost:
+        points = []
+        for offset, value in enumerate(window_entanglement_cost):
+            x = left + offset * window_step
+            y = chart_bottom - chart_height * value / max(1.0, max_secondary)
+            points.append((x, y))
+        _draw_polyline(canvas, points, stroke="#d702fe", stroke_width=1.8)
+        for x, y in points:
+            canvas.circle(cx=x, cy=y, r=2.4, fill="#d702fe")
+
+    for offset, window_index in enumerate(window_indices):
+        if (
+            len(window_indices) <= 12
+            or offset % max(1, len(window_indices) // 10) == 0
+        ):
+            x = left + offset * window_step
+            canvas.text(
+                x=x,
+                y=height - 18.0,
+                text=str(window_index),
+                fill=_MUTED_TEXT,
+                font_size=10.0,
+                anchor="middle",
+            )
+
+    canvas.text(
+        x=width / 2,
+        y=height - 4.0,
+        text="Window transition",
+        fill=_MUTED_TEXT,
+        font_size=12.0,
+        anchor="middle",
+    )
+    return canvas.to_document()
 
 
 def _assignments_and_qpu_count(
@@ -201,10 +297,9 @@ def _assignments_and_qpu_count(
     for window_idx, window in enumerate(partition):
         if len(window) != num_qpus:
             raise ValueError("All windows must have the same QPU count")
-
-        mapping: dict[int, int] = {}
-        if {qpu.id for qpu in window.keys()} != qpu_ids:
+        if {qpu.id for qpu in window} != qpu_ids:
             raise ValueError("All windows must use the same QPU identifiers")
+        mapping: dict[int, int] = {}
         for qpu, qubits in window.items():
             for qubit in qubits:
                 if qubit in mapping:
@@ -221,7 +316,7 @@ def _assignments_and_qpu_count(
 def _collect_qubits(assignments: list[dict[int, int]]) -> list[int]:
     qubits: set[int] = set()
     for mapping in assignments:
-        qubits.update(mapping.keys())
+        qubits.update(mapping)
     return sorted(qubits)
 
 
@@ -231,8 +326,11 @@ def _movement_counts(assignments: list[dict[int, int]]) -> list[int]:
         prev = assignments[idx - 1]
         curr = assignments[idx]
         all_qubits = set(prev) | set(curr)
-        moved = sum(1 for q in all_qubits if prev.get(q) != curr.get(q))
-        movement.append(moved)
+        movement.append(
+            sum(
+                1 for qubit in all_qubits if prev.get(qubit) != curr.get(qubit)
+            )
+        )
     return movement
 
 
@@ -245,33 +343,118 @@ def _order_qubits(
     sort_by_final_qpu: bool,
 ) -> list[int]:
     order = list(qubits)
-
     if top_k_most_moved is not None:
         movement = _qubit_movement_counts(order, assignments)
         movement.sort(key=lambda item: (-item[1], item[0]))
         order = [qubit for qubit, _ in movement[:top_k_most_moved]]
-
     if sort_by_final_qpu:
         final_assignment = assignments[-1]
-        order.sort(key=lambda q: (final_assignment.get(q, -1), q))
-
+        order.sort(key=lambda qubit: (final_assignment.get(qubit, -1), qubit))
     if sample_stride is not None and sample_stride > 1:
         order = order[::sample_stride]
-
     return order
 
 
 def _qubit_movement_counts(
-    qubits: list[int], assignments: list[dict[int, int]]
+    qubits: list[int],
+    assignments: list[dict[int, int]],
 ) -> list[tuple[int, int]]:
     counts: list[tuple[int, int]] = []
     for qubit in qubits:
-        prev = assignments[0].get(qubit)
         moved = 0
-        for idx in range(1, len(assignments)):
-            curr = assignments[idx].get(qubit)
-            if curr != prev:
+        previous = assignments[0].get(qubit)
+        for assignment in assignments[1:]:
+            current = assignment.get(qubit)
+            if current != previous:
                 moved += 1
-            prev = curr
+            previous = current
         counts.append((qubit, moved))
     return counts
+
+
+def _draw_title(
+    canvas: SvgCanvas,
+    *,
+    width: int,
+    title: str,
+    subtitle: str,
+) -> None:
+    canvas.text(
+        x=width / 2,
+        y=40.0,
+        text=title,
+        fill=_TEXT_COLOR,
+        font_size=24.0,
+        font_weight="600",
+        anchor="middle",
+    )
+    canvas.text(
+        x=width / 2,
+        y=64.0,
+        text=subtitle,
+        fill=_MUTED_TEXT,
+        font_size=12.0,
+        anchor="middle",
+    )
+
+
+def _draw_heatmap_legend(
+    canvas: SvgCanvas,
+    *,
+    num_qpus: int,
+    x: float,
+    y: float,
+) -> None:
+    width = num_qpus * 74.0 + 18.0
+    canvas.rect(
+        x=x - 10.0,
+        y=y - 10.0,
+        width=width,
+        height=34.0,
+        fill="#ffffff",
+        stroke="#d8deea",
+        stroke_width=0.9,
+        opacity=0.96,
+        rx=9.0,
+    )
+    current_x = x
+    for qpu_id in range(num_qpus):
+        canvas.rect(
+            x=current_x,
+            y=y,
+            width=14.0,
+            height=14.0,
+            fill=_qpu_color(qpu_id),
+            stroke="none",
+            rx=2.0,
+        )
+        canvas.text(
+            x=current_x + 22.0,
+            y=y + 11.0,
+            text=f"QPU {qpu_id}",
+            fill=_TEXT_COLOR,
+            font_size=11.0,
+        )
+        current_x += 74.0
+
+
+def _draw_polyline(
+    canvas: SvgCanvas,
+    points: list[tuple[float, float]],
+    *,
+    stroke: str,
+    stroke_width: float,
+) -> None:
+    if not points:
+        return
+    commands = [f"M {points[0][0]:.2f} {points[0][1]:.2f}"]
+    commands.extend(f"L {x:.2f} {y:.2f}" for x, y in points[1:])
+    canvas.path(
+        d=" ".join(commands),
+        stroke=stroke,
+        stroke_width=stroke_width,
+    )
+
+
+def _qpu_color(qpu_id: int) -> str:
+    return _COLOR_SCHEME[qpu_id % len(_COLOR_SCHEME)]
