@@ -13,9 +13,9 @@ import math
 
 from openqasm3 import ast
 
-from memq_dqc.graph import NetworkGraph
-from memq_dqc.partition.algos import kl_partition
+from memq_dqc.network import NetworkGraph
 from memq_dqc.partition.partitioner import QPU, BasePartitioner
+from memq_dqc.partition.subroutines import kl_partition
 from memq_dqc.partition.utils import partition_cost
 from memq_dqc.preprocessing.qasm import count_total_qubits
 from memq_dqc.utils import (

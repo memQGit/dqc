@@ -9,10 +9,10 @@ import networkx as nx
 import pytest
 
 from memq_dqc.circuit import CircuitDAG
-from memq_dqc.graph import NetworkGraph
-from memq_dqc.io.qasm import load_qasm_program
+from memq_dqc.network import NetworkGraph
 from memq_dqc.partition import Partitioner
 from memq_dqc.partition.utils import partition_cost
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.utils import get_windows
 
 
