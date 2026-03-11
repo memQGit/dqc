@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="292" viewBox="0 0 640 292">
+<rect x="0" y="0" width="640" height="292" fill="#ffffff"/>
+<text x="320" y="40" fill="#102a43" font-size="24.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">Small Simple 1 partition heatmap</text>
+<text x="320" y="64" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="middle">QPU assignment of each logical qubit across partition windows</text>
+<rect x="414" y="62" width="166" height="34" fill="#ffffff" stroke="#d8deea" stroke-width="0.9" rx="9" opacity="0.96"/>
+<rect x="424" y="72" width="14" height="14" fill="#4801b0" stroke="none" rx="2" opacity="1"/>
+<text x="446" y="83" fill="#102a43" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">QPU 0</text>
+<rect x="498" y="72" width="14" height="14" fill="#d702fe" stroke="none" rx="2" opacity="1"/>
+<text x="520" y="83" fill="#102a43" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">QPU 1</text>
+<rect x="293" y="112" width="54" height="16" fill="#f8fafc" stroke="none" opacity="0.9"/>
+<text x="283" y="123.52" fill="#102a43" font-size="8.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">0</text>
+<rect x="293" y="112" width="18" height="16" fill="#d702fe" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="311" y="112" width="18" height="16" fill="#4801b0" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="329" y="112" width="18" height="16" fill="#4801b0" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<text x="283" y="139.52" fill="#102a43" font-size="8.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">1</text>
+<rect x="293" y="128" width="18" height="16" fill="#4801b0" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="311" y="128" width="18" height="16" fill="#4801b0" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="329" y="128" width="18" height="16" fill="#4801b0" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="293" y="144" width="54" height="16" fill="#f8fafc" stroke="none" opacity="0.9"/>
+<text x="283" y="155.52" fill="#102a43" font-size="8.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">2</text>
+<rect x="293" y="144" width="18" height="16" fill="#4801b0" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="311" y="144" width="18" height="16" fill="#4801b0" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="329" y="144" width="18" height="16" fill="#4801b0" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<text x="283" y="171.52" fill="#102a43" font-size="8.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">3</text>
+<rect x="293" y="160" width="18" height="16" fill="#4801b0" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="311" y="160" width="18" height="16" fill="#d702fe" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="329" y="160" width="18" height="16" fill="#d702fe" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="293" y="176" width="54" height="16" fill="#f8fafc" stroke="none" opacity="0.9"/>
+<text x="283" y="187.52" fill="#102a43" font-size="8.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">4</text>
+<rect x="293" y="176" width="18" height="16" fill="#d702fe" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="311" y="176" width="18" height="16" fill="#d702fe" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="329" y="176" width="18" height="16" fill="#d702fe" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<text x="283" y="203.52" fill="#102a43" font-size="8.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">5</text>
+<rect x="293" y="192" width="18" height="16" fill="#d702fe" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="311" y="192" width="18" height="16" fill="#d702fe" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<rect x="329" y="192" width="18" height="16" fill="#d702fe" stroke="#ffffff" stroke-width="0.5" opacity="1"/>
+<text x="302" y="274" fill="#52606d" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="middle">0</text>
+<text x="320" y="288" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="middle">Partition window</text>
+<text x="18" y="146" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">Logical qubit</text>
+</svg>
