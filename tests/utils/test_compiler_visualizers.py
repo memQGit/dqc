@@ -8,10 +8,10 @@
 import pytest
 
 from memq_dqc.circuit import CircuitDAG
-from memq_dqc.graph import NetworkGraph
-from memq_dqc.io.qasm import load_qasm_program
+from memq_dqc.network import NetworkGraph
 from memq_dqc.partition import Partitioner
-from memq_dqc.partition.types import QPU
+from memq_dqc.partition.partitioner import QPU
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.visualization import (
     SvgDocument,
     plot_distributed_circuit,

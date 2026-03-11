@@ -17,10 +17,10 @@ from memq_dqc.visualization.svg_document import SvgCanvas, SvgDocument
 if TYPE_CHECKING:
     from memq_dqc.circuit import CircuitDAG, Op
     from memq_dqc.partition.partitioner import (
+        QPU,
         PartitionSchedule,
         PartitionWindows,
     )
-    from memq_dqc.partition.types import QPU
 
 
 _LOCAL_GATE_FILL = "#f8fbff"
@@ -1379,7 +1379,7 @@ def _remote_op_ids(
 
 
 def _single_qpu_assignment(ops: list[Op]) -> dict[QPU, set[int]]:
-    from memq_dqc.partition.types import QPU
+    from memq_dqc.partition.partitioner import QPU
 
     qubits = {qubit for op in ops for qubit in op.qubit_indices}
     return {QPU(id=0): qubits}
