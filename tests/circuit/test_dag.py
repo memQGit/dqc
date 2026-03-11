@@ -15,11 +15,10 @@ from qiskit.dagcircuit import DAGCircuit, DAGOpNode
 from memq_dqc.builder.extract_utils import SwapOp
 from memq_dqc.circuit.dag import CircuitDAG as DAG
 from memq_dqc.circuit.dag import DistributedCircuitDAG
-from memq_dqc.graph import NetworkGraph, PhysicalQubit
-from memq_dqc.io.qasm import load_qasm_program
-from memq_dqc.partition.types import QPU
-from memq_dqc.preprocessing.qasm import CleanedQuantumGate
-from memq_dqc.qasm.types import LogicalQubit
+from memq_dqc.network import NetworkGraph, PhysicalQubit
+from memq_dqc.partition.partitioner import QPU
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
+from memq_dqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
 
 
 def _build_memq_dag(qasm_path: Path) -> DAG:
@@ -280,8 +279,8 @@ def test_distributed_dag_remote_gate_uses_final_swapped_qubits(
     ]
     assert len(remote_gates) == 1
     assert remote_gates[0].qubits[:2] == [
-        LogicalQubit("q0", 1),
-        LogicalQubit("q1", 2),
+        CircuitQubit("q0", 1),
+        CircuitQubit("q1", 2),
     ]
 
 
@@ -346,24 +345,24 @@ def test_distributed_dag_remote_gate_local_swaps_follow_path_order(
         "swap",
     ]
     assert remote_gate_sequence[0].qubits == [
-        LogicalQubit("q1", 0),
-        LogicalQubit("q1", 1),
+        CircuitQubit("q1", 0),
+        CircuitQubit("q1", 1),
     ]
     assert remote_gate_sequence[1].qubits == [
-        LogicalQubit("q1", 1),
-        LogicalQubit("q1", 2),
+        CircuitQubit("q1", 1),
+        CircuitQubit("q1", 2),
     ]
     assert remote_gate_sequence[2].qubits[:2] == [
-        LogicalQubit("q0", 0),
-        LogicalQubit("q1", 2),
+        CircuitQubit("q0", 0),
+        CircuitQubit("q1", 2),
     ]
     assert remote_gate_sequence[3].qubits == [
-        LogicalQubit("q1", 1),
-        LogicalQubit("q1", 2),
+        CircuitQubit("q1", 1),
+        CircuitQubit("q1", 2),
     ]
     assert remote_gate_sequence[4].qubits == [
-        LogicalQubit("q1", 0),
-        LogicalQubit("q1", 1),
+        CircuitQubit("q1", 0),
+        CircuitQubit("q1", 1),
     ]
 
 
@@ -516,8 +515,8 @@ def test_distributed_dag_remote_cry_is_rewritten_to_rcry(
     assert len(remote_gates) == 1
     assert len(remote_gates[0].qubits) == 4
     assert remote_gates[0].qubits[:2] == [
-        LogicalQubit("q0", 0),
-        LogicalQubit("q1", 0),
+        CircuitQubit("q0", 0),
+        CircuitQubit("q1", 0),
     ]
 
 
@@ -709,12 +708,12 @@ def test_distributed_dag_remote_swap_uses_two_disjoint_comm_pairs(
     ]
     assert len(rswaps) == 1
     assert rswaps[0].qubits == [
-        LogicalQubit("q0", 0),
-        LogicalQubit("q1", 0),
-        LogicalQubit("c0", 0),
-        LogicalQubit("c1", 0),
-        LogicalQubit("c0", 1),
-        LogicalQubit("c1", 1),
+        CircuitQubit("q0", 0),
+        CircuitQubit("q1", 0),
+        CircuitQubit("c0", 0),
+        CircuitQubit("c1", 0),
+        CircuitQubit("c0", 1),
+        CircuitQubit("c1", 1),
     ]
 
 

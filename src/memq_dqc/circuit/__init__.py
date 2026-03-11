@@ -9,7 +9,15 @@
 
 from memq_dqc.circuit.builders import build_dag
 from memq_dqc.circuit.dag import CircuitDAG, DistributedCircuitDAG
+from memq_dqc.circuit.interaction_graph import InteractionGraph
 from memq_dqc.circuit.layers import Layer
 from memq_dqc.circuit.ops import Op
 
-__all__ = ["CircuitDAG", "DistributedCircuitDAG", "Layer", "Op", "build_dag"]
+__all__ = [
+    "CircuitDAG",
+    "DistributedCircuitDAG",
+    "InteractionGraph",
+    "Layer",
+    "Op",
+    "build_dag",
+]

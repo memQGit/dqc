@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from memq_dqc.visualization.svg_document import SvgCanvas, SvgDocument
 
 if TYPE_CHECKING:
-    from memq_dqc.partition.types import QPU
+    from memq_dqc.partition.partitioner import QPU
 
 PartitionTimeline = list[dict["QPU", set[int]]]
 

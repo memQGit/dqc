@@ -10,8 +10,8 @@ from pathlib import Path
 import networkx as nx
 import pytest
 
-from memq_dqc.graph import InteractionGraph
-from memq_dqc.io.qasm import load_qasm_program
+from memq_dqc.circuit import InteractionGraph
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
 
 
 def test_build_interaction_graph_returns_graph(
@@ -76,7 +76,7 @@ def test_display_interaction_graph(
 
     # Patch plt.show to prevent actual rendering during tests
     monkeypatch.setattr(
-        "memq_dqc.graph.interaction_graph.plt.show",
+        "memq_dqc.circuit.interaction_graph.plt.show",
         lambda: None,
     )
 

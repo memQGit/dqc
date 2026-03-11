@@ -5,7 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Cleaned OpenQASM statement data structures."""
+"""Preprocessing statement data types."""
 
 from __future__ import annotations
 
@@ -13,10 +13,15 @@ from dataclasses import dataclass
 
 from openqasm3 import ast
 
-from memq_dqc.qasm.types import LogicalQubit
+
+@dataclass(frozen=True, slots=True)
+class CircuitQubit:
+    """Represents a circuit-level qubit with register name and index."""
+
+    register_name: str
+    index: int
 
 
-# TODO: come up with better naming for all of these instead of "Cleaned (...)"
 @dataclass(frozen=True, slots=True)
 class Cbit:
     """Represents a classical bit with register name and index."""
@@ -62,7 +67,7 @@ class CleanedQuantumGate(CleanedStatement):
     """Cleaned quantum gate statement."""
 
     name: str
-    qubits: list[LogicalQubit]
+    qubits: list[CircuitQubit]
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,5 +83,18 @@ class CleanedQuantumMeasurementStatement(CleanedStatement):
     """Cleaned quantum measurement statement."""
 
     name: str = "measure"
-    qubit: LogicalQubit | None = None
+    qubit: CircuitQubit | None = None
     cbit: Cbit | None = None
+
+
+__all__ = [
+    "Cbit",
+    "CircuitQubit",
+    "CleanedClassicalDeclaration",
+    "CleanedIncludeStatement",
+    "CleanedQuantumGate",
+    "CleanedQuantumGateDefinition",
+    "CleanedQuantumMeasurementStatement",
+    "CleanedQubitDeclaration",
+    "CleanedStatement",
+]

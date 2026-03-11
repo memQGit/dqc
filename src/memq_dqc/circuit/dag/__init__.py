@@ -5,15 +5,9 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Partitioning data types."""
+"""Circuit DAG models and distributed DAG transformations."""
 
-from __future__ import annotations
+from memq_dqc.circuit.dag.distributed import DistributedCircuitDAG
+from memq_dqc.circuit.dag.mono import CircuitDAG
 
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True, slots=True)
-class QPU:
-    """Represents a QPU identifier for partition assignments."""
-
-    id: int
+__all__ = ["CircuitDAG", "DistributedCircuitDAG"]

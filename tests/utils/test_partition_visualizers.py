@@ -7,7 +7,7 @@
 
 import pytest
 
-from memq_dqc.partition.types import QPU
+from memq_dqc.partition.partitioner import QPU
 from memq_dqc.visualization import SvgDocument
 from memq_dqc.visualization.partition_visualizer import (
     plot_migration_timeline,

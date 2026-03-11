@@ -20,7 +20,7 @@ from memq_dqc.utils.common import qubit_partition_map as _qubit_partition_map
 if TYPE_CHECKING:
     from memq_dqc.circuit.dag import CircuitDAG
     from memq_dqc.circuit.ops import Op
-    from memq_dqc.partition.types import QPU
+    from memq_dqc.partition.partitioner import QPU
 
 
 # PUBLIC METHODS
