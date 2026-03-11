@@ -6,7 +6,7 @@
 # ============================================================================
 
 from memq_dqc.builder.extract_utils import synthesize_state_teleportation_swaps
-from memq_dqc.partition import QPU
+from memq_dqc.partition.partitioner import QPU
 
 
 def test_synthesize_swaps_emits_only_cross_qpu_swaps() -> None:

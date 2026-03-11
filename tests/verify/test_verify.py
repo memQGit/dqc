@@ -11,9 +11,9 @@ import openqasm3
 import pytest
 
 from memq_dqc.builder import extract_distributed_circuit
-from memq_dqc.graph import NetworkGraph
-from memq_dqc.io.qasm import load_qasm_program
+from memq_dqc.network import NetworkGraph
 from memq_dqc.partition import Partitioner
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
 
 # TODO: add back - from memq_dqc.verify import verify_distributed_circuit
 from memq_dqc.verify import manual_cost_verification

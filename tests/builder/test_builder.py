@@ -9,10 +9,10 @@ import pytest
 from openqasm3 import ast
 
 from memq_dqc.builder import extract_distributed_circuit, identify_remote_gates
-from memq_dqc.graph import NetworkGraph
-from memq_dqc.io.qasm import load_qasm_program
-from memq_dqc.partition import QPU, Partitioner
-from memq_dqc.partition.partitioner import BasePartitioner
+from memq_dqc.network import NetworkGraph
+from memq_dqc.partition import Partitioner
+from memq_dqc.partition.partitioner import QPU, BasePartitioner
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.utils import get_windows
 
 
