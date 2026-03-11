@@ -12,7 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pytest
 
-from memq_dqc.partition.types import QPU
+from memq_dqc.partition.partitioner import QPU
 from memq_dqc.visualization.partition_visualizer import (
     plot_migration_timeline,
     plot_partition_heatmap,
