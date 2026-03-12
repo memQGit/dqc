@@ -14,15 +14,19 @@ of the necessary data to perform partitioning.
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 from openqasm3 import ast
 
+from memq_dqc._logging import StepTimer, workflow_logging
 from memq_dqc.circuit import Circuit
 from memq_dqc.circuit.op import Op
 from memq_dqc.network import NetworkGraph
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,32 +93,53 @@ class Partitioner:
             network, program, algo, algo_kwargs
         )
 
-    def run(self) -> None:
+    def run(
+        self,
+        *,
+        verbosity: Literal["quiet", "info", "debug"] = "quiet",
+    ) -> None:
         """Run the configured partitioning algorithm.
+
+        Args:
+            verbosity: Logging verbosity for this workflow call.
 
         Updates:
             cost, schedule, and windows with the latest partitioning results.
         """
-        self._algorithm.run()
-        schedule = self._algorithm.schedule
-        if not schedule:
-            print(
-                "[Partitioner] No partition schedule available to print "
-                "logical->physical mappings."
+        with workflow_logging(verbosity):
+            timer = StepTimer()
+            logger.info(
+                "Starting partitioning with %s.",
+                type(self._algorithm).__name__,
             )
-            return
+            self._algorithm.run()
+            schedule = self._algorithm.schedule
+            if not schedule:
+                logger.warning(
+                    "Partitioning finished without a partition schedule "
+                    "after %.3fs.",
+                    timer.elapsed_seconds(),
+                )
+                return
 
-        initial_mapping = _circuit_qubit_physical_map(schedule[0])
-        final_mapping = _circuit_qubit_physical_map(schedule[-1])
-        final_window_idx = len(schedule) - 1
-        print(
-            "[Partitioner] Initial logical->physical mapping "
-            f"(window 0): {initial_mapping}"
-        )
-        print(
-            "[Partitioner] Final logical->physical mapping "
-            f"(window {final_window_idx}): {final_mapping}"
-        )
+            initial_mapping = _circuit_qubit_physical_map(schedule[0])
+            final_mapping = _circuit_qubit_physical_map(schedule[-1])
+            final_window_idx = len(schedule) - 1
+            logger.info(
+                "Partitioning completed in %.3fs: windows=%d cost=%s.",
+                timer.elapsed_seconds(),
+                len(schedule),
+                self._algorithm.cost,
+            )
+            logger.debug(
+                "Initial logical->physical mapping (window 0): %s",
+                initial_mapping,
+            )
+            logger.debug(
+                "Final logical->physical mapping (window %d): %s",
+                final_window_idx,
+                final_mapping,
+            )
 
     @property
     def cost(self) -> float | None:

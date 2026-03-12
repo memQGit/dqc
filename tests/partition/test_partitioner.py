@@ -5,6 +5,9 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import logging
+from typing import Any, cast
+
 import networkx as nx
 import pytest
 
@@ -69,10 +72,10 @@ def test_partitioner_benchmark_static_schedule_is_stationary(
         assert by_qpu_id == expected_assignment
 
 
-def test_partitioner_run_prints_initial_and_final_mappings(
+def test_partitioner_run_quiet_emits_no_logs(
     simple1_circuit_path,
     three_comp_one_comm_x2_network_path,
-    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     program = load_qasm_program(str(simple1_circuit_path))
     network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
@@ -83,22 +86,102 @@ def test_partitioner_run_prints_initial_and_final_mappings(
         algo_kwargs={"window_length": 2},
     )
 
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
     partitioner.run()
-    output = capsys.readouterr().out
+
+    records = [
+        record
+        for record in caplog.records
+        if record.name.startswith("memq_dqc")
+    ]
+    assert records == []
+
+
+def test_partitioner_run_info_logs_summary(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo="benchmark_static",
+        algo_kwargs={"window_length": 2},
+    )
+
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    partitioner.run(verbosity="info")
+
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name.startswith("memq_dqc")
+    ]
+    assert any(
+        "Starting partitioning with BenchmarkStaticPartitioner." in msg
+        for msg in messages
+    )
+    assert any("Partitioning completed in" in msg for msg in messages)
+
+
+def test_partitioner_run_debug_logs_mappings_and_algorithm_details(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo="benchmark_static",
+        algo_kwargs={"window_length": 2},
+    )
+
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    partitioner.run(verbosity="debug")
 
     assert partitioner.schedule
     final_window_idx = len(partitioner.schedule) - 1
 
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name.startswith("memq_dqc")
+    ]
+
     assert (
-        "[Partitioner] Initial logical->physical mapping (window 0):" in output
-    )
-    assert (
-        "[Partitioner] Final logical->physical mapping "
-        f"(window {final_window_idx}):"
-    ) in output
-    assert (
+        "Initial logical->physical mapping (window 0): "
         "{0: (0, 0), 1: (0, 1), 2: (0, 2), 3: (1, 0), 4: (1, 1), 5: (1, 2)}"
-    ) in output
+    ) in messages
+    assert (
+        "Final logical->physical mapping "
+        f"(window {final_window_idx}): "
+        "{0: (0, 0), 1: (0, 1), 2: (0, 2), 3: (1, 0), 4: (1, 1), 5: (1, 2)}"
+    ) in messages
+    assert any(
+        "Benchmark static partitioning parameters:" in msg for msg in messages
+    )
+
+
+def test_partitioner_run_rejects_invalid_verbosity(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo="benchmark_static",
+        algo_kwargs={"window_length": 2},
+    )
+
+    invalid_verbosity = cast(Any, "loud")
+    with pytest.raises(ValueError, match="Unsupported verbosity"):
+        partitioner.run(verbosity=invalid_verbosity)
 
 
 def test_partitioner_benchmark_static_uses_effective_sizes(

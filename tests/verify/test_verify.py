@@ -5,12 +5,18 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import logging
 from pathlib import Path
+from typing import Any, cast
 
 import openqasm3
+import pytest
 
-# TODO: add back - from memq_dqc.verify import verify_distributed_circuit
-from memq_dqc.verify import manual_cost_verification
+from memq_dqc.verify import (
+    manual_cost_verification,
+    verify_distributed_circuit,
+)
+from memq_dqc.verify import verify as verify_module
 from memq_dqc.verify.verify import dist_to_mono_circuit
 
 # TODO: need more tests!
@@ -112,3 +118,128 @@ h q[0];
 cx q[0], q[1];
 """
     assert manual_cost_verification(qasm) == 0
+
+
+def test_verify_distributed_circuit_quiet_emits_no_logs(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(verify_module.qiskit.qasm3, "load", lambda _: object())
+    monkeypatch.setattr(
+        verify_module.qiskit.qasm3, "loads", lambda _: object()
+    )
+    monkeypatch.setattr(
+        verify_module, "dist_to_mono_circuit", lambda _: "OPENQASM 3.0;"
+    )
+    counts = iter([{"00": 10}, {"00": 10}])
+    monkeypatch.setattr(
+        verify_module,
+        "get_counts",
+        lambda _circuit, *, shots: next(counts),
+    )
+    monkeypatch.setattr(
+        verify_module, "hellinger_fidelity", lambda _orig, _mono: 1.0
+    )
+
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    assert verify_distributed_circuit("orig.qasm", "dist.qasm", shots=10)
+
+    records = [
+        record
+        for record in caplog.records
+        if record.name.startswith("memq_dqc")
+    ]
+    assert records == []
+
+
+def test_verify_distributed_circuit_info_logs_success(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(verify_module.qiskit.qasm3, "load", lambda _: object())
+    monkeypatch.setattr(
+        verify_module.qiskit.qasm3, "loads", lambda _: object()
+    )
+    monkeypatch.setattr(
+        verify_module, "dist_to_mono_circuit", lambda _: "OPENQASM 3.0;"
+    )
+    counts = iter([{"00": 10}, {"00": 10}])
+    monkeypatch.setattr(
+        verify_module,
+        "get_counts",
+        lambda _circuit, *, shots: next(counts),
+    )
+    monkeypatch.setattr(
+        verify_module, "hellinger_fidelity", lambda _orig, _mono: 0.95
+    )
+
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    assert verify_distributed_circuit(
+        "orig.qasm",
+        "dist.qasm",
+        shots=10,
+        fidelity_threshold=0.9,
+        verbosity="info",
+    )
+
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name.startswith("memq_dqc")
+    ]
+    assert any(
+        "Starting distributed circuit verification: shots=10 "
+        "fidelity_threshold=0.900." in msg
+        for msg in messages
+    )
+    assert any("Verification succeeded in" in msg for msg in messages)
+
+
+def test_verify_distributed_circuit_debug_logs_failure_details(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(verify_module.qiskit.qasm3, "load", lambda _: object())
+    monkeypatch.setattr(
+        verify_module.qiskit.qasm3, "loads", lambda _: object()
+    )
+    monkeypatch.setattr(
+        verify_module, "dist_to_mono_circuit", lambda _: "OPENQASM 3.0;"
+    )
+    counts = iter([{"00": 6, "11": 4}, {"00": 2, "11": 8}])
+    monkeypatch.setattr(
+        verify_module,
+        "get_counts",
+        lambda _circuit, *, shots: next(counts),
+    )
+    monkeypatch.setattr(
+        verify_module, "hellinger_fidelity", lambda _orig, _mono: 0.5
+    )
+
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    assert not verify_distributed_circuit(
+        "orig.qasm",
+        "dist.qasm",
+        shots=10,
+        fidelity_threshold=0.9,
+        verbosity="debug",
+    )
+
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name.startswith("memq_dqc")
+    ]
+    assert any("Loaded original circuit in" in msg for msg in messages)
+    assert any("Computed fidelity in" in msg for msg in messages)
+    assert any("Verification failed in" in msg for msg in messages)
+
+
+def test_verify_distributed_circuit_rejects_invalid_verbosity() -> None:
+    invalid_verbosity = cast(Any, "loud")
+    with pytest.raises(ValueError, match="Unsupported verbosity"):
+        verify_distributed_circuit(
+            "orig.qasm",
+            "dist.qasm",
+            verbosity=invalid_verbosity,
+        )
