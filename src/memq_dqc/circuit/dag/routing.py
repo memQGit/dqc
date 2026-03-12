@@ -55,20 +55,14 @@ def _build_remote_gate_statements(
     network: NetworkGraph,
 ) -> tuple[list[CleanedStatement], int]:
     """Build statements for one remote two-qubit gate execution."""
-    raw_comm_pair = None
-    local_paths = None
-    for _, candidate_pair, candidate_paths in network.get_comm_pair_options(
-        network_qubit_a, network_qubit_b
-    ):
-        if _remote_local_paths_are_valid(candidate_paths):
-            raw_comm_pair = candidate_pair
-            local_paths = candidate_paths
-            break
-    if raw_comm_pair is None or local_paths is None:
-        raise ValueError(
-            "No valid direct remote-gate path keeps data operands on "
-            "computation qubits."
-        )
+    raw_comm_pair, local_paths = _select_direct_remote_gate_option(
+        network_qubit_a,
+        network_qubit_b,
+        network,
+    )
+
+    # The remote gate acts on the last computation qubit before each
+    # communication qubit, after any local swaps have been applied.
     updated_gate_qubit_a = (
         local_paths[0][-2] if len(local_paths[0]) > 1 else network_qubit_a
     )
@@ -84,11 +78,12 @@ def _build_remote_gate_statements(
     swap_gate_statements: list[CleanedStatement] = []
     local_swaps_added = 0
     for local_path in local_paths:
-        # Already adjecent to comm qubit; no swap needed
+        # Already adjacent to the communication qubit; no local swap needed.
         if len(local_path) <= 2:
             continue
 
-        # Move the data qubit along the local path one edge at a time.
+        # Move the data qubit toward the communication qubit one local hop
+        # at a time.
         for comp_qubit_pos in range(len(local_path) - 2):
             q0 = _physical_to_circuit_qubit(local_path[comp_qubit_pos])
             q1 = _physical_to_circuit_qubit(local_path[comp_qubit_pos + 1])
@@ -141,6 +136,28 @@ def _build_remote_gate_statements(
     return gate_statements, local_swaps_added
 
 
+def _select_direct_remote_gate_option(
+    network_qubit_a: PhysicalQubit,
+    network_qubit_b: PhysicalQubit,
+    network: NetworkGraph,
+) -> tuple[
+    tuple[PhysicalQubit, PhysicalQubit],
+    tuple[list[PhysicalQubit], list[PhysicalQubit]],
+]:
+    """Return the first direct remote-gate option with valid local paths."""
+    for _, comm_pair, local_paths in network.get_comm_pair_options(
+        network_qubit_a,
+        network_qubit_b,
+    ):
+        if _remote_local_paths_are_valid(local_paths):
+            return comm_pair, local_paths
+
+    raise ValueError(
+        "No valid direct remote-gate path keeps data operands on "
+        "computation qubits."
+    )
+
+
 def _remote_local_paths_are_valid(
     local_paths: tuple[list[PhysicalQubit], list[PhysicalQubit]],
 ) -> bool:
@@ -150,6 +167,8 @@ def _remote_local_paths_are_valid(
 
 def _remote_local_path_is_valid(local_path: list[PhysicalQubit]) -> bool:
     """Return whether one local path is valid for remote gate execution."""
+    # The path must start on a computation qubit and end on a communication
+    # qubit, with only computation qubits in between.
     if len(local_path) < 2:
         return False
     if not local_path[0].is_computation:
@@ -279,6 +298,8 @@ def _build_routed_remote_gate_hop(
             f"{next_qpu_id} while routing remote gate."
         )
 
+    # Try intermediary slots in preference order until one produces a valid
+    # routed swap and does not collide with the static operand.
     for candidate_slot in candidate_slots:
         next_pos = (next_qpu_id, candidate_slot)
         if next_pos == static_pos:
