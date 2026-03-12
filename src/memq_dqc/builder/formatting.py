@@ -15,7 +15,6 @@ from memq_dqc.preprocessing.qasm.ast_utils import (
 )
 
 
-# TODO: this file probably shouldn't exist - move to utils or something
 def rename_comm_qubits(qasm_prog: ast.Program) -> ast.Program:
     """Adjust communication qubit names for compatibility with simulator.
 

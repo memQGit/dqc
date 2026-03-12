@@ -232,7 +232,7 @@ def test_get_shortest_path_returns_nearest_comm_path(
     assert network._get_shortest_path(source) == [source, destination]
 
 
-def test_construct_path_prefers_comp_intermediates_when_tied(
+def test_construct_path_uses_first_predecessor_when_tied(
     simple1_network_path: Path,
 ) -> None:
     network = NetworkGraph(str(simple1_network_path))
@@ -253,7 +253,7 @@ def test_construct_path_prefers_comp_intermediates_when_tied(
 
     assert network._construct_path(predecessors, source, target) == [
         source,
-        good_predecessor,
+        bad_predecessor,
         target,
     ]
 
