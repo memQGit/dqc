@@ -395,7 +395,6 @@ class NetworkGraph:
         qpu_a: int,
         qpu_b: int,
     ) -> int:
-        # TODO: go through this - relied on codex refactor for time crunch
         """Return minimum raw e-bit pairs for a remote gate between two QPUs.
 
         Args:
@@ -466,13 +465,15 @@ class NetworkGraph:
         return pair_counts
 
     def _qpu_neighbors_with_min_pairs(
-        # TODO: go through this - relied on codex refactor for time crunch
         self,
         qpu_id: int,
         min_pairs: int,
         pair_counts: dict[tuple[int, int], int],
     ) -> list[int]:
-        """Return sorted neighboring QPU IDs meeting pair-count threshold."""
+        """Return sorted neighboring QPU IDs meeting pair-count threshold.
+
+        For example, if we have remote swap, require 2 EPR pairs (for now)
+        """
         neighbors = []
         for pair, count in pair_counts.items():
             if count < min_pairs:
@@ -485,7 +486,6 @@ class NetworkGraph:
         return sorted(set(neighbors))
 
     def _shortest_qpu_path_with_min_pairs(
-        # TODO: go through this - relied on codex refactor for time crunch
         self,
         source_qpu_id: int,
         target_qpu_id: int,
@@ -524,10 +524,6 @@ class NetworkGraph:
         Given a predecessor dictionary from NetworkX shortest path algorithms,
         reconstructs the actual path from source to target.
 
-        When multiple shortest predecessor choices exist, this method
-        deterministically prefers paths that keep intermediate nodes on
-        computation qubits.
-
         Args:
             pred: Predecessor dictionary mapping each node to a list of
                 predecessor nodes on shortest paths, as returned by
@@ -539,48 +535,18 @@ class NetworkGraph:
             A list of nodes representing the path from source to target,
             or None if no path exists.
         """
-        # TODO: review and cleanup this function
         if target == source:
             return [source]
         if target not in pred:  # unreachable
             return None
 
-        memo: dict[PhysicalQubit, list[PhysicalQubit] | None] = {}
-
-        # TODO: remove nested function
-        def _path_key(
-            path: list[PhysicalQubit],
-        ) -> tuple[int, tuple[str, ...]]:
-            nonterminal_comm_count = sum(
-                node.is_communication for node in path[:-1]
-            )
-            return (
-                nonterminal_comm_count,
-                tuple(node.label for node in path),
-            )
-
-        def _build_path(node: PhysicalQubit) -> list[PhysicalQubit] | None:
-            if node == source:
-                return [source]
-            if node in memo:
-                return memo[node]
-
-            predecessors = pred.get(node, [])
-            candidate_paths: list[list[PhysicalQubit]] = []
-            for predecessor in predecessors:
-                predecessor_path = _build_path(predecessor)
-                if predecessor_path is None:
-                    continue
-                candidate_paths.append(predecessor_path + [node])
-
-            if not candidate_paths:
-                memo[node] = None
-                return None
-
-            memo[node] = min(candidate_paths, key=_path_key)
-            return memo[node]
-
-        return _build_path(target)
+        cache: dict[PhysicalQubit, list[PhysicalQubit] | None] = {}
+        return _build_predecessor_path(
+            pred=pred,
+            source=source,
+            node=target,
+            cache=cache,
+        )
 
     def _valid_comm_pairs(
         self, qubit_a: PhysicalQubit, qubit_b: PhysicalQubit
@@ -935,7 +901,6 @@ def _network_qubit_sort_key(
 
 
 def _ordered_qpu_pair(qpu_a: int, qpu_b: int) -> tuple[int, int]:
-    # TODO: go through this - relied on codex refactor for time crunch
     """Return a normalized ordered QPU pair key."""
     if qpu_a <= qpu_b:
         return qpu_a, qpu_b
@@ -943,11 +908,13 @@ def _ordered_qpu_pair(qpu_a: int, qpu_b: int) -> tuple[int, int]:
 
 
 def _reconstruct_qpu_path(
-    # TODO: go through this - relied on codex refactor for time crunch
     predecessor: dict[int, int | None],
     target_qpu_id: int,
 ) -> list[int]:
-    """Reconstruct a QPU path from predecessor map."""
+    """Reconstruct a QPU path from predecessor map.
+
+    Used to construct return path of qubit after swapping to to reach a QPU
+    """
     path = [target_qpu_id]
     current = target_qpu_id
     while predecessor[current] is not None:
@@ -958,9 +925,37 @@ def _reconstruct_qpu_path(
     return path
 
 
+def _build_predecessor_path(
+    pred: dict[PhysicalQubit, list[PhysicalQubit]],
+    source: PhysicalQubit,
+    node: PhysicalQubit,
+    cache: dict[PhysicalQubit, list[PhysicalQubit] | None],
+) -> list[PhysicalQubit] | None:
+    """Build one path from a NetworkX predecessor map."""
+    if node == source:
+        return [source]
+    if node in cache:
+        return cache[node]
+
+    for predecessor in pred.get(node, []):
+        predecessor_path = _build_predecessor_path(
+            pred=pred,
+            source=source,
+            node=predecessor,
+            cache=cache,
+        )
+        if predecessor_path is None:
+            continue
+        cache[node] = predecessor_path + [node]
+        return cache[node]
+
+    cache[node] = None
+    return None
+
+
 def _route_length(path: list[int]) -> int:
-    # TODO: go through this - relied on codex refactor for time crunch
     """Return the number of intermediary QPUs in a route."""
     if len(path) <= 1:
         return 0
+    # First and last are source and target, so don't count them
     return max(0, len(path) - 2)

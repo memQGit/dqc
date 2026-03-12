@@ -44,13 +44,18 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
     # TODO: MUST DEAL WITH CASE OF ORIGINAL REGISTERS NAMED C (EG CLASSICAL)
     circuit, schedule, windows = _validated_partitioner_outputs(partitioner)
 
+    # Find all remote gates and necessary state teleportations / swaps
     remote_gates = identify_remote_gates(circuit, partitioner)
     swap_schedule = synthesize_state_teleportation_swaps(schedule)
     num_swaps = sum(len(timestep_swaps) for timestep_swaps in swap_schedule)
+
+    # Identify all statements which should now be remote
     remote_statement_ids = {op.statement_id for op, _ in remote_gates}
     comp_qubits_per_qpu = partitioner.network.comp_qubits_per_qpu()
     comm_qubits_per_qpu = partitioner.network.comm_qubits_per_qpu()
     num_comm_registers = sum(1 for count in comm_qubits_per_qpu if count > 0)
+
+    # Build the distributed circuit program
     distributed = circuit.build_distributed(
         remote_statement_ids=remote_statement_ids,
         swaps_schedule=swap_schedule,
@@ -64,6 +69,7 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
     # Number of QPUs should equal number of partitions
     num_qpus = len(schedule[0])
 
+    # Confirm the distributed program has the correct number of statements
     # TODO: handle any number of input registers (or enforce 1)
     num_qubit_registers = 1
     local_swaps_added = distributed.num_local_swaps_added
@@ -81,6 +87,7 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
 
     # Routed remote gates may add additional ``rswap`` statements beyond
     # schedule-synthesized swaps.
+    # TODO: make this exact and confirm cost calculations
     assert len(distributed.statements) >= expected_statement_count
     partitioner._algorithm.cost = _exact_entanglement_cost(distributed)
     return distributed.program
