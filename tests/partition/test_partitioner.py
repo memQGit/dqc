@@ -8,7 +8,7 @@
 import networkx as nx
 import pytest
 
-from memq_dqc.circuit import CircuitDAG
+from memq_dqc.circuit import Circuit
 from memq_dqc.network import NetworkGraph
 from memq_dqc.partition import Partitioner
 from memq_dqc.partition.utils import partition_cost
@@ -32,9 +32,7 @@ def test_partitioner_cisco_default(
     assert isinstance(cost, float)
     assert schedule
     assert windows
-    assert len(schedule) == len(
-        get_windows(CircuitDAG(program), window_length=2)
-    )
+    assert len(schedule) == len(get_windows(Circuit(program), window_length=2))
     assert len(windows) == len(schedule)
 
 
@@ -59,9 +57,7 @@ def test_partitioner_benchmark_static_schedule_is_stationary(
     assert isinstance(cost, float)
     assert schedule
     assert windows
-    assert len(schedule) == len(
-        get_windows(CircuitDAG(program), window_length=2)
-    )
+    assert len(schedule) == len(get_windows(Circuit(program), window_length=2))
     assert len(windows) == len(schedule)
 
     expected_assignment = {
@@ -127,8 +123,8 @@ def test_partitioner_benchmark_static_uses_effective_sizes(
         for qpu, assigned_qubits in first_window.items()
     }
     assert by_qpu_id == {
-        0: {0, 1, 2, 3},
-        1: {4, 5},
+        1: {0, 1, 2, 3},
+        2: {4, 5},
     }
 
 
@@ -151,9 +147,7 @@ def test_partitioner_benchmark_random_schedule_is_stationary(
 
     assert schedule
     assert windows
-    assert len(schedule) == len(
-        get_windows(CircuitDAG(program), window_length=2)
-    )
+    assert len(schedule) == len(get_windows(Circuit(program), window_length=2))
     assert len(windows) == len(schedule)
 
     first_window = {qpu.id: qubits for qpu, qubits in schedule[0].items()}

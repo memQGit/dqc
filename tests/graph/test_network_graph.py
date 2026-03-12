@@ -48,7 +48,7 @@ def test_display_network_graph(
 
     # Patch plt.show to prevent actual rendering during tests
     monkeypatch.setattr(
-        "memq_dqc.network.plt.show",
+        "memq_dqc.network.network_graph.plt.show",
         lambda: None,
     )
 
@@ -290,16 +290,16 @@ def test_qubit_type_accessors(simple1_network_path: Path) -> None:
     ]
 
 
-def test_get_comm_pair_paths_are_local_to_source_qpu(
+def test_get_comm_pair_options_paths_are_local_to_source_qpu(
     three_comp_one_comm_x2_network_path: Path,
 ) -> None:
     network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
     qubit_a = _node_by_label(network, "q_1_0")
     qubit_b = _node_by_label(network, "q_0_0")
 
-    _cost, (comm_a, comm_b), (path_a, path_b) = network.get_comm_pair(
+    _cost, (comm_a, comm_b), (path_a, path_b) = network.get_comm_pair_options(
         qubit_a, qubit_b
-    )
+    )[0]
 
     assert path_a[0] == qubit_a
     assert path_b[0] == qubit_b
@@ -319,9 +319,9 @@ def test_directional_remote_gate_qpu_route(
     network_path = simple1_network_path.parent / "nonuniform_1.json"
     network = NetworkGraph(str(network_path))
 
-    assert network.get_directional_remote_gate_qpu_route(1, 3) == [1, 2, 3]
+    assert network.get_qpu_route(1, 3) == [1, 2, 3]
     with pytest.raises(ValueError, match="No routed remote-gate path found"):
-        network.get_directional_remote_gate_qpu_route(3, 1)
+        network.get_qpu_route(3, 1)
 
 
 def test_remote_gate_ebit_cost_uses_best_direction(
@@ -333,3 +333,21 @@ def test_remote_gate_ebit_cost_uses_best_direction(
     # TODO: make sure this makese sense
     assert network.remote_gate_ebit_cost(1, 3) == 5
     assert network.remote_gate_ebit_cost(1, 2) == 1
+
+
+def test_remote_swap_ebit_cost_tracks_route_length(
+    simple1_network_path: Path,
+) -> None:
+    network = NetworkGraph(str(simple1_network_path))
+
+    assert network.remote_swap_ebit_cost(1, 2) == 0
+
+
+def test_remote_swap_ebit_cost_requires_two_pairs(
+    simple1_network_path: Path,
+) -> None:
+    network_path = simple1_network_path.parent / "nonuniform_1.json"
+    network = NetworkGraph(str(network_path))
+
+    with pytest.raises(ValueError, match="No QPU path found"):
+        network.remote_swap_ebit_cost(1, 3)

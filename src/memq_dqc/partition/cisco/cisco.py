@@ -13,6 +13,7 @@ import math
 
 from openqasm3 import ast
 
+# TODO: these imports should be as limited and repeatable as possible
 from memq_dqc.network import NetworkGraph
 from memq_dqc.partition.partitioner import QPU, BasePartitioner
 from memq_dqc.partition.subroutines import kl_partition
@@ -54,13 +55,13 @@ class CiscoPartitioner(BasePartitioner):
         Updates:
             cost, schedule, and windows with the latest partitioning results.
         """
-        num_qubits = count_total_qubits(self.program)
+        num_qubits = count_total_qubits(self.circuit.mono.program)
         partition_sizes = _effective_partition_sizes(
             self.network.comp_qubits_per_qpu(),
             num_qubits,
         )
-        dag = self.dag
-        num_two_qubit_ops = dag.num_two_qubit_gates
+        circuit = self.circuit
+        num_two_qubit_ops = circuit.mono.num_two_qubit_gates
         # Determining optimal window size
         if self.window_length is None:
             if num_two_qubit_ops == 0:
@@ -74,7 +75,7 @@ class CiscoPartitioner(BasePartitioner):
                 self.window_length = max(
                     min_window, min(int(round(base_window)), max_window)
                 )
-        windows = get_windows(dag, self.window_length)
+        windows = get_windows(circuit, self.window_length)
         if not windows:
             raise ValueError(
                 "No operation windows generated from the circuit."
@@ -91,7 +92,7 @@ class CiscoPartitioner(BasePartitioner):
             return float(self.network.remote_gate_ebit_cost(qpu_a, qpu_b))
 
         self.windows = windows
-        qpus = [QPU(id=idx) for idx in range(len(partition_sizes))]
+        qpus = [QPU(id=qpu_id) for qpu_id in network_qpu_ids]
         initial_subcircuit = create_initial_subcircuit_graph(
             num_qubits, windows[0]
         )
@@ -137,7 +138,12 @@ class CiscoPartitioner(BasePartitioner):
                 window_graph,
                 candidate_partition,
                 edge_cost=_remote_ebit_multiplier,
-            ) + movement_cost(candidate_partition, previous_partition)
+            ) + movement_cost(
+                candidate_partition,
+                previous_partition,
+                network=self.network,
+                qpu_ids=network_qpu_ids,
+            )
             if candidate_cost <= previous_cost:
                 window_partitions.append(candidate_partition)
                 total_entanglement_cost += candidate_cost

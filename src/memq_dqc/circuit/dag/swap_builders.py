@@ -15,9 +15,8 @@ from openqasm3 import ast
 
 from memq_dqc.builder.extract_utils import SwapOp
 from memq_dqc.circuit.dag.remap import (
-    _logical_to_physical_qubit,
-    _map_qpu_id,
-    _physical_to_logical_qubit,
+    _circuit_qubit_to_physical_qubit,
+    _physical_to_circuit_qubit,
     _qpu_id_from_register_name,
     _to_ast_qubit_ref,
 )
@@ -30,13 +29,13 @@ if TYPE_CHECKING:
 
 def _candidate_comp_slots_for_qpu(
     qpu_id: int,
-    logical_to_physical_window: dict[int, tuple[int, int]],
+    circuit_qubit_to_physical_window: dict[int, tuple[int, int]],
     comp_capacity_by_schedule_qpu: dict[int, int] | None,
 ) -> list[int]:
     """Return candidate computation slots on a schedule QPU."""
     mapped_slots = sorted(
         slot
-        for mapped_qpu_id, slot in logical_to_physical_window.values()
+        for mapped_qpu_id, slot in circuit_qubit_to_physical_window.values()
         if mapped_qpu_id == qpu_id
     )
     mapped_slots_set = set(mapped_slots)
@@ -59,15 +58,11 @@ def _build_rswap_statement_from_positions(
     pos0: tuple[int, int],
     pos1: tuple[int, int],
     network: NetworkGraph,
-    schedule_to_network_qpu_id: dict[int, int],
-    network_to_schedule_qpu_id: dict[int, int],
 ) -> CleanedQuantumGate:
     """Build a routed ``rswap`` statement from two schedule-space positions."""
     swap_node, swap_qubits = _build_swap_gate(
         SwapOp(q0=-1, q1=-1, pos0=pos0, pos1=pos1),
         network,
-        schedule_to_network_qpu_id,
-        network_to_schedule_qpu_id,
     )
     return CleanedQuantumGate(
         statement_type=ast.QuantumGate,
@@ -81,9 +76,7 @@ def _build_rswap_statement_from_positions(
 def _build_rswap_statements_for_swap(
     swap: SwapOp,
     network: NetworkGraph,
-    schedule_to_network_qpu_id: dict[int, int],
-    network_to_schedule_qpu_id: dict[int, int],
-    logical_to_physical_window: dict[int, tuple[int, int]],
+    circuit_qubit_to_physical_window: dict[int, tuple[int, int]],
     comp_capacity_by_schedule_qpu: dict[int, int] | None,
 ) -> list[CleanedQuantumGate]:
     """Build one or more ``rswap`` statements for a schedule-space swap.
@@ -95,11 +88,7 @@ def _build_rswap_statements_for_swap(
     Args:
         swap: Swap operation to realize.
         network: Network graph used to resolve communication pairs and routes.
-        schedule_to_network_qpu_id: Mapping from schedule QPU IDs to network
-            QPU IDs.
-        network_to_schedule_qpu_id: Mapping from network QPU IDs to schedule
-            QPU IDs.
-        logical_to_physical_window: Logical-to-physical map for the current
+        circuit_qubit_to_physical_window: Logical-to-physical map for the current
             window.
         comp_capacity_by_schedule_qpu: Optional computation capacity per
             schedule QPU.
@@ -113,8 +102,6 @@ def _build_rswap_statements_for_swap(
                 pos0=swap.pos0,
                 pos1=swap.pos1,
                 network=network,
-                schedule_to_network_qpu_id=schedule_to_network_qpu_id,
-                network_to_schedule_qpu_id=network_to_schedule_qpu_id,
             )
         ]
     except ValueError as direct_swap_error:
@@ -127,9 +114,7 @@ def _build_rswap_statements_for_swap(
             pos0=swap.pos0,
             pos1=swap.pos1,
             network=network,
-            schedule_to_network_qpu_id=schedule_to_network_qpu_id,
-            network_to_schedule_qpu_id=network_to_schedule_qpu_id,
-            logical_to_physical_window=logical_to_physical_window,
+            circuit_qubit_to_physical_window=circuit_qubit_to_physical_window,
             comp_capacity_by_schedule_qpu=comp_capacity_by_schedule_qpu,
         )
         if len(routed_positions) < 2:
@@ -142,8 +127,6 @@ def _build_rswap_statements_for_swap(
                     pos0=routed_positions[idx],
                     pos1=routed_positions[idx + 1],
                     network=network,
-                    schedule_to_network_qpu_id=schedule_to_network_qpu_id,
-                    network_to_schedule_qpu_id=network_to_schedule_qpu_id,
                 )
             )
 
@@ -153,8 +136,6 @@ def _build_rswap_statements_for_swap(
                     pos0=routed_positions[idx],
                     pos1=routed_positions[idx + 1],
                     network=network,
-                    schedule_to_network_qpu_id=schedule_to_network_qpu_id,
-                    network_to_schedule_qpu_id=network_to_schedule_qpu_id,
                 )
             )
 
@@ -165,9 +146,7 @@ def _routed_swap_positions(
     pos0: tuple[int, int],
     pos1: tuple[int, int],
     network: NetworkGraph,
-    schedule_to_network_qpu_id: dict[int, int],
-    network_to_schedule_qpu_id: dict[int, int],
-    logical_to_physical_window: dict[int, tuple[int, int]],
+    circuit_qubit_to_physical_window: dict[int, tuple[int, int]],
     comp_capacity_by_schedule_qpu: dict[int, int] | None,
 ) -> list[tuple[int, int]]:
     """Resolve intermediary positions for a routed non-adjacent swap.
@@ -176,11 +155,7 @@ def _routed_swap_positions(
         pos0: First endpoint position in schedule space.
         pos1: Second endpoint position in schedule space.
         network: Network graph used to compute QPU hop routes.
-        schedule_to_network_qpu_id: Mapping from schedule QPU IDs to network
-            QPU IDs.
-        network_to_schedule_qpu_id: Mapping from network QPU IDs to schedule
-            QPU IDs.
-        logical_to_physical_window: Logical-to-physical map for the current
+        circuit_qubit_to_physical_window: Logical-to-physical map for the current
             window.
         comp_capacity_by_schedule_qpu: Optional computation capacity per
             schedule QPU.
@@ -188,12 +163,10 @@ def _routed_swap_positions(
     Returns:
         Ordered positions from source to target, including intermediaries.
     """
-    source_network_qpu_id = _map_qpu_id(pos0[0], schedule_to_network_qpu_id)
-    target_network_qpu_id = _map_qpu_id(pos1[0], schedule_to_network_qpu_id)
     pair_counts = network._remote_comm_pair_counts()
     route_network_qpu_ids = network._shortest_qpu_path_with_min_pairs(
-        source_qpu_id=source_network_qpu_id,
-        target_qpu_id=target_network_qpu_id,
+        source_qpu_id=pos0[0],
+        target_qpu_id=pos1[0],
         min_pairs=2,
         pair_counts=pair_counts,
     )
@@ -202,20 +175,17 @@ def _routed_swap_positions(
 
     routed_positions = [pos0]
     for network_qpu_id in route_network_qpu_ids[1:-1]:
-        schedule_qpu_id = _map_qpu_id(
-            network_qpu_id, network_to_schedule_qpu_id
-        )
         candidate_slots = _candidate_comp_slots_for_qpu(
-            qpu_id=schedule_qpu_id,
-            logical_to_physical_window=logical_to_physical_window,
+            qpu_id=network_qpu_id,
+            circuit_qubit_to_physical_window=circuit_qubit_to_physical_window,
             comp_capacity_by_schedule_qpu=comp_capacity_by_schedule_qpu,
         )
         if not candidate_slots:
             raise ValueError(
                 "No computation slot available on intermediary QPU "
-                f"{schedule_qpu_id} while routing partition swap."
+                f"{network_qpu_id} while routing partition swap."
             )
-        routed_positions.append((schedule_qpu_id, candidate_slots[0]))
+        routed_positions.append((network_qpu_id, candidate_slots[0]))
     routed_positions.append(pos1)
     return routed_positions
 
@@ -223,18 +193,12 @@ def _routed_swap_positions(
 def _build_swap_gate(
     swap: SwapOp,
     network: NetworkGraph,
-    schedule_to_network_qpu_id: dict[int, int],
-    network_to_schedule_qpu_id: dict[int, int],
 ) -> tuple[ast.QuantumGate, list[CircuitQubit]]:
     """Build an ``rswap`` gate node and logical-qubit payload.
 
     Args:
         swap: Swap operation describing two physical positions.
         network: Network graph used to resolve communication pairs.
-        schedule_to_network_qpu_id: Mapping from schedule QPU IDs to network
-            QPU IDs.
-        network_to_schedule_qpu_id: Mapping from network QPU IDs to schedule
-            QPU IDs.
 
     Returns:
         AST gate node and cleaned logical qubits for the swap.
@@ -250,14 +214,8 @@ def _build_swap_gate(
         CircuitQubit(register_name=f"q{q1_qpu}", index=q1_slot),
     ]
 
-    network_qubit_a = _logical_to_physical_qubit(
-        data_qubits[0],
-        schedule_to_network_qpu_id,
-    )
-    network_qubit_b = _logical_to_physical_qubit(
-        data_qubits[1],
-        schedule_to_network_qpu_id,
-    )
+    network_qubit_a = _circuit_qubit_to_physical_qubit(data_qubits[0])
+    network_qubit_b = _circuit_qubit_to_physical_qubit(data_qubits[1])
     pair_options = network.get_comm_pair_options(
         network_qubit_a,
         network_qubit_b,
@@ -279,7 +237,7 @@ def _build_swap_gate(
         )
 
     comm_qubits = [
-        _physical_to_logical_qubit(comm_qubit, network_to_schedule_qpu_id)
+        _physical_to_circuit_qubit(comm_qubit)
         for comm_pair in selected_pairs
         for comm_qubit in comm_pair
     ]

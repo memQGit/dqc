@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import which
@@ -368,6 +370,450 @@ class SvgDocument:
         return output_path
 
 
+@dataclass(frozen=True, slots=True)
+class SvgDashboardPanel:
+    """A single visualization card inside an HTML dashboard.
+
+    Args:
+        title: Card heading shown above the embedded SVG.
+        document: SVG document rendered inside the card.
+        description: Optional supporting text shown under the title.
+    """
+
+    title: str
+    document: SvgDocument
+    description: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SvgDashboardSection:
+    """A grouped dashboard section containing one or more visualization cards.
+
+    Args:
+        title: Section heading shown in the dashboard.
+        panels: Visualization cards rendered within the section.
+        description: Optional supporting text shown under the heading.
+    """
+
+    title: str
+    panels: Sequence[SvgDashboardPanel]
+    description: str | None = None
+
+
+def build_svg_dashboard_html(
+    sections: Sequence[SvgDashboardSection],
+    *,
+    title: str = "Visualization Dashboard",
+) -> str:
+    """Build a standalone HTML dashboard for multiple SVG visualizations.
+
+    Args:
+        sections: Ordered dashboard sections to render.
+        title: Document title shown at the top of the dashboard.
+
+    Returns:
+        A standalone HTML document with all provided visualizations embedded.
+    """
+    escaped_title = escape(title)
+    nav_links = "\n".join(
+        (
+            '<a class="dashboard__nav-link" '
+            f'href="#{_slugify(section.title)}">{escape(section.title)}</a>'
+        )
+        for section in sections
+    )
+    sections_markup = "\n".join(
+        _dashboard_section_markup(section) for section in sections
+    )
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{escaped_title}</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --page: #f3f7fb;
+      --page-accent: #e3eefb;
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-border: #cad7e6;
+      --text: #102a43;
+      --muted: #52606d;
+      --accent: #0f766e;
+      --accent-soft: rgba(15, 118, 110, 0.10);
+      --shadow: 0 20px 48px rgba(16, 42, 67, 0.10);
+    }}
+    * {{
+      box-sizing: border-box;
+    }}
+    html {{
+      scroll-behavior: smooth;
+    }}
+    body {{
+      margin: 0;
+      color: var(--text);
+      font-family: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+      background:
+        radial-gradient(circle at top right, var(--page-accent), transparent 28%),
+        linear-gradient(180deg, #fbfdff 0%, var(--page) 100%);
+    }}
+    .dashboard {{
+      width: min(1500px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 24px 0 40px;
+    }}
+    .dashboard__hero {{
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: grid;
+      gap: 14px;
+      margin-bottom: 20px;
+      padding: 18px 20px;
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      background: rgba(248, 251, 255, 0.88);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+    }}
+    .dashboard__hero h1 {{
+      margin: 0;
+      font-size: clamp(28px, 4vw, 42px);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }}
+    .dashboard__hero p {{
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .dashboard__nav {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }}
+    .dashboard__nav-link {{
+      border: 1px solid var(--panel-border);
+      border-radius: 999px;
+      padding: 7px 12px;
+      color: var(--text);
+      text-decoration: none;
+      background: #ffffff;
+    }}
+    .dashboard__nav-link:hover {{
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-soft);
+    }}
+    .dashboard__section {{
+      display: grid;
+      gap: 14px;
+      margin-bottom: 28px;
+      padding: 0;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }}
+    .dashboard__section-header {{
+      display: grid;
+      gap: 6px;
+    }}
+    .dashboard__section-header h2 {{
+      margin: 0;
+      font-size: 24px;
+      line-height: 1.1;
+    }}
+    .dashboard__section-header p {{
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .dashboard__featured {{
+      display: grid;
+    }}
+    .dashboard__grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }}
+    .dashboard-card {{
+      display: grid;
+      gap: 12px;
+      padding: 0;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      min-width: 0;
+    }}
+    .dashboard-card--featured {{
+      gap: 14px;
+      padding: 18px;
+    }}
+    .dashboard-card__header {{
+      display: grid;
+      gap: 4px;
+    }}
+    .dashboard-card--featured .dashboard-card__header h3 {{
+      font-size: 20px;
+    }}
+    .dashboard-card__header h3 {{
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.15;
+    }}
+    .dashboard-card__header p {{
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .dashboard-card__viewport {{
+      overflow: hidden;
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 10px 24px rgba(16, 42, 67, 0.08);
+      display: block;
+      cursor: zoom-in;
+      appearance: none;
+      text-align: left;
+    }}
+    .dashboard-card__svg {{
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      height: auto;
+      box-shadow: none;
+    }}
+    .dashboard-card__hint {{
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    .dashboard-modal {{
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(16, 42, 67, 0.68);
+      backdrop-filter: blur(8px);
+    }}
+    .dashboard-modal[hidden] {{
+      display: none;
+    }}
+    .dashboard-modal__sheet {{
+      width: min(1440px, 100%);
+      max-height: calc(100vh - 40px);
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 18px;
+      background: #f8fbff;
+      box-shadow: 0 24px 60px rgba(16, 42, 67, 0.28);
+    }}
+    .dashboard-modal__header {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }}
+    .dashboard-modal__title {{
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.15;
+    }}
+    .dashboard-modal__description {{
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }}
+    .dashboard-modal__close {{
+      border: 1px solid var(--panel-border);
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: #ffffff;
+      color: var(--text);
+      font: inherit;
+      cursor: pointer;
+    }}
+    .dashboard-modal__viewport {{
+      overflow: auto;
+      padding: 12px;
+      border-radius: 14px;
+      background: #ffffff;
+    }}
+    .dashboard-modal__viewport svg {{
+      display: block;
+      width: 100%;
+      height: auto;
+    }}
+    @media (max-width: 1180px) {{
+      .dashboard__grid {{
+        grid-template-columns: 1fr;
+      }}
+    }}
+    @media (max-width: 720px) {{
+      .dashboard {{
+        width: min(100vw - 20px, 1500px);
+        padding-top: 10px;
+      }}
+      .dashboard__hero {{
+        position: static;
+      }}
+      .dashboard__section {{
+        padding: 16px;
+      }}
+    }}
+  </style>
+</head>
+<body>
+  <main class="dashboard">
+    <header class="dashboard__hero">
+      <div>
+        <h1>{escaped_title}</h1>
+        <p>One standalone HTML view for every generated visualization.</p>
+      </div>
+      <nav class="dashboard__nav">
+        {nav_links}
+      </nav>
+    </header>
+    {sections_markup}
+  </main>
+  <div class="dashboard-modal" hidden>
+    <div class="dashboard-modal__sheet" role="dialog" aria-modal="true">
+      <div class="dashboard-modal__header">
+        <div>
+          <h2 class="dashboard-modal__title"></h2>
+          <p class="dashboard-modal__description"></p>
+        </div>
+        <button class="dashboard-modal__close" type="button">Close</button>
+      </div>
+      <div class="dashboard-modal__viewport"></div>
+    </div>
+  </div>
+  <script>
+    const svgNamespace = "http://www.w3.org/2000/svg";
+
+    function wrapSvgContent(svg) {{
+      const background = svg.querySelector(":scope > .svg-document__background");
+      if (background) {{
+        background.remove();
+      }}
+      let group = svg.querySelector(":scope > g.dashboard-crop-group");
+      if (group) {{
+        return group;
+      }}
+      group = document.createElementNS(svgNamespace, "g");
+      group.setAttribute("class", "dashboard-crop-group");
+      for (const child of [...svg.childNodes]) {{
+        if (child === group) {{
+          continue;
+        }}
+        group.appendChild(child);
+      }}
+      svg.appendChild(group);
+      return group;
+    }}
+
+    function cropSvg(svg) {{
+      const group = wrapSvgContent(svg);
+      const bbox = group.getBBox();
+      const padX = Math.max(12, bbox.width * 0.03);
+      const padY = Math.max(12, bbox.height * 0.05);
+      svg.setAttribute(
+        "viewBox",
+        `${{bbox.x - padX}} ${{bbox.y - padY}} `
+          + `${{bbox.width + padX * 2}} ${{bbox.height + padY * 2}}`,
+      );
+      svg.removeAttribute("width");
+      svg.removeAttribute("height");
+      svg.dataset.cropped = "true";
+    }}
+
+    const modal = document.querySelector(".dashboard-modal");
+    const modalTitle = document.querySelector(".dashboard-modal__title");
+    const modalDescription = document.querySelector(
+      ".dashboard-modal__description",
+    );
+    const modalViewport = document.querySelector(".dashboard-modal__viewport");
+    const modalClose = document.querySelector(".dashboard-modal__close");
+
+    function openModal(viewport) {{
+      const title = viewport.dataset.panelTitle || "Visualization";
+      const description = viewport.dataset.panelDescription || "";
+      const svg = viewport.querySelector("svg");
+      if (!svg) {{
+        return;
+      }}
+      modalTitle.textContent = title;
+      modalDescription.textContent = description;
+      modalViewport.replaceChildren(svg.cloneNode(true));
+      modal.hidden = false;
+      document.body.style.overflow = "hidden";
+    }}
+
+    function closeModal() {{
+      modal.hidden = true;
+      modalViewport.replaceChildren();
+      document.body.style.overflow = "";
+    }}
+
+    for (const svg of document.querySelectorAll(".dashboard-card__svg")) {{
+      cropSvg(svg);
+    }}
+
+    for (const viewport of document.querySelectorAll(".dashboard-card__viewport")) {{
+      viewport.addEventListener("click", () => openModal(viewport));
+    }}
+
+    modalClose.addEventListener("click", closeModal);
+    modal.addEventListener("click", (event) => {{
+      if (event.target === modal) {{
+        closeModal();
+      }}
+    }});
+    window.addEventListener("keydown", (event) => {{
+      if (event.key === "Escape" && !modal.hidden) {{
+        closeModal();
+      }}
+    }});
+  </script>
+</body>
+</html>
+"""
+
+
+def write_svg_dashboard_html(
+    path: str | Path,
+    sections: Sequence[SvgDashboardSection],
+    *,
+    title: str = "Visualization Dashboard",
+) -> Path:
+    """Write a standalone SVG dashboard HTML document to disk.
+
+    Args:
+        path: Destination HTML filepath.
+        sections: Ordered dashboard sections to render.
+        title: Document title shown at the top of the dashboard.
+
+    Returns:
+        The resolved output path.
+    """
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        build_svg_dashboard_html(sections, title=title),
+        encoding="utf-8",
+    )
+    return output_path
+
+
 @dataclass(slots=True)
 class SvgCanvas:
     """Minimal SVG builder for programmatic diagram generation.
@@ -578,8 +1024,9 @@ class SvgCanvas:
                 f'viewBox="0 0 {self.width} {self.height}">'
             ),
             (
-                f'<rect x="0" y="0" width="{self.width}" '
-                f'height="{self.height}" fill="{self.background}"/>'
+                f'<rect class="svg-document__background" x="0" y="0" '
+                f'width="{self.width}" height="{self.height}" '
+                f'fill="{self.background}"/>'
             ),
             *self._elements,
             "</svg>",
@@ -625,3 +1072,73 @@ def _attrs(**attributes: object) -> str:
 
 def _tag(name: str, **attributes: object) -> str:
     return f"<{name} {_attrs(**attributes)}/>"
+
+
+def _dashboard_section_markup(section: SvgDashboardSection) -> str:
+    description_markup = ""
+    if section.description is not None:
+        description_markup = f"<p>{escape(section.description)}</p>"
+    featured_panel = section.panels[0] if section.panels else None
+    secondary_panels = section.panels[1:] if len(section.panels) > 1 else []
+    featured_markup = ""
+    if featured_panel is not None:
+        featured_markup = (
+            '<div class="dashboard__featured">'
+            f"{_dashboard_panel_markup(featured_panel, featured=True)}"
+            "</div>"
+        )
+    grid_markup = ""
+    if secondary_panels:
+        grid_markup = (
+            '<div class="dashboard__grid">'
+            + "\n".join(
+                _dashboard_panel_markup(panel) for panel in secondary_panels
+            )
+            + "</div>"
+        )
+    return f"""<section class="dashboard__section" id="{_slugify(section.title)}">
+  <header class="dashboard__section-header">
+    <h2>{escape(section.title)}</h2>
+    {description_markup}
+  </header>
+  {featured_markup}
+  {grid_markup}
+</section>"""
+
+
+def _dashboard_panel_markup(
+    panel: SvgDashboardPanel, *, featured: bool = False
+) -> str:
+    description_markup = ""
+    if panel.description is not None:
+        description_markup = f"<p>{escape(panel.description)}</p>"
+    hint_markup = '<p class="dashboard-card__hint">Click to expand.</p>'
+    svg_markup = panel.document.svg.replace(
+        "<svg ",
+        '<svg class="dashboard-card__svg" ',
+        1,
+    )
+    card_class = "dashboard-card dashboard-card--featured"
+    if not featured:
+        card_class = "dashboard-card"
+    return f"""<article class="{card_class}">
+  <header class="dashboard-card__header">
+    <h3>{escape(panel.title)}</h3>
+    {description_markup}
+    {hint_markup}
+  </header>
+  <button
+    class="dashboard-card__viewport"
+    type="button"
+    data-panel-title="{escape(panel.title)}"
+    data-panel-description="{escape(panel.description or "")}"
+    aria-label="Expand {escape(panel.title)}"
+  >
+    {svg_markup}
+  </button>
+</article>"""
+
+
+def _slugify(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return slug or "section"

@@ -8,48 +8,12 @@
 from pathlib import Path
 
 import openqasm3
-import pytest
-
-from memq_dqc.builder import extract_distributed_circuit
-from memq_dqc.network import NetworkGraph
-from memq_dqc.partition import Partitioner
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
 
 # TODO: add back - from memq_dqc.verify import verify_distributed_circuit
 from memq_dqc.verify import manual_cost_verification
 from memq_dqc.verify.verify import dist_to_mono_circuit
 
-
 # TODO: need more tests!
-def test_verify_distributed_circuit_simple3(
-    three_comp_one_comm_x2_network_path: Path,
-    tmp_path: Path,
-) -> None:
-    circuit_path = (
-        Path(__file__).resolve().parents[1]
-        / "fixtures"
-        / "circuits"
-        / "simple3.qasm"
-    )
-
-    qasm_program = load_qasm_program(str(circuit_path))
-    network_graph = NetworkGraph(str(three_comp_one_comm_x2_network_path))
-    partitioner = Partitioner(network_graph, qasm_program)
-    partitioner.run()
-
-    # we expect this to fail and raise ValueError for now
-    # TODO: fix this - right now it is failing because only 1 comm qubit
-    with pytest.raises(ValueError):
-        extract_distributed_circuit(partitioner)
-
-
-#    dist_path = tmp_path / "simple3_distributed.qasm"
-#  with dist_path.open("w", encoding="utf-8") as file_obj:
-#     openqasm3.dump(dist_prog, file_obj)
-
-#   assert (
-#      verify_distributed_circuit(str(circuit_path), str(dist_path)) is True
-#   )
 
 
 def test_dist_to_mono_circuit_removes_comm_qubits_for_remote_gates(

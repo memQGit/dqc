@@ -20,8 +20,8 @@ from typing import Any, TypeVar
 
 from openqasm3 import ast
 
-from memq_dqc.circuit.dag import CircuitDAG
-from memq_dqc.circuit.ops import Op
+from memq_dqc.circuit import Circuit
+from memq_dqc.circuit.op import Op
 from memq_dqc.network import NetworkGraph
 
 
@@ -50,8 +50,7 @@ class BasePartitioner(ABC):
             program: Parsed OpenQASM 3 program.
         """
         self.network = network
-        self.program = program
-        self.dag = CircuitDAG(program)
+        self.circuit = Circuit(program)
         # TODO: check correctness (should be total e-bits; not based on partition graph)
         self.schedule: PartitionSchedule | None = None
         self.cost: float | None = None
@@ -105,8 +104,8 @@ class Partitioner:
             )
             return
 
-        initial_mapping = _logical_to_physical_map(schedule[0])
-        final_mapping = _logical_to_physical_map(schedule[-1])
+        initial_mapping = _circuit_qubit_physical_map(schedule[0])
+        final_mapping = _circuit_qubit_physical_map(schedule[-1])
         final_window_idx = len(schedule) - 1
         print(
             "[Partitioner] Initial logical->physical mapping "
@@ -133,9 +132,9 @@ class Partitioner:
         return self._algorithm.windows
 
     @property
-    def dag(self) -> CircuitDAG:
-        """Return the circuit DAG for the configured program."""
-        return self._algorithm.dag
+    def circuit(self) -> Circuit:
+        """Return the circuit for the configured program."""
+        return self._algorithm.circuit
 
     @property
     def network(self) -> NetworkGraph:
@@ -190,7 +189,7 @@ def _get_algorithm_class(name: str) -> type[BasePartitioner]:
     raise ValueError(f"Unknown partitioning algorithm: {name}")
 
 
-def _logical_to_physical_map(
+def _circuit_qubit_physical_map(
     assignment: dict[QPU, set[int]],
 ) -> dict[int, tuple[int, int]]:
     """Return a deterministic logical-to-physical map for one window.

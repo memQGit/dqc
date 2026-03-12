@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 from memq_dqc.utils.common import qubit_partition_map, window_op_map
 
 if TYPE_CHECKING:
-    from memq_dqc.circuit.dag import CircuitDAG
-    from memq_dqc.circuit.ops import Op
+    from memq_dqc.circuit import Circuit
+    from memq_dqc.circuit.op import Op
     from memq_dqc.partition import Partitioner
     from memq_dqc.partition.partitioner import QPU
 
@@ -26,7 +26,7 @@ PartitionAssignment = dict["QPU", set[int]]
 
 @dataclass(frozen=True, slots=True)
 class SwapOp:
-    """Swap between two positions, recording logical qubits at emission."""
+    """Recording the qubits’ physical positions when the swap is generated."""
 
     q0: int
     q1: int
@@ -201,20 +201,20 @@ def _synthesize_swaps_for_timestep(
 
 
 def identify_remote_gates(
-    circuit_dag: CircuitDAG,
+    circuit: Circuit,
     partition: Partitioner,
 ) -> list[tuple[Op, dict[str, int]]]:
     """Identify remote gates in the scheduled circuit.
 
     Args:
-        circuit_dag: The CircuitDAG representing the quantum circuit.
+        circuit: The circuit representing the quantum circuit.
         partition: The Partitioner object containing the partitioning schedule.
 
     Returns:
         Augmented list of operations with two-qubit gates replaced with remote
         variants where applicable.
     """
-    ops = circuit_dag.ops
+    ops = circuit.mono.ops
     windows = partition.windows
     schedule = partition.schedule
     if windows is None or schedule is None:
@@ -231,6 +231,8 @@ def identify_remote_gates(
             raise ValueError(
                 "Only single- and two-qubit gates are supported currently."
             )
+        if len(op.qubits) != 2:
+            raise ValueError("Expected a two-qubit operation.")
         q1, q2 = op.qubits
         op_window_idx = window_op_mapping[op.op_id]
         qubit_map = qubit_partition_map(schedule[op_window_idx])
@@ -266,16 +268,17 @@ def window_final_op_id_map(windows: list[list[Op]]) -> dict[int, int]:
 
 
 # TODO: determine if this should be placed somewhere else - perhaps in DAG
-def logical_physical_map(
+def circuit_qubit_physical_map(
     # TODO: this is not clean
     schedule: list[PartitionAssignment],
     swaps: list[list[SwapOp]],
 ) -> list[dict[int, tuple[int, int]]]:
-    """Create logical-to-physical qubit maps for each time interval.
+    """Create circuit-to-physical qubit maps for each time interval.
 
     A physical qubit is characterized by an (int, int) tuple, where first
     element represents QPU index, second element represents qubit index for
-    that given QPU.
+    that given QPU. A circuit qubit is the qubit index as defined in the
+    original input circuit.
 
     """
     if not schedule:
@@ -283,11 +286,15 @@ def logical_physical_map(
 
     initial_partition = schedule[0]
     current_map: dict[int, tuple[int, int]] = {}
+
+    # Sort intitial partition by QPU ID, iterate through the qubits
     for qpu, qubit_set in sorted(
         initial_partition.items(), key=lambda item: item[0].id
     ):
-        for slot_idx, qubit in enumerate(sorted(qubit_set)):
-            current_map[qubit] = (qpu.id, slot_idx)
+        # Qubit set is list of circuit qubits assigned to that QPU
+        for pos_idx, circuit_qubit in enumerate(sorted(qubit_set)):
+            # Map the circuit qubit to a physical position
+            current_map[circuit_qubit] = (qpu.id, pos_idx)
 
     interval_maps: list[dict[int, tuple[int, int]]] = [current_map.copy()]
 
