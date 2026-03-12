@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from openqasm3 import ast
 
+from memq_dqc.network import PhysicalQubit
 from memq_dqc.preprocessing.qasm import (
     clone_statement_node,
     extract_qubit_index,
@@ -108,7 +109,6 @@ def _circuit_qubit_to_physical_qubit(
             "CircuitQubit computation register must be q<int>. "
             f"Received {qubit.register_name!r}."
         )
-    from memq_dqc.network import PhysicalQubit
 
     return PhysicalQubit(
         qpu_id=int(register),
@@ -120,8 +120,6 @@ def _circuit_qubit_to_physical_qubit(
 def _physical_to_circuit_qubit(
     qubit: PhysicalQubit,
 ) -> CircuitQubit:
-    # NOTE: This performs a representational mapping from a PhysicalQubit to
-    # a CircuitQubit reference; no additional semantic information is added.
     """Convert a physical network qubit to a logical register reference.
 
     Args:
@@ -234,6 +232,16 @@ def _to_ast_qubit_ref(qubit: CircuitQubit) -> ast.IndexedIdentifier:
     )
 
 
+def _remap_ast_qubit_refs(
+    qubits: list[ast.IndexedIdentifier | ast.Identifier],
+    circuit_qubit_to_physical: dict[int, tuple[int, int]],
+) -> list[ast.IndexedIdentifier]:
+    """Remap a list of AST qubit references into per-QPU register space."""
+    return [
+        _map_qubit_ref(qubit, circuit_qubit_to_physical) for qubit in qubits
+    ]
+
+
 def _remap_statement_qubits(
     statement: ast.Statement,
     circuit_qubit_to_physical: dict[int, tuple[int, int]],
@@ -247,12 +255,12 @@ def _remap_statement_qubits(
     Returns:
         Remapped statement clone.
     """
+    # Clone first so the original parsed statement tree stays untouched.
     mapped = clone_statement_node(statement)
     if isinstance(mapped, ast.QuantumGate):
-        mapped.qubits = [
-            _map_qubit_ref(qubit, circuit_qubit_to_physical)
-            for qubit in mapped.qubits
-        ]
+        mapped.qubits = _remap_ast_qubit_refs(
+            mapped.qubits, circuit_qubit_to_physical
+        )
         return mapped
     if isinstance(mapped, ast.QuantumMeasurementStatement):
         mapped.measure = ast.QuantumMeasurement(
@@ -262,10 +270,9 @@ def _remap_statement_qubits(
         )
         return mapped
     if isinstance(mapped, ast.QuantumBarrier):
-        mapped.qubits = [
-            _map_qubit_ref(qubit, circuit_qubit_to_physical)
-            for qubit in mapped.qubits
-        ]
+        mapped.qubits = _remap_ast_qubit_refs(
+            mapped.qubits, circuit_qubit_to_physical
+        )
         return mapped
     if isinstance(mapped, ast.QuantumReset):
         mapped.qubits = _map_qubit_ref(
@@ -273,10 +280,9 @@ def _remap_statement_qubits(
         )
         return mapped
     if isinstance(mapped, ast.QuantumPhase):
-        mapped.qubits = [
-            _map_qubit_ref(qubit, circuit_qubit_to_physical)
-            for qubit in mapped.qubits
-        ]
+        mapped.qubits = _remap_ast_qubit_refs(
+            mapped.qubits, circuit_qubit_to_physical
+        )
         return mapped
     return mapped
 
@@ -330,23 +336,20 @@ def _replace_qubit_declarations(
     if not schedule:
         raise ValueError("schedule must contain at least one window.")
 
+    # Declarations are based on the initial window, which defines the register
+    # layout for the distributed program.
     qpu_qubits = {qpu: set(qubits) for qpu, qubits in schedule[0].items()}
     qpu_ids = sorted(qpu.id for qpu in qpu_qubits)
-    if comp_qubits_per_qpu is None:
-        comp_counts_by_qpu = {
+    comp_counts_by_qpu = _counts_by_qpu(
+        qpu_ids=qpu_ids,
+        counts=comp_qubits_per_qpu,
+        default_counts={
             qpu.id: len(qubits) for qpu, qubits in qpu_qubits.items()
-        }
-    else:
-        if len(comp_qubits_per_qpu) != len(qpu_ids):
-            raise ValueError(
-                "comp_qubits_per_qpu length must match the number of QPUs "
-                f"in schedule: {len(comp_qubits_per_qpu)} != {len(qpu_ids)}."
-            )
-        comp_counts_by_qpu = {
-            qpu_id: comp_qubits_per_qpu[idx]
-            for idx, qpu_id in enumerate(qpu_ids)
-        }
+        },
+        label="comp_qubits_per_qpu",
+    )
 
+    # Confirm the initial placement fits inside each QPU's declared capacity.
     for qpu, qubits in qpu_qubits.items():
         capacity = comp_counts_by_qpu[qpu.id]
         if len(qubits) > capacity:
@@ -356,18 +359,12 @@ def _replace_qubit_declarations(
                 f"capacity={capacity}."
             )
 
-    if comm_qubits_per_qpu is None:
-        comm_counts_by_qpu = {qpu_id: 0 for qpu_id in qpu_ids}
-    else:
-        if len(comm_qubits_per_qpu) != len(qpu_ids):
-            raise ValueError(
-                "comm_qubits_per_qpu length must match the number of QPUs "
-                f"in schedule: {len(comm_qubits_per_qpu)} != {len(qpu_ids)}."
-            )
-        comm_counts_by_qpu = {
-            qpu_id: comm_qubits_per_qpu[idx]
-            for idx, qpu_id in enumerate(qpu_ids)
-        }
+    comm_counts_by_qpu = _counts_by_qpu(
+        qpu_ids=qpu_ids,
+        counts=comm_qubits_per_qpu,
+        default_counts={qpu_id: 0 for qpu_id in qpu_ids},
+        label="comm_qubits_per_qpu",
+    )
 
     def _build_declaration(
         register_name: str,
@@ -411,6 +408,8 @@ def _replace_qubit_declarations(
                 _build_declaration(f"c{qpu_id}", comm_size)
             )
 
+    # Drop the original declarations and splice in the per-QPU registers
+    # immediately after any include statements.
     filtered = [
         statement
         for statement in statements
@@ -423,3 +422,20 @@ def _replace_qubit_declarations(
     ):
         insert_idx += 1
     return filtered[:insert_idx] + new_declarations + filtered[insert_idx:]
+
+
+def _counts_by_qpu(
+    qpu_ids: list[int],
+    counts: list[int] | None,
+    default_counts: dict[int, int],
+    label: str,
+) -> dict[int, int]:
+    """Return per-QPU counts, validating optional explicit inputs."""
+    if counts is None:
+        return default_counts
+    if len(counts) != len(qpu_ids):
+        raise ValueError(
+            f"{label} length must match the number of QPUs in schedule: "
+            f"{len(counts)} != {len(qpu_ids)}."
+        )
+    return {qpu_id: counts[idx] for idx, qpu_id in enumerate(qpu_ids)}

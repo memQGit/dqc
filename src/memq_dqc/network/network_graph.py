@@ -306,7 +306,7 @@ class NetworkGraph:
                 f"No reachable communication pairs found to connect {qubit_a!r} "
                 f"and {qubit_b!r}."
             )
-        # Sort by decreasing cost (then by qpu / qubit labels)
+        # Sort by increasing cost (then by qpu / qubit labels)
         return sorted(
             pair_options,
             key=lambda item: (
