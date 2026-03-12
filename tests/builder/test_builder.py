@@ -5,6 +5,9 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import logging
+from typing import Any, cast
+
 import pytest
 from openqasm3 import ast
 
@@ -227,3 +230,96 @@ def test_extract_distributed_circuit_sets_exact_entanglement_cost(
     extract_distributed_circuit(partitioner)
 
     assert partitioner.cost == 1.0
+
+
+def test_extract_distributed_circuit_quiet_emits_no_logs(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    extract_distributed_circuit(partitioner)
+
+    records = [
+        record
+        for record in caplog.records
+        if record.name.startswith("memq_dqc")
+    ]
+    assert records == []
+
+
+def test_extract_distributed_circuit_info_logs_summary(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    extract_distributed_circuit(partitioner, verbosity="info")
+
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name.startswith("memq_dqc")
+    ]
+    assert "Starting distributed circuit extraction." in messages
+    assert any(
+        "Distributed circuit extraction completed in" in msg
+        for msg in messages
+    )
+
+
+def test_extract_distributed_circuit_debug_logs_diagnostics(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    extract_distributed_circuit(partitioner, verbosity="debug")
+
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name.startswith("memq_dqc")
+    ]
+    assert any("Validated partitioner outputs:" in msg for msg in messages)
+    assert any("Distributed statement count:" in msg for msg in messages)
+
+
+def test_extract_distributed_circuit_rejects_invalid_verbosity(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+
+    invalid_verbosity = cast(Any, "loud")
+    with pytest.raises(ValueError, match="Unsupported verbosity"):
+        extract_distributed_circuit(
+            partitioner,
+            verbosity=invalid_verbosity,
+        )

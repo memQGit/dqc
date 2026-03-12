@@ -13,16 +13,20 @@ teleportation)
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import logging
+from typing import TYPE_CHECKING, Literal
 
 from openqasm3 import ast
 
+from memq_dqc._logging import StepTimer, workflow_logging
 from memq_dqc.builder.extract_utils import (
     identify_remote_gates,
     synthesize_state_teleportation_swaps,
 )
 from memq_dqc.partition import Partitioner
 from memq_dqc.preprocessing.qasm.types import CleanedQuantumGate
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from memq_dqc.circuit import Circuit, DistributedCircuit
@@ -32,65 +36,112 @@ if TYPE_CHECKING:
     )
 
 
-def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
+def extract_distributed_circuit(
+    partitioner: Partitioner,
+    *,
+    verbosity: Literal["quiet", "info", "debug"] = "quiet",
+) -> ast.Program:
     """Extract distributed circuit from partitioning assignment.
 
     Args:
         partitioner: Partitioner with partitioning results.
+        verbosity: Logging verbosity for this workflow call.
 
     Returns:
         Distributed OpenQASM 3 program with remote gate names applied.
     """
-    # TODO: MUST DEAL WITH CASE OF ORIGINAL REGISTERS NAMED C (EG CLASSICAL)
-    circuit, schedule, windows = _validated_partitioner_outputs(partitioner)
+    with workflow_logging(verbosity):
+        overall_timer = StepTimer()
+        logger.info("Starting distributed circuit extraction.")
 
-    # Find all remote gates and necessary state teleportations / swaps
-    remote_gates = identify_remote_gates(circuit, partitioner)
-    swap_schedule = synthesize_state_teleportation_swaps(schedule)
-    num_swaps = sum(len(timestep_swaps) for timestep_swaps in swap_schedule)
+        # TODO: MUST DEAL WITH CASE OF ORIGINAL REGISTERS NAMED C
+        circuit, schedule, windows = _validated_partitioner_outputs(
+            partitioner
+        )
+        logger.debug(
+            "Validated partitioner outputs: schedule_steps=%d windows=%d.",
+            len(schedule),
+            len(windows),
+        )
 
-    # Identify all statements which should now be remote
-    remote_statement_ids = {op.statement_id for op, _ in remote_gates}
-    comp_qubits_per_qpu = partitioner.network.comp_qubits_per_qpu()
-    comm_qubits_per_qpu = partitioner.network.comm_qubits_per_qpu()
-    num_comm_registers = sum(1 for count in comm_qubits_per_qpu if count > 0)
+        remote_analysis_timer = StepTimer()
+        remote_gates = identify_remote_gates(circuit, partitioner)
+        swap_schedule = synthesize_state_teleportation_swaps(schedule)
+        num_swaps = sum(
+            len(timestep_swaps) for timestep_swaps in swap_schedule
+        )
+        logger.debug(
+            "Identified %d remote gates and %d synthesized swaps in %.3fs.",
+            len(remote_gates),
+            num_swaps,
+            remote_analysis_timer.elapsed_seconds(),
+        )
 
-    # Build the distributed circuit program
-    distributed = circuit.build_distributed(
-        remote_statement_ids=remote_statement_ids,
-        swaps_schedule=swap_schedule,
-        windows=windows,
-        schedule=schedule,
-        comp_qubits_per_qpu=comp_qubits_per_qpu,
-        comm_qubits_per_qpu=comm_qubits_per_qpu,
-        network=partitioner.network,
-    )
+        remote_statement_ids = {op.statement_id for op, _ in remote_gates}
+        comp_qubits_per_qpu = partitioner.network.comp_qubits_per_qpu()
+        comm_qubits_per_qpu = partitioner.network.comm_qubits_per_qpu()
+        num_comm_registers = sum(
+            1 for count in comm_qubits_per_qpu if count > 0
+        )
 
-    # Number of QPUs should equal number of partitions
-    num_qpus = len(schedule[0])
+        build_timer = StepTimer()
+        distributed = circuit.build_distributed(
+            remote_statement_ids=remote_statement_ids,
+            swaps_schedule=swap_schedule,
+            windows=windows,
+            schedule=schedule,
+            comp_qubits_per_qpu=comp_qubits_per_qpu,
+            comm_qubits_per_qpu=comm_qubits_per_qpu,
+            network=partitioner.network,
+        )
+        logger.debug(
+            "Built distributed circuit in %.3fs.",
+            build_timer.elapsed_seconds(),
+        )
 
-    # Confirm the distributed program has the correct number of statements
-    # TODO: handle any number of input registers (or enforce 1)
-    num_qubit_registers = 1
-    local_swaps_added = distributed.num_local_swaps_added
-    include_dist_gates = len(remote_gates) > 0 or num_swaps > 0
-    # Add statement for each swap and replace one qubit register per QPU.
-    expected_statement_count = (
-        len(circuit.mono.statements)  # TODO: clean this up
-        + int(include_dist_gates)
-        + num_swaps
-        + num_qpus
-        + num_comm_registers
-        - num_qubit_registers
-        + local_swaps_added
-    )
+        num_qpus = len(schedule[0])
+        num_qubit_registers = 1
+        local_swaps_added = distributed.num_local_swaps_added
+        include_dist_gates = len(remote_gates) > 0 or num_swaps > 0
+        expected_statement_count = (
+            len(circuit.mono.statements)
+            + int(include_dist_gates)
+            + num_swaps
+            + num_qpus
+            + num_comm_registers
+            - num_qubit_registers
+            + local_swaps_added
+        )
+        actual_statement_count = len(distributed.statements)
+        logger.debug(
+            "Distributed statement count: expected_min=%d actual=%d "
+            "include_dist_gates=%s local_swaps_added=%d num_qpus=%d "
+            "num_comm_registers=%d remote_statement_ids=%d.",
+            expected_statement_count,
+            actual_statement_count,
+            include_dist_gates,
+            local_swaps_added,
+            num_qpus,
+            num_comm_registers,
+            len(remote_statement_ids),
+        )
 
-    # Routed remote gates may add additional ``rswap`` statements beyond
-    # schedule-synthesized swaps.
-    # TODO: make this exact and confirm cost calculations
-    assert len(distributed.statements) >= expected_statement_count
-    partitioner._algorithm.cost = _exact_entanglement_cost(distributed)
-    return distributed.program
+        # Routed remote gates may add additional ``rswap`` statements beyond
+        # schedule-synthesized swaps.
+        # TODO: make this exact and confirm cost calculations
+        assert actual_statement_count >= expected_statement_count
+        exact_cost = _exact_entanglement_cost(distributed)
+        partitioner._algorithm.cost = exact_cost
+        logger.info(
+            "Distributed circuit extraction completed in %.3fs: "
+            "remote_gates=%d swaps=%d statements=%d exact_cost=%.3f.",
+            overall_timer.elapsed_seconds(),
+            len(remote_gates),
+            num_swaps,
+            actual_statement_count,
+            exact_cost,
+        )
+        return distributed.program
 
 
 def _validated_partitioner_outputs(
