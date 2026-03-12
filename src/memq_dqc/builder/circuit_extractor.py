@@ -42,8 +42,6 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
         Distributed OpenQASM 3 program with remote gate names applied.
     """
     # TODO: MUST DEAL WITH CASE OF ORIGINAL REGISTERS NAMED C (EG CLASSICAL)
-    # TODO: figure out cleaner way of abstraction ... probably shouldn't all
-    # ... be handled in circuit DAG
     circuit, schedule, windows = _validated_partitioner_outputs(partitioner)
 
     remote_gates = identify_remote_gates(circuit, partitioner)
