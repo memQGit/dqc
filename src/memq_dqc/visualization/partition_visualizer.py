@@ -62,31 +62,35 @@ def plot_partition_heatmap(
         sample_stride=sample_stride,
         sort_by_final_qpu=sort_by_final_qpu,
     )
+    header_visible = title != ""
+    resolved_title = "Partition Heatmap" if title is None else title
 
-    cell_width = 10.0 if len(assignments) > 80 else 18.0
-    cell_height = 10.0 if len(qubit_order) > 50 else 16.0
-    left = 88.0
-    top = 112.0
-    right = 28.0
-    bottom = 48.0
-    legend_height = 36.0
-    base_width = left + right + len(assignments) * cell_width + 60.0
-    width = int(max(base_width, 640.0))
-    left += (width - base_width) / 2
+    cell_width = 10.0 if len(assignments) > 80 else 16.0
+    cell_height = 10.0 if len(qubit_order) > 50 else 14.0
+    left = 54.0
+    top = 104.0 if header_visible else 78.0
+    right = 18.0
+    bottom = 36.0
+    legend_height = 34.0
+    base_width = left + right + len(assignments) * cell_width
+    width = int(max(base_width, 420.0))
     height = int(top + bottom + len(qubit_order) * cell_height + legend_height)
     canvas = SvgCanvas(width=width, height=height, background="#ffffff")
 
-    _draw_title(
-        canvas,
-        width=width,
-        title=title or "Partition Heatmap",
-        subtitle="QPU assignment of each logical qubit across partition windows",
-    )
+    if header_visible:
+        _draw_title(
+            canvas,
+            width=width,
+            title=resolved_title,
+            subtitle=(
+                "QPU assignment of each logical qubit across partition windows"
+            ),
+        )
     _draw_heatmap_legend(
         canvas,
         num_qpus=num_qpus,
-        x=max(left, width - (num_qpus * 86.0) - 44.0),
-        y=72.0,
+        x=left,
+        y=16.0 if not header_visible else 72.0,
     )
 
     for row_index, qubit in enumerate(qubit_order):
@@ -143,7 +147,7 @@ def plot_partition_heatmap(
         anchor="middle",
     )
     canvas.text(
-        x=18.0,
+        x=16.0,
         y=height / 2,
         text="Logical qubit",
         fill=_MUTED_TEXT,
@@ -183,27 +187,29 @@ def plot_migration_timeline(
         raise ValueError(
             "window_entanglement_cost must match number of transitions."
         )
+    header_visible = title != ""
+    resolved_title = "Migration Timeline" if title is None else title
 
-    top = 112.0
-    left = 64.0
-    right = 60.0 if window_entanglement_cost is not None else 28.0
-    bottom = 44.0
-    chart_height = 220.0
-    window_step = 18.0 if len(window_indices) > 60 else 30.0
+    top = 102.0 if header_visible else 74.0
+    left = 50.0
+    right = 44.0 if window_entanglement_cost is not None else 18.0
+    bottom = 36.0
+    chart_height = 228.0
+    window_step = 18.0 if len(window_indices) > 60 else 24.0
     base_width = (
-        left + right + max(1, len(window_indices) - 1) * window_step + 48.0
+        left + right + max(1, len(window_indices) - 1) * window_step + 20.0
     )
-    width = int(max(base_width, 760.0))
-    left += (width - base_width) / 2
+    width = int(max(base_width, 420.0))
     height = int(top + bottom + chart_height)
     canvas = SvgCanvas(width=width, height=height, background="#ffffff")
 
-    _draw_title(
-        canvas,
-        width=width,
-        title=title or "Migration Timeline",
-        subtitle="Moved logical qubits across adjacent partition windows",
-    )
+    if header_visible:
+        _draw_title(
+            canvas,
+            width=width,
+            title=resolved_title,
+            subtitle="Moved logical qubits across adjacent partition windows",
+        )
 
     max_primary = max(movement, default=0)
     max_secondary = max(window_entanglement_cost or [0.0], default=0.0)
@@ -405,7 +411,7 @@ def _draw_heatmap_legend(
     x: float,
     y: float,
 ) -> None:
-    width = num_qpus * 74.0 + 18.0
+    width = num_qpus * 70.0 + 18.0
     canvas.rect(
         x=x - 10.0,
         y=y - 10.0,

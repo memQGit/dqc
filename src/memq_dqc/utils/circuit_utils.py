@@ -18,8 +18,9 @@ import networkx as nx
 from memq_dqc.utils.common import qubit_partition_map as _qubit_partition_map
 
 if TYPE_CHECKING:
-    from memq_dqc.circuit.dag import CircuitDAG
-    from memq_dqc.circuit.ops import Op
+    from memq_dqc.circuit import Circuit
+    from memq_dqc.circuit.op import Op
+    from memq_dqc.network import NetworkGraph
     from memq_dqc.partition.partitioner import QPU
 
 
@@ -61,7 +62,9 @@ def create_initial_subcircuit_graph(
 
     """
     two_qubit_counts = count_two_qubit_pairs(
-        op.qubit_indices for op in window if len(op.qubits) == 2
+        (op.qubit_indices[0], op.qubit_indices[1])
+        for op in window
+        if op.is_two_qubit
     )
 
     # Generate the interaction graph for the first subcircuit
@@ -89,7 +92,9 @@ def build_window_interaction_graph(
     """
     # TODO: abstract hardcoded weights to user controls
     two_qubit_counts = count_two_qubit_pairs(
-        op.qubit_indices for op in ops if len(op.qubits) == 2
+        (op.qubit_indices[0], op.qubit_indices[1])
+        for op in ops
+        if op.is_two_qubit
     )
     active_qubits = {q for pair in two_qubit_counts.keys() for q in pair}
 
@@ -113,29 +118,52 @@ def build_window_interaction_graph(
 def movement_cost(
     new_partition: list[set[int]] | dict[QPU, set[int]],
     old_partition: list[set[int]] | dict[QPU, set[int]],
+    *,
+    network: NetworkGraph | None = None,
+    qpu_ids: list[int] | None = None,
 ) -> float:
     """Calculate the cost of moving qubits between partitions.
 
     Args:
         new_partition: The updated partitioning of qubits.
         old_partition: The previous partitioning of qubits.
+        network: Optional network used to weight inter-QPU movement.
+        qpu_ids: Optional QPU IDs ordered by partition index.
 
     Returns:
-        The movement cost based on the number of qubits moved.
+        The movement cost.
+
+    Raises:
+        ValueError: If only one of ``network`` or ``qpu_ids`` is provided.
     """
+    if (network is None) != (qpu_ids is None):
+        raise ValueError(
+            "movement_cost requires both network and qpu_ids when using "
+            "topology-aware costs."
+        )
+
     old_qubit_to_part = qubit_partition_map(old_partition)
     new_qubit_to_part = qubit_partition_map(new_partition)
 
-    moved_qubits = sum(
-        1
-        for qubit, old_part in old_qubit_to_part.items()
-        if new_qubit_to_part.get(qubit) != old_part
-    )
+    total_cost = 0.0
+    for qubit, old_part in old_qubit_to_part.items():
+        new_part = new_qubit_to_part.get(qubit)
+        if new_part is None or new_part == old_part:
+            continue
+        if network is None or qpu_ids is None:
+            total_cost += 1.0
+        else:
+            try:
+                total_cost += float(
+                    network.remote_swap_ebit_cost(
+                        qpu_ids[old_part],
+                        qpu_ids[new_part],
+                    )
+                )
+            except ValueError:
+                return float("inf")
 
-    # Increasing this value leads to more stationary partition
-    cost_per_moved_qubit = 1.0
-
-    return moved_qubits * cost_per_moved_qubit
+    return total_cost
 
 
 def qubit_partition_map(
@@ -168,19 +196,19 @@ def distribute(v: int, n: int) -> list[int]:
 
 
 def get_windows(
-    dag: CircuitDAG,
+    circuit: Circuit,
     window_length: int,
 ) -> list[list[Op]]:
     """Generate subcircuit windows with a target two-qubit gate count.
 
     Args:
-        dag: Circuit DAG providing operations in program order.
+        circuit: Circuit providing operations in program order.
         window_length: Number of two-qubit operations per window.
 
     Returns:
         Operation windows in circuit order.
     """
-    ops = dag.ops
+    ops = circuit.mono.ops
     windows = []
     current_window = []
     num_two_qubit_ops = 0

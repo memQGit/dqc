@@ -12,8 +12,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .extract_utils import (
+    circuit_qubit_physical_map,
     identify_remote_gates,
-    logical_physical_map,
     synthesize_state_teleportation_swaps,
     window_final_op_id_map,
 )
@@ -44,7 +44,7 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
 __all__ = [
     "extract_distributed_circuit",
     "identify_remote_gates",
-    "logical_physical_map",
+    "circuit_qubit_physical_map",
     "synthesize_state_teleportation_swaps",
     "window_final_op_id_map",
     "rename_comm_qubits",

@@ -51,51 +51,49 @@ def _replace_statement_node(
 
 def _remap_cleaned_qubits(
     qubits: list[CircuitQubit],
-    logical_to_physical: dict[int, tuple[int, int]],
+    circuit_qubit_to_physical: dict[int, tuple[int, int]],
 ) -> list[CircuitQubit]:
     """Remap a list of logical qubits to QPU-local register coordinates.
 
     Args:
         qubits: Logical qubits to remap.
-        logical_to_physical: Mapping from logical index to ``(qpu_id, slot)``.
+        circuit_qubit_to_physical: Mapping from logical index to ``(qpu_id, slot)``.
 
     Returns:
         Remapped logical qubits using per-QPU register names and indices.
     """
     return [
-        _remap_cleaned_qubit(qubit, logical_to_physical) for qubit in qubits
+        _remap_cleaned_qubit(qubit, circuit_qubit_to_physical)
+        for qubit in qubits
     ]
 
 
 def _remap_cleaned_qubit(
     qubit: CircuitQubit | None,
-    logical_to_physical: dict[int, tuple[int, int]],
+    circuit_qubit_to_physical: dict[int, tuple[int, int]],
 ) -> CircuitQubit | None:
     """Remap one logical qubit to its current physical placement.
 
     Args:
         qubit: Logical qubit to remap, if present.
-        logical_to_physical: Mapping from logical index to ``(qpu_id, slot)``.
+        circuit_qubit_to_physical: Mapping from logical index to ``(qpu_id, slot)``.
 
     Returns:
         Remapped logical qubit, or ``None`` when the input is ``None``.
     """
     if qubit is None:
         return None
-    qpu_id, slot_idx = logical_to_physical[qubit.index]
+    qpu_id, slot_idx = circuit_qubit_to_physical[qubit.index]
     return CircuitQubit(register_name=f"q{qpu_id}", index=slot_idx)
 
 
-def _logical_to_physical_qubit(
+def _circuit_qubit_to_physical_qubit(
     qubit: CircuitQubit,
-    schedule_to_network_qpu_id: dict[int, int],
 ) -> PhysicalQubit:
     """Convert a logical qubit reference to a physical network qubit.
 
     Args:
         qubit: Logical qubit in schedule register space.
-        schedule_to_network_qpu_id: Optional remapping from schedule QPU IDs to
-            network QPU IDs.
 
     Returns:
         Physical computation qubit reference for network queries.
@@ -110,20 +108,17 @@ def _logical_to_physical_qubit(
             "CircuitQubit computation register must be q<int>. "
             f"Received {qubit.register_name!r}."
         )
-    register_qpu_id = int(register)
-    qpu_id = _map_qpu_id(register_qpu_id, schedule_to_network_qpu_id)
     from memq_dqc.network import PhysicalQubit
 
     return PhysicalQubit(
-        qpu_id=qpu_id,
+        qpu_id=int(register),
         qubit_id=qubit.index,
         qubit_type="computation",
     )
 
 
-def _physical_to_logical_qubit(
+def _physical_to_circuit_qubit(
     qubit: PhysicalQubit,
-    network_to_schedule_qpu_id: dict[int, int],
 ) -> CircuitQubit:
     # NOTE: This performs a representational mapping from a PhysicalQubit to
     # a CircuitQubit reference; no additional semantic information is added.
@@ -131,32 +126,26 @@ def _physical_to_logical_qubit(
 
     Args:
         qubit: Physical qubit to convert.
-        network_to_schedule_qpu_id: Optional remapping from network QPU IDs to
-            schedule QPU IDs.
 
     Returns:
         Logical qubit using ``q`` registers for computation qubits and ``c``
         registers for communication qubits.
     """
-    qpu_id = _map_qpu_id(qubit.qpu_id, network_to_schedule_qpu_id)
     prefix = "c" if qubit.qubit_type == "communication" else "q"
     return CircuitQubit(
-        register_name=f"{prefix}{qpu_id}", index=qubit.qubit_id
+        register_name=f"{prefix}{qubit.qpu_id}", index=qubit.qubit_id
     )
 
 
 def _order_comm_pair(
     mapped_qubits: list[CircuitQubit],
     comm_pair: tuple[PhysicalQubit, PhysicalQubit],
-    network_to_schedule_qpu_id: dict[int, int],
 ) -> tuple[PhysicalQubit, PhysicalQubit]:
     """Align communication qubit ordering with logical gate operand order.
 
     Args:
         mapped_qubits: Mapped logical operands for a two-qubit gate.
         comm_pair: Communication qubit pair returned by the network.
-        network_to_schedule_qpu_id: Optional remapping from network QPU IDs to
-            schedule QPU IDs.
 
     Returns:
         Communication pair ordered to match ``mapped_qubits`` operand order.
@@ -174,20 +163,17 @@ def _order_comm_pair(
     qpu_b = _qpu_id_from_register_name(mapped_qubits[1].register_name)
     comm_a, comm_b = comm_pair
 
-    comm_a_qpu_id = _map_qpu_id(comm_a.qpu_id, network_to_schedule_qpu_id)
-    comm_b_qpu_id = _map_qpu_id(comm_b.qpu_id, network_to_schedule_qpu_id)
-
-    if comm_a_qpu_id == qpu_a and comm_b_qpu_id == qpu_b:
+    if comm_a.qpu_id == qpu_a and comm_b.qpu_id == qpu_b:
         return comm_a, comm_b
 
-    if comm_a_qpu_id == qpu_b and comm_b_qpu_id == qpu_a:
+    if comm_a.qpu_id == qpu_b and comm_b.qpu_id == qpu_a:
         return comm_b, comm_a
 
     raise ValueError(
         "Communication pair QPU IDs do not match mapped qubit QPU IDs: "
         f"mapped=({mapped_qubits[0].register_name}, "
         f"{mapped_qubits[1].register_name}), "
-        f"comm=({comm_a_qpu_id}, {comm_b_qpu_id})."
+        f"comm=({comm_a.qpu_id}, {comm_b.qpu_id})."
     )
 
 
@@ -233,34 +219,6 @@ def _ordered_network_qpu_ids(network: NetworkGraph) -> list[int]:
     return sorted(qpu_ids)
 
 
-def _sorted_qpu_ids(qpu_ids: list[int]) -> list[int]:
-    """Return QPU IDs in ascending order.
-
-    Args:
-        qpu_ids: QPU IDs to sort.
-
-    Returns:
-        Sorted QPU IDs.
-    """
-    return sorted(qpu_ids)
-
-
-def _map_qpu_id(
-    qpu_id: int,
-    mapping: dict[int, int],
-) -> int:
-    """Map a QPU ID through an optional mapping.
-
-    Args:
-        qpu_id: QPU ID to map.
-        mapping: Mapping dictionary from source to target QPU IDs.
-
-    Returns:
-        Mapped ID when present, otherwise the original ID.
-    """
-    return mapping.get(qpu_id, qpu_id)
-
-
 def _to_ast_qubit_ref(qubit: CircuitQubit) -> ast.IndexedIdentifier:
     """Build an AST indexed identifier for a logical qubit.
 
@@ -278,13 +236,13 @@ def _to_ast_qubit_ref(qubit: CircuitQubit) -> ast.IndexedIdentifier:
 
 def _remap_statement_qubits(
     statement: ast.Statement,
-    logical_to_physical: dict[int, tuple[int, int]],
+    circuit_qubit_to_physical: dict[int, tuple[int, int]],
 ) -> ast.Statement:
     """Clone and remap qubit references inside a supported AST statement.
 
     Args:
         statement: Statement to clone and remap.
-        logical_to_physical: Mapping from logical index to ``(qpu_id, slot)``.
+        circuit_qubit_to_physical: Mapping from logical index to ``(qpu_id, slot)``.
 
     Returns:
         Remapped statement clone.
@@ -292,27 +250,31 @@ def _remap_statement_qubits(
     mapped = clone_statement_node(statement)
     if isinstance(mapped, ast.QuantumGate):
         mapped.qubits = [
-            _map_qubit_ref(qubit, logical_to_physical)
+            _map_qubit_ref(qubit, circuit_qubit_to_physical)
             for qubit in mapped.qubits
         ]
         return mapped
     if isinstance(mapped, ast.QuantumMeasurementStatement):
         mapped.measure = ast.QuantumMeasurement(
-            qubit=_map_qubit_ref(mapped.measure.qubit, logical_to_physical)
+            qubit=_map_qubit_ref(
+                mapped.measure.qubit, circuit_qubit_to_physical
+            )
         )
         return mapped
     if isinstance(mapped, ast.QuantumBarrier):
         mapped.qubits = [
-            _map_qubit_ref(qubit, logical_to_physical)
+            _map_qubit_ref(qubit, circuit_qubit_to_physical)
             for qubit in mapped.qubits
         ]
         return mapped
     if isinstance(mapped, ast.QuantumReset):
-        mapped.qubits = _map_qubit_ref(mapped.qubits, logical_to_physical)
+        mapped.qubits = _map_qubit_ref(
+            mapped.qubits, circuit_qubit_to_physical
+        )
         return mapped
     if isinstance(mapped, ast.QuantumPhase):
         mapped.qubits = [
-            _map_qubit_ref(qubit, logical_to_physical)
+            _map_qubit_ref(qubit, circuit_qubit_to_physical)
             for qubit in mapped.qubits
         ]
         return mapped
@@ -321,13 +283,13 @@ def _remap_statement_qubits(
 
 def _map_qubit_ref(
     qubit: ast.IndexedIdentifier | ast.Identifier,
-    logical_to_physical: dict[int, tuple[int, int]],
+    circuit_qubit_to_physical: dict[int, tuple[int, int]],
 ) -> ast.IndexedIdentifier:
     """Map one indexed qubit reference to per-QPU register space.
 
     Args:
         qubit: Qubit AST reference to remap.
-        logical_to_physical: Mapping from logical index to ``(qpu_id, slot)``.
+        circuit_qubit_to_physical: Mapping from logical index to ``(qpu_id, slot)``.
 
     Returns:
         Remapped qubit AST reference.
@@ -339,7 +301,7 @@ def _map_qubit_ref(
     if isinstance(qubit, ast.Identifier):
         raise NotImplementedError("Cannot remap unindexed qubit identifiers.")
     logical_index = extract_qubit_index(qubit)
-    qpu_id, slot_idx = logical_to_physical[logical_index]
+    qpu_id, slot_idx = circuit_qubit_to_physical[logical_index]
     return ast.IndexedIdentifier(
         name=ast.Identifier(f"q{qpu_id}"),
         indices=[[ast.IntegerLiteral(slot_idx)]],

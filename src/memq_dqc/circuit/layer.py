@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 
-from memq_dqc.circuit.ops import Op
+from memq_dqc.circuit.op import Op
 
 
 @dataclass(frozen=True, slots=True)

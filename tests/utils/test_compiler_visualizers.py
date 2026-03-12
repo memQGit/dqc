@@ -7,13 +7,16 @@
 
 import pytest
 
-from memq_dqc.circuit import CircuitDAG
+from memq_dqc.circuit import Circuit
 from memq_dqc.network import NetworkGraph
 from memq_dqc.partition import Partitioner
 from memq_dqc.partition.partitioner import QPU
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.visualization import (
+    SvgDashboardPanel,
+    SvgDashboardSection,
     SvgDocument,
+    build_svg_dashboard_html,
     plot_distributed_circuit,
     plot_partition_flow,
     plot_window_activity,
@@ -36,7 +39,7 @@ def test_plot_distributed_circuit_marks_remote_gates(
     three_comp_one_comm_x2_network_path,
 ) -> None:
     program = load_qasm_program(str(simple1_circuit_path))
-    dag = CircuitDAG(program)
+    circuit = Circuit(program)
     network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
     partitioner = Partitioner(
         network,
@@ -48,7 +51,7 @@ def test_plot_distributed_circuit_marks_remote_gates(
     assert partitioner.windows is not None
 
     document = plot_distributed_circuit(
-        dag,
+        circuit,
         schedule=partitioner.schedule,
         windows=partitioner.windows,
     )
@@ -61,7 +64,7 @@ def test_plot_distributed_circuit_marks_remote_gates(
 
 def test_plot_distributed_circuit_renders_measurement_subscript() -> None:
     program = load_qasm_program("examples/circuits/simple1.qasm")
-    dag = CircuitDAG(program)
+    circuit = Circuit(program)
     network = NetworkGraph("examples/networks/3comp_1comm_x2.json")
     partitioner = Partitioner(
         network,
@@ -73,7 +76,7 @@ def test_plot_distributed_circuit_renders_measurement_subscript() -> None:
     assert partitioner.windows is not None
 
     document = plot_distributed_circuit(
-        dag,
+        circuit,
         schedule=partitioner.schedule,
         windows=partitioner.windows,
     )
@@ -98,7 +101,7 @@ def test_plot_window_activity_returns_svg(
     three_comp_one_comm_x2_network_path,
 ) -> None:
     program = load_qasm_program(str(simple1_circuit_path))
-    dag = CircuitDAG(program)
+    circuit = Circuit(program)
     network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
     partitioner = Partitioner(
         network,
@@ -110,7 +113,7 @@ def test_plot_window_activity_returns_svg(
     assert partitioner.windows is not None
 
     document = plot_window_activity(
-        dag,
+        circuit,
         partitioner.schedule,
         partitioner.windows,
     )
@@ -125,7 +128,7 @@ def test_plot_window_activity_validates_schedule_and_windows(
     three_comp_one_comm_x2_network_path,
 ) -> None:
     program = load_qasm_program(str(bell_circuit_path))
-    dag = CircuitDAG(program)
+    circuit = Circuit(program)
     network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
     partitioner = Partitioner(
         network,
@@ -138,7 +141,7 @@ def test_plot_window_activity_validates_schedule_and_windows(
 
     with pytest.raises(ValueError, match="same length"):
         plot_window_activity(
-            dag,
+            circuit,
             partitioner.schedule[:-1],
             partitioner.windows,
         )
@@ -160,3 +163,37 @@ def test_svg_document_writes_interactive_html(tmp_path) -> None:
     assert "Viewer Smoke Test" in html
     assert 'data-action="fit"' in html
     assert 'class="viewer__svg"' in html
+
+
+def test_build_svg_dashboard_html_renders_sections() -> None:
+    document = SvgDocument(
+        width=24,
+        height=24,
+        svg=(
+            '<svg xmlns="http://www.w3.org/2000/svg" '
+            'width="24" height="24"></svg>'
+        ),
+    )
+
+    html = build_svg_dashboard_html(
+        [
+            SvgDashboardSection(
+                title="Sample Case",
+                description="Combined output for one partitioning run.",
+                panels=[
+                    SvgDashboardPanel(
+                        title="Distributed circuit",
+                        document=document,
+                        description="Circuit-level view.",
+                    )
+                ],
+            )
+        ],
+        title="Visualization Dashboard",
+    )
+
+    assert "Visualization Dashboard" in html
+    assert "Sample Case" in html
+    assert "Distributed circuit" in html
+    assert "Combined output for one partitioning run." in html
+    assert 'class="dashboard-card__svg"' in html

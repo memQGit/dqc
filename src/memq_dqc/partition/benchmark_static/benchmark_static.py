@@ -50,13 +50,13 @@ class BenchmarkStaticPartitioner(BasePartitioner):
         Updates:
             cost, schedule, and windows with the latest partitioning results.
         """
-        num_qubits = count_total_qubits(self.program)
+        num_qubits = count_total_qubits(self.circuit.mono.program)
         partition_sizes = _effective_partition_sizes(
             self.network.comp_qubits_per_qpu(),
             num_qubits,
         )
-        dag = self.dag
-        num_two_qubit_ops = dag.num_two_qubit_gates
+        circuit = self.circuit
+        num_two_qubit_ops = circuit.mono.num_two_qubit_gates
         if self.window_length is None:
             if num_two_qubit_ops == 0:
                 self.window_length = 1
@@ -69,19 +69,18 @@ class BenchmarkStaticPartitioner(BasePartitioner):
                 self.window_length = max(
                     min_window, min(int(round(base_window)), max_window)
                 )
-        windows = get_windows(dag, self.window_length)
+        windows = get_windows(circuit, self.window_length)
         if not windows:
             raise ValueError(
                 "No operation windows generated from the circuit."
             )
-        self.windows = windows
-
-        qpus = [QPU(id=idx) for idx in range(len(partition_sizes))]
-        static_partition = _build_static_partition(partition_sizes, num_qubits)
-
         network_qpu_ids = sorted(
             {qubit.qpu_id for qubit in self.network.qubit_type_map}
         )
+        self.windows = windows
+
+        qpus = [QPU(id=qpu_id) for qpu_id in network_qpu_ids]
+        static_partition = _build_static_partition(partition_sizes, num_qubits)
 
         def _remote_ebit_multiplier(part_a: int, part_b: int) -> float:
             qpu_a = network_qpu_ids[part_a]

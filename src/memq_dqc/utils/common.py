@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from memq_dqc.circuit.ops import Op
+    from memq_dqc.circuit.op import Op
     from memq_dqc.partition.partitioner import QPU
 
 
