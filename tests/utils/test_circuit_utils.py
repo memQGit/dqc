@@ -5,12 +5,14 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+from typing import Any, cast
 
 import pytest
 from openqasm3 import ast
 
 from memq_dqc.circuit import Circuit
 from memq_dqc.network import NetworkGraph
+from memq_dqc.partition.partitioner import QPU
 from memq_dqc.preprocessing.qasm import (
     count_total_qubits,
     extract_qubit_index,
@@ -236,6 +238,14 @@ def test_movement_cost_returns_inf_for_unrouteable_swap(
         network=network,
         qpu_ids=[0, 1],
     ) == float("inf")
+
+
+def test_movement_cost_rejects_qpu_keyed_partitions() -> None:
+    old_partition = cast(Any, {QPU(id=1): {0}, QPU(id=3): {1}})
+    new_partition = cast(Any, {QPU(id=1): {1}, QPU(id=3): {0}})
+
+    with pytest.raises(TypeError, match="list-based partitions"):
+        movement_cost(new_partition, old_partition)
 
 
 def test_qubit_partition_map() -> None:

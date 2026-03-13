@@ -116,8 +116,8 @@ def build_window_interaction_graph(
 
 
 def movement_cost(
-    new_partition: list[set[int]] | dict[QPU, set[int]],
-    old_partition: list[set[int]] | dict[QPU, set[int]],
+    new_partition: list[set[int]],
+    old_partition: list[set[int]],
     *,
     network: NetworkGraph | None = None,
     qpu_ids: list[int] | None = None,
@@ -134,8 +134,15 @@ def movement_cost(
         The movement cost.
 
     Raises:
+        TypeError: If either partition is provided as a QPU-keyed mapping.
         ValueError: If only one of ``network`` or ``qpu_ids`` is provided.
     """
+    if isinstance(new_partition, dict) or isinstance(old_partition, dict):
+        raise TypeError(
+            "movement_cost requires list-based partitions; "
+            "QPU-keyed schedule mappings are not supported."
+        )
+
     if (network is None) != (qpu_ids is None):
         raise ValueError(
             "movement_cost requires both network and qpu_ids when using "
