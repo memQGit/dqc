@@ -127,7 +127,7 @@ def build_distributed_statements(
 
     Utilizes partition to remap circuit qubits to physical qubits, then
     inserts necessary state teleport and gate teleport operations to build
-    the distributed program from the orginal monolithic program.
+    the distributed program from the original monolithic program.
 
     Args:
         statements: Cleaned statements from the base circuit.
