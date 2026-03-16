@@ -6,24 +6,49 @@
 # ============================================================================
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from qiskit import qasm3
 from qiskit.converters import circuit_to_dag
-from qiskit.dagcircuit import DAGCircuit, DAGOpNode
+from qiskit.dagcircuit import DAGCircuit
 
 from memq_dqc.builder.extract_utils import SwapOp
-from memq_dqc.circuit.dag import CircuitDAG as DAG
-from memq_dqc.circuit.dag import DistributedCircuitDAG
+from memq_dqc.circuit import Circuit, DistributedCircuit, Op
+from memq_dqc.circuit.dag import CircuitDAG
 from memq_dqc.network import NetworkGraph, PhysicalQubit
 from memq_dqc.partition.partitioner import QPU
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
 
 
-def _build_memq_dag(qasm_path: Path) -> DAG:
-    program = load_qasm_program(str(qasm_path))
-    return DAG(program)
+def _build_memq_circuit(qasm_path: Path) -> Circuit:
+    return Circuit(str(qasm_path))
+
+
+def _build_memq_dag(qasm_path: Path) -> CircuitDAG:
+    return _build_memq_circuit(qasm_path).mono.dag
+
+
+def _build_distributed(
+    circuit: Circuit,
+    remote_statement_ids: set[int],
+    *,
+    swaps_schedule: list[list[SwapOp]],
+    windows: list[list[Op]],
+    schedule: list[dict[QPU, set[int]]],
+    network: Any,
+    comp_qubits_per_qpu: list[int] | None = None,
+    comm_qubits_per_qpu: list[int] | None = None,
+) -> DistributedCircuit:
+    return circuit.build_distributed(
+        remote_statement_ids=remote_statement_ids,
+        swaps_schedule=swaps_schedule,
+        windows=windows,
+        schedule=schedule,
+        network=network,
+        comp_qubits_per_qpu=comp_qubits_per_qpu,
+        comm_qubits_per_qpu=comm_qubits_per_qpu,
+    )
 
 
 def _build_qiskit_dag(qasm_path: Path) -> DAGCircuit:
@@ -32,13 +57,13 @@ def _build_qiskit_dag(qasm_path: Path) -> DAGCircuit:
     return circuit_to_dag(circuit)
 
 
-def _qiskit_op_nodes(dag: DAGCircuit) -> list[DAGOpNode]:
+def _qiskit_op_nodes(dag: DAGCircuit) -> list[Any]:
     return list(dag.op_nodes())
 
 
 def _qiskit_op_signatures(
     dag: DAGCircuit,
-    nodes: list[DAGOpNode],
+    nodes: list[Any],
 ) -> list[tuple[str, tuple[int, ...]]]:
     qubit_index = {qubit: idx for idx, qubit in enumerate(dag.qubits)}
     return [
@@ -49,7 +74,7 @@ def _qiskit_op_signatures(
 
 def _qiskit_edges(
     dag: DAGCircuit,
-    nodes: list[DAGOpNode],
+    nodes: list[Any],
 ) -> dict[tuple[int, int], set[int]]:
     node_index = {node: idx for idx, node in enumerate(nodes)}
     edges: dict[tuple[int, int], set[int]] = {}
@@ -65,7 +90,7 @@ def _qiskit_edges(
     return edges
 
 
-def _memq_edges(dag: DAG) -> dict[tuple[int, int], set[int]]:
+def _memq_edges(dag: CircuitDAG) -> dict[tuple[int, int], set[int]]:
     edges: dict[tuple[int, int], set[int]] = {}
     for u, v, data in dag.graph.edges(data=True):
         edges[(u, v)] = {q.index for q in data["qubits"]}
@@ -91,10 +116,12 @@ def _qiskit_layers(
     return layers
 
 
-def _memq_layers(dag: DAG) -> list[frozenset[tuple[str, tuple[int, ...]]]]:
+def _memq_layers(
+    dag: CircuitDAG,
+) -> list[frozenset[tuple[str, tuple[int, ...]]]]:
     return [
         frozenset((op.name, op.qubit_indices) for op in layer)
-        for layer in dag.extract_layers()
+        for layer in dag.layers
     ]
 
 
@@ -110,11 +137,12 @@ def test_dag_matches_qiskit(
     fixture_name: str,
 ) -> None:
     qasm_path = request.getfixturevalue(fixture_name)
+    memq_circuit = _build_memq_circuit(qasm_path)
     memq_dag = _build_memq_dag(qasm_path)
     qiskit_dag = _build_qiskit_dag(qasm_path)
     qiskit_nodes = _qiskit_op_nodes(qiskit_dag)
 
-    memq_ops = [(op.name, op.qubit_indices) for op in memq_dag.ops]
+    memq_ops = [(op.name, op.qubit_indices) for op in memq_circuit.mono.ops]
     qiskit_ops = _qiskit_op_signatures(qiskit_dag, qiskit_nodes)
     assert memq_ops == qiskit_ops
     assert _memq_edges(memq_dag) == _qiskit_edges(qiskit_dag, qiskit_nodes)
@@ -188,36 +216,78 @@ def test_count_two_qubit_gates(
     expected_two_qubit_gates: int,
 ) -> None:
     qasm_path = request.getfixturevalue(fixture_name)
-    dag = _build_memq_dag(qasm_path)
-    assert dag.num_two_qubit_gates == expected_two_qubit_gates
+    circuit = _build_memq_circuit(qasm_path)
+    assert circuit.mono.num_two_qubit_gates == expected_two_qubit_gates
 
 
 def test_distributed_dag_counts_remote_gates(
-    request: pytest.FixtureRequest,
+    tmp_path: Path,
 ) -> None:
-    # MUST FILL IN
-    pass
+    class _RemoteGateNetwork:
+        def __init__(self) -> None:
+            self.qubit_type_map = {
+                PhysicalQubit(0, 0, "computation"): "computation",
+                PhysicalQubit(1, 0, "computation"): "computation",
+            }
+
+        def get_comm_pair_options(self, qubit_a, qubit_b):
+            comm_pair = (
+                PhysicalQubit(0, 0, "communication"),
+                PhysicalQubit(1, 0, "communication"),
+            )
+            return [
+                (
+                    0,
+                    comm_pair,
+                    ([qubit_a, comm_pair[0]], [qubit_b, comm_pair[1]]),
+                )
+            ]
+
+    qasm_path = tmp_path / "single_remote.qasm"
+    qasm_path.write_text(
+        "OPENQASM 3.0;\nqubit[2] q;\ncx q[0], q[1];\n",
+        encoding="utf-8",
+    )
+    circuit = _build_memq_circuit(qasm_path)
+    remote_statement_ids = {circuit.mono.ops[0].statement_id}
+    distributed = _build_distributed(
+        circuit,
+        remote_statement_ids,
+        swaps_schedule=[],
+        windows=[circuit.mono.ops],
+        schedule=[{QPU(id=0): {0}, QPU(id=1): {1}}],
+        comp_qubits_per_qpu=[1, 1],
+        comm_qubits_per_qpu=[1, 1],
+        network=_RemoteGateNetwork(),
+    )
+
+    assert distributed.num_remote_gates == 1
+    assert distributed.dag.depth == len(distributed.dag.layers)
 
 
 def test_distributed_dag_validates_schedule_and_swaps_shape(
     request: pytest.FixtureRequest,
 ) -> None:
+    class _StubNetwork:
+        qpus = {0: object()}
+
     qasm_path = request.getfixturevalue("bell_circuit_path")
-    base_dag = _build_memq_dag(qasm_path)
+    circuit = _build_memq_circuit(qasm_path)
     remote_statement_ids: set[int] = set()
     qpu0 = QPU(id=0)
-    all_qubits = {q.index for op in base_dag.ops for q in op.qubits}
-    windows = [base_dag.ops[:1], base_dag.ops[1:]]
+    all_qubits = {q.index for op in circuit.mono.ops for q in op.qubits}
+    windows = [circuit.mono.ops[:1], circuit.mono.ops[1:]]
     schedule = [{qpu0: all_qubits}]
     swaps_schedule: list[list[SwapOp]] = []
 
     with pytest.raises(ValueError, match="schedule/windows length mismatch"):
-        DistributedCircuitDAG(
-            base_dag,
+        _build_distributed(
+            circuit,
             remote_statement_ids,
             swaps_schedule=swaps_schedule,
             windows=windows,
             schedule=schedule,
+            network=_StubNetwork(),
         )
 
 
@@ -231,7 +301,7 @@ def test_distributed_dag_remote_gate_uses_final_swapped_qubits(
                 PhysicalQubit(1, 0, "computation"): "computation",
             }
 
-        def get_comm_pair(self, qubit_a, qubit_b):
+        def get_comm_pair_options(self, qubit_a, qubit_b):
             comm_pair = (
                 PhysicalQubit(0, 0, "communication"),
                 PhysicalQubit(1, 0, "communication"),
@@ -246,22 +316,22 @@ def test_distributed_dag_remote_gate_uses_final_swapped_qubits(
                 PhysicalQubit(qubit_b.qpu_id, 2, "computation"),
                 comm_pair[1],
             ]
-            return 2, comm_pair, (path_a, path_b)
+            return [(2, comm_pair, (path_a, path_b))]
 
     qasm_path = tmp_path / "single_remote.qasm"
     qasm_path.write_text(
         "OPENQASM 3.0;\nqubit[2] q;\ncx q[0], q[1];\n",
         encoding="utf-8",
     )
-    base_dag = _build_memq_dag(qasm_path)
-    remote_statement_ids = {base_dag.ops[0].statement_id}
+    circuit = _build_memq_circuit(qasm_path)
+    remote_statement_ids = {circuit.mono.ops[0].statement_id}
     qpu0 = QPU(id=0)
     qpu1 = QPU(id=1)
-    windows = [base_dag.ops]
+    windows = [circuit.mono.ops]
     schedule = [{qpu0: {0}, qpu1: {1}}]
 
-    distributed_dag = DistributedCircuitDAG(
-        base_dag,
+    distributed = _build_distributed(
+        circuit,
         remote_statement_ids=remote_statement_ids,
         swaps_schedule=[],
         windows=windows,
@@ -273,7 +343,7 @@ def test_distributed_dag_remote_gate_uses_final_swapped_qubits(
 
     remote_gates = [
         statement
-        for statement in distributed_dag.statements
+        for statement in distributed.statements
         if isinstance(statement, CleanedQuantumGate)
         and statement.name == "rcx"
     ]
@@ -294,7 +364,7 @@ def test_distributed_dag_remote_gate_local_swaps_follow_path_order(
                 PhysicalQubit(1, 0, "computation"): "computation",
             }
 
-        def get_comm_pair(self, qubit_a, qubit_b):
+        def get_comm_pair_options(self, qubit_a, qubit_b):
             comm_pair = (
                 PhysicalQubit(0, 0, "communication"),
                 PhysicalQubit(1, 0, "communication"),
@@ -306,22 +376,22 @@ def test_distributed_dag_remote_gate_local_swaps_follow_path_order(
                 PhysicalQubit(qubit_b.qpu_id, 2, "computation"),
                 comm_pair[1],
             ]
-            return 3, comm_pair, (path_a, path_b)
+            return [(3, comm_pair, (path_a, path_b))]
 
     qasm_path = tmp_path / "single_remote.qasm"
     qasm_path.write_text(
         "OPENQASM 3.0;\nqubit[2] q;\ncx q[0], q[1];\n",
         encoding="utf-8",
     )
-    base_dag = _build_memq_dag(qasm_path)
-    remote_statement_ids = {base_dag.ops[0].statement_id}
+    circuit = _build_memq_circuit(qasm_path)
+    remote_statement_ids = {circuit.mono.ops[0].statement_id}
     qpu0 = QPU(id=0)
     qpu1 = QPU(id=1)
-    windows = [base_dag.ops]
+    windows = [circuit.mono.ops]
     schedule = [{qpu0: {0}, qpu1: {1}}]
 
-    distributed_dag = DistributedCircuitDAG(
-        base_dag,
+    distributed = _build_distributed(
+        circuit,
         remote_statement_ids=remote_statement_ids,
         swaps_schedule=[],
         windows=windows,
@@ -333,7 +403,7 @@ def test_distributed_dag_remote_gate_local_swaps_follow_path_order(
 
     remote_gate_sequence = [
         statement
-        for statement in distributed_dag.statements
+        for statement in distributed.statements
         if isinstance(statement, CleanedQuantumGate)
     ]
 
@@ -376,25 +446,6 @@ def test_distributed_dag_remote_gate_rejects_comm_data_operands(
                 PhysicalQubit(1, 0, "computation"): "computation",
             }
 
-        def get_comm_pair(self, qubit_a, qubit_b):
-            # Invalid for remote-gate data operands:
-            # path_a penultimate node is communication.
-            bad_comm_pair = (
-                PhysicalQubit(0, 1, "communication"),
-                PhysicalQubit(1, 0, "communication"),
-            )
-            bad_path_a = [
-                qubit_a,
-                PhysicalQubit(0, 0, "communication"),
-                bad_comm_pair[0],
-            ]
-            bad_path_b = [
-                qubit_b,
-                PhysicalQubit(1, 1, "computation"),
-                bad_comm_pair[1],
-            ]
-            return 2, bad_comm_pair, (bad_path_a, bad_path_b)
-
         def get_comm_pair_options(self, qubit_a, qubit_b):
             bad_comm_pair = (
                 PhysicalQubit(0, 1, "communication"),
@@ -435,13 +486,13 @@ def test_distributed_dag_remote_gate_rejects_comm_data_operands(
         "OPENQASM 3.0;\nqubit[2] q;\ncp(pi/8) q[0], q[1];\n",
         encoding="utf-8",
     )
-    base_dag = _build_memq_dag(qasm_path)
-    remote_statement_ids = {base_dag.ops[0].statement_id}
+    circuit = _build_memq_circuit(qasm_path)
+    remote_statement_ids = {circuit.mono.ops[0].statement_id}
     schedule = [{QPU(id=0): {0}, QPU(id=1): {1}}]
-    windows = [base_dag.ops]
+    windows = [circuit.mono.ops]
 
-    distributed_dag = DistributedCircuitDAG(
-        base_dag=base_dag,
+    distributed = _build_distributed(
+        circuit,
         remote_statement_ids=remote_statement_ids,
         swaps_schedule=[],
         windows=windows,
@@ -453,7 +504,7 @@ def test_distributed_dag_remote_gate_rejects_comm_data_operands(
 
     remote_gates = [
         statement
-        for statement in distributed_dag.statements
+        for statement in distributed.statements
         if isinstance(statement, CleanedQuantumGate)
         and statement.name == "rcp"
     ]
@@ -474,29 +525,31 @@ def test_distributed_dag_remote_cry_is_rewritten_to_rcry(
                 PhysicalQubit(1, 0, "computation"): "computation",
             }
 
-        def get_comm_pair(self, qubit_a, qubit_b):
+        def get_comm_pair_options(self, qubit_a, qubit_b):
             comm_pair = (
                 PhysicalQubit(0, 0, "communication"),
                 PhysicalQubit(1, 0, "communication"),
             )
-            return (
-                0,
-                comm_pair,
-                ([qubit_a, comm_pair[0]], [qubit_b, comm_pair[1]]),
-            )
+            return [
+                (
+                    0,
+                    comm_pair,
+                    ([qubit_a, comm_pair[0]], [qubit_b, comm_pair[1]]),
+                )
+            ]
 
     qasm_path = tmp_path / "single_remote_cry.qasm"
     qasm_path.write_text(
         "OPENQASM 3.0;\nqubit[2] q;\ncry(pi/8) q[0], q[1];\n",
         encoding="utf-8",
     )
-    base_dag = _build_memq_dag(qasm_path)
-    remote_statement_ids = {base_dag.ops[0].statement_id}
+    circuit = _build_memq_circuit(qasm_path)
+    remote_statement_ids = {circuit.mono.ops[0].statement_id}
     schedule = [{QPU(id=0): {0}, QPU(id=1): {1}}]
-    windows = [base_dag.ops]
+    windows = [circuit.mono.ops]
 
-    distributed_dag = DistributedCircuitDAG(
-        base_dag=base_dag,
+    distributed = _build_distributed(
+        circuit,
         remote_statement_ids=remote_statement_ids,
         swaps_schedule=[],
         windows=windows,
@@ -508,7 +561,7 @@ def test_distributed_dag_remote_cry_is_rewritten_to_rcry(
 
     remote_gates = [
         statement
-        for statement in distributed_dag.statements
+        for statement in distributed.statements
         if isinstance(statement, CleanedQuantumGate)
         and statement.name == "rcry"
     ]
@@ -530,20 +583,20 @@ def test_distributed_dag_unsupported_remote_gate_raises_direct_error(
                 PhysicalQubit(1, 0, "computation"): "computation",
             }
 
-        def get_comm_pair(self, qubit_a, qubit_b):
+        def get_comm_pair_options(self, qubit_a, qubit_b):
             comm_pair = (
                 PhysicalQubit(0, 0, "communication"),
                 PhysicalQubit(1, 0, "communication"),
             )
-            return (
-                0,
-                comm_pair,
-                ([qubit_a, comm_pair[0]], [qubit_b, comm_pair[1]]),
-            )
+            return [
+                (
+                    0,
+                    comm_pair,
+                    ([qubit_a, comm_pair[0]], [qubit_b, comm_pair[1]]),
+                )
+            ]
 
-        def get_directional_remote_gate_qpu_route(
-            self, source_qpu_id, target_qpu_id
-        ):
+        def get_qpu_route(self, source_qpu_id, target_qpu_id):
             return [source_qpu_id, target_qpu_id]
 
     qasm_path = tmp_path / "single_remote_unsupported.qasm"
@@ -551,17 +604,17 @@ def test_distributed_dag_unsupported_remote_gate_raises_direct_error(
         "OPENQASM 3.0;\nqubit[2] q;\ncy q[0], q[1];\n",
         encoding="utf-8",
     )
-    base_dag = _build_memq_dag(qasm_path)
-    remote_statement_ids = {base_dag.ops[0].statement_id}
+    circuit = _build_memq_circuit(qasm_path)
+    remote_statement_ids = {circuit.mono.ops[0].statement_id}
     schedule = [{QPU(id=0): {0}, QPU(id=1): {1}}]
-    windows = [base_dag.ops]
+    windows = [circuit.mono.ops]
 
     with pytest.raises(
         ValueError,
         match="Unsupported remote two-qubit gate 'cy'",
     ):
-        DistributedCircuitDAG(
-            base_dag=base_dag,
+        _build_distributed(
+            circuit,
             remote_statement_ids=remote_statement_ids,
             swaps_schedule=[],
             windows=windows,
@@ -584,13 +637,13 @@ def test_distributed_dag_routes_remote_gate_through_intermediary_qpu(
         "OPENQASM 3.0;\nqubit[2] q;\ncx q[0], q[1];\n",
         encoding="utf-8",
     )
-    base_dag = _build_memq_dag(qasm_path)
-    remote_statement_ids = {base_dag.ops[0].statement_id}
-    schedule = [{QPU(id=0): {0}, QPU(id=1): set(), QPU(id=2): {1}}]
-    windows = [base_dag.ops]
+    circuit = _build_memq_circuit(qasm_path)
+    remote_statement_ids = {circuit.mono.ops[0].statement_id}
+    schedule = [{QPU(id=1): {0}, QPU(id=2): set(), QPU(id=3): {1}}]
+    windows = [circuit.mono.ops]
 
-    distributed_dag = DistributedCircuitDAG(
-        base_dag=base_dag,
+    distributed = _build_distributed(
+        circuit,
         remote_statement_ids=remote_statement_ids,
         swaps_schedule=[],
         windows=windows,
@@ -602,13 +655,13 @@ def test_distributed_dag_routes_remote_gate_through_intermediary_qpu(
 
     routed_rswaps = [
         statement
-        for statement in distributed_dag.statements
+        for statement in distributed.statements
         if isinstance(statement, CleanedQuantumGate)
         and statement.name == "rswap"
     ]
     routed_remote_gates = [
         statement
-        for statement in distributed_dag.statements
+        for statement in distributed.statements
         if isinstance(statement, CleanedQuantumGate)
         and statement.name == "rcx"
     ]
@@ -627,21 +680,21 @@ def test_distributed_dag_remote_swaps_require_network(
         "OPENQASM 3.0;\nqubit[2] q;\nh q[0];\nx q[1];\n",
         encoding="utf-8",
     )
-    base_dag = _build_memq_dag(qasm_path)
+    circuit = _build_memq_circuit(qasm_path)
     qpu0 = QPU(id=0)
     qpu1 = QPU(id=1)
     schedule = [{qpu0: {0}, qpu1: {1}}, {qpu0: {0}, qpu1: {1}}]
-    windows = [base_dag.ops[:1], base_dag.ops[1:]]
+    windows = [circuit.mono.ops[:1], circuit.mono.ops[1:]]
     swaps_schedule = [
         [SwapOp(q0=0, q1=1, pos0=(0, 0), pos1=(1, 0))],
     ]
 
     with pytest.raises(
         ValueError,
-        match="Network graph is required to build remote swaps",
+        match="Network graph is required to build distributed circuits",
     ):
-        DistributedCircuitDAG(
-            base_dag=base_dag,
+        _build_distributed(
+            circuit,
             remote_statement_ids=set(),
             swaps_schedule=swaps_schedule,
             windows=windows,
@@ -681,16 +734,16 @@ def test_distributed_dag_remote_swap_uses_two_disjoint_comm_pairs(
         "OPENQASM 3.0;\nqubit[2] q;\nh q[0];\nx q[1];\n",
         encoding="utf-8",
     )
-    base_dag = _build_memq_dag(qasm_path)
+    circuit = _build_memq_circuit(qasm_path)
     qpu0 = QPU(id=0)
     qpu1 = QPU(id=1)
     schedule = [{qpu0: {0}, qpu1: {1}}, {qpu0: {0}, qpu1: {1}}]
-    windows = [base_dag.ops[:1], base_dag.ops[1:]]
+    windows = [circuit.mono.ops[:1], circuit.mono.ops[1:]]
     swaps_schedule = [
         [SwapOp(q0=0, q1=1, pos0=(0, 0), pos1=(1, 0))],
     ]
-    distributed_dag = DistributedCircuitDAG(
-        base_dag=base_dag,
+    distributed = _build_distributed(
+        circuit,
         remote_statement_ids=set(),
         swaps_schedule=swaps_schedule,
         windows=windows,
@@ -702,7 +755,7 @@ def test_distributed_dag_remote_swap_uses_two_disjoint_comm_pairs(
 
     rswaps = [
         statement
-        for statement in distributed_dag.statements
+        for statement in distributed.statements
         if isinstance(statement, CleanedQuantumGate)
         and statement.name == "rswap"
     ]
@@ -751,7 +804,11 @@ def test_distributed_dag_routes_nonadjacent_partition_swap(
                 return [source_qpu_id, 1, target_qpu_id]
             if (
                 pair_counts.get(
-                    tuple(sorted((source_qpu_id, target_qpu_id))), 0
+                    (
+                        min(source_qpu_id, target_qpu_id),
+                        max(source_qpu_id, target_qpu_id),
+                    ),
+                    0,
                 )
                 >= min_pairs
             ):
@@ -783,17 +840,17 @@ def test_distributed_dag_routes_nonadjacent_partition_swap(
         "OPENQASM 3.0;\nqubit[3] q;\nh q[0];\nx q[2];\n",
         encoding="utf-8",
     )
-    base_dag = _build_memq_dag(qasm_path)
+    circuit = _build_memq_circuit(qasm_path)
     schedule = [
         {QPU(id=0): {0}, QPU(id=1): {1}, QPU(id=2): {2}},
         {QPU(id=0): {2}, QPU(id=1): {1}, QPU(id=2): {0}},
     ]
-    windows = [base_dag.ops[:1], base_dag.ops[1:]]
+    windows = [circuit.mono.ops[:1], circuit.mono.ops[1:]]
     swaps_schedule = [
         [SwapOp(q0=0, q1=2, pos0=(0, 0), pos1=(2, 0))],
     ]
-    distributed_dag = DistributedCircuitDAG(
-        base_dag=base_dag,
+    distributed = _build_distributed(
+        circuit,
         remote_statement_ids=set(),
         swaps_schedule=swaps_schedule,
         windows=windows,
@@ -805,7 +862,7 @@ def test_distributed_dag_routes_nonadjacent_partition_swap(
 
     rswaps = [
         statement
-        for statement in distributed_dag.statements
+        for statement in distributed.statements
         if isinstance(statement, CleanedQuantumGate)
         and statement.name == "rswap"
     ]
@@ -843,11 +900,11 @@ def test_distributed_dag_remote_swap_requires_two_disjoint_ebit_pairs(
         "OPENQASM 3.0;\nqubit[2] q;\nh q[0];\nx q[1];\n",
         encoding="utf-8",
     )
-    base_dag = _build_memq_dag(qasm_path)
+    circuit = _build_memq_circuit(qasm_path)
     qpu0 = QPU(id=0)
     qpu1 = QPU(id=1)
     schedule = [{qpu0: {0}, qpu1: {1}}, {qpu0: {0}, qpu1: {1}}]
-    windows = [base_dag.ops[:1], base_dag.ops[1:]]
+    windows = [circuit.mono.ops[:1], circuit.mono.ops[1:]]
     swaps_schedule = [
         [SwapOp(q0=0, q1=1, pos0=(0, 0), pos1=(1, 0))],
     ]
@@ -857,8 +914,8 @@ def test_distributed_dag_remote_swap_requires_two_disjoint_ebit_pairs(
         match="State teleportation not supported - currently requires "
         "2 e-bit pairs.",
     ):
-        DistributedCircuitDAG(
-            base_dag=base_dag,
+        _build_distributed(
+            circuit,
             remote_statement_ids=set(),
             swaps_schedule=swaps_schedule,
             windows=windows,

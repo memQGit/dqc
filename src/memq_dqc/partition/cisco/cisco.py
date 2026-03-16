@@ -9,10 +9,13 @@
 
 from __future__ import annotations
 
+import logging
 import math
 
 from openqasm3 import ast
 
+# TODO: these imports should be as limited and repeatable as possible
+from memq_dqc._logging import StepTimer
 from memq_dqc.network import NetworkGraph
 from memq_dqc.partition.partitioner import QPU, BasePartitioner
 from memq_dqc.partition.subroutines import kl_partition
@@ -25,6 +28,8 @@ from memq_dqc.utils import (
     qubit_partition_map,
 )
 from memq_dqc.utils.circuit_utils import build_window_interaction_graph
+
+logger = logging.getLogger(__name__)
 
 
 class CiscoPartitioner(BasePartitioner):
@@ -54,15 +59,18 @@ class CiscoPartitioner(BasePartitioner):
         Updates:
             cost, schedule, and windows with the latest partitioning results.
         """
-        num_qubits = count_total_qubits(self.program)
+        overall_timer = StepTimer()
+        num_qubits = count_total_qubits(self.circuit.mono.program)
         partition_sizes = _effective_partition_sizes(
             self.network.comp_qubits_per_qpu(),
             num_qubits,
         )
-        dag = self.dag
-        num_two_qubit_ops = dag.num_two_qubit_gates
+        circuit = self.circuit
+        num_two_qubit_ops = circuit.mono.num_two_qubit_gates
+        window_length_mode = "provided"
         # Determining optimal window size
         if self.window_length is None:
+            window_length_mode = "auto"
             if num_two_qubit_ops == 0:
                 self.window_length = 1
             else:
@@ -74,11 +82,28 @@ class CiscoPartitioner(BasePartitioner):
                 self.window_length = max(
                     min_window, min(int(round(base_window)), max_window)
                 )
-        windows = get_windows(dag, self.window_length)
+
+        logger.debug(
+            "Cisco partitioning parameters: logical_qubits=%d "
+            "two_qubit_ops=%d window_length=%d mode=%s partition_sizes=%s.",
+            num_qubits,
+            num_two_qubit_ops,
+            self.window_length,
+            window_length_mode,
+            partition_sizes,
+        )
+
+        windows_timer = StepTimer()
+        windows = get_windows(circuit, self.window_length)
         if not windows:
             raise ValueError(
                 "No operation windows generated from the circuit."
             )
+        logger.debug(
+            "Generated %d partition windows in %.3fs.",
+            len(windows),
+            windows_timer.elapsed_seconds(),
+        )
         network_qpu_ids = sorted(
             {qubit.qpu_id for qubit in self.network.qubit_type_map}
         )
@@ -91,7 +116,8 @@ class CiscoPartitioner(BasePartitioner):
             return float(self.network.remote_gate_ebit_cost(qpu_a, qpu_b))
 
         self.windows = windows
-        qpus = [QPU(id=idx) for idx in range(len(partition_sizes))]
+        qpus = [QPU(id=qpu_id) for qpu_id in network_qpu_ids]
+        initial_partition_timer = StepTimer()
         initial_subcircuit = create_initial_subcircuit_graph(
             num_qubits, windows[0]
         )
@@ -105,9 +131,16 @@ class CiscoPartitioner(BasePartitioner):
             # TODO: go through this - relied on codex refactor for time crunch
             edge_cost=_remote_ebit_multiplier,
         )
+        logger.debug(
+            "Initial partition computed in %.3fs with cost=%.3f.",
+            initial_partition_timer.elapsed_seconds(),
+            total_entanglement_cost,
+        )
         window_partitions = [partition_result]
 
-        for ops in windows[1:]:
+        follow_on_timer = StepTimer()
+        for window_idx, ops in enumerate(windows[1:], start=1):
+            window_timer = StepTimer()
             previous_partition = window_partitions[-1]
             partition_map = qubit_partition_map(previous_partition)
             window_graph, active_qubits = build_window_interaction_graph(
@@ -115,6 +148,12 @@ class CiscoPartitioner(BasePartitioner):
             )
             if not active_qubits:
                 window_partitions.append(previous_partition)
+                logger.debug(
+                    "Window %d reused previous partition in %.3fs: "
+                    "no active qubits.",
+                    window_idx,
+                    window_timer.elapsed_seconds(),
+                )
                 continue
 
             active_partition_sizes = [
@@ -137,16 +176,49 @@ class CiscoPartitioner(BasePartitioner):
                 window_graph,
                 candidate_partition,
                 edge_cost=_remote_ebit_multiplier,
-            ) + movement_cost(candidate_partition, previous_partition)
+            ) + movement_cost(
+                candidate_partition,
+                previous_partition,
+                network=self.network,
+                qpu_ids=network_qpu_ids,
+            )
             if candidate_cost <= previous_cost:
                 window_partitions.append(candidate_partition)
                 total_entanglement_cost += candidate_cost
+                decision = "accepted"
             else:
                 window_partitions.append(previous_partition)
                 total_entanglement_cost += previous_cost
+                decision = "reused_previous"
+
+            logger.debug(
+                "Window %d processed in %.3fs: active_qubits=%d "
+                "previous_cost=%.3f candidate_cost=%.3f decision=%s.",
+                window_idx,
+                window_timer.elapsed_seconds(),
+                len(active_qubits),
+                previous_cost,
+                candidate_cost,
+                decision,
+            )
+
+        logger.debug(
+            "Processed %d follow-on windows in %.3fs.",
+            max(0, len(windows) - 1),
+            follow_on_timer.elapsed_seconds(),
+        )
 
         self.cost = total_entanglement_cost
+        schedule_timer = StepTimer()
         self.schedule = _build_schedule(window_partitions, qpus)
+        logger.debug(
+            "Built schedule with %d windows in %.3fs. Total cost=%.3f "
+            "overall_runtime=%.3fs.",
+            len(self.schedule),
+            schedule_timer.elapsed_seconds(),
+            total_entanglement_cost,
+            overall_timer.elapsed_seconds(),
+        )
 
 
 def _effective_partition_sizes(

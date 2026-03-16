@@ -10,6 +10,8 @@ This document describes the high-level module layout and data flow.
 3. Circuit operations are assembled into a `CircuitDAG`
    (`memq_dqc.circuit.dag`).
 4. Partitioning and scheduling operate over DAG ops and layers.
+5. The main workflow APIs can emit progress, timing, and debug diagnostics via
+   the `verbosity` controls on partitioning, extraction, and verification.
 
 ## Packages
 
@@ -32,3 +34,6 @@ This document describes the high-level module layout and data flow.
 - `memq_dqc.circuit.build_dag`
 - `memq_dqc.circuit.CircuitDAG`
 - `memq_dqc.preprocessing.qasm` for QASM preprocessing helpers
+- `memq_dqc.partition.Partitioner.run(verbosity=...)`
+- `memq_dqc.builder.extract_distributed_circuit(..., verbosity=...)`
+- `memq_dqc.verify.verify_distributed_circuit(..., verbosity=...)`

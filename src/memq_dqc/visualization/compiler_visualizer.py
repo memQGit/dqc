@@ -15,7 +15,7 @@ from memq_dqc.utils.common import qubit_partition_map
 from memq_dqc.visualization.svg_document import SvgCanvas, SvgDocument
 
 if TYPE_CHECKING:
-    from memq_dqc.circuit import CircuitDAG, Op
+    from memq_dqc.circuit import Circuit, Op
     from memq_dqc.partition.partitioner import (
         QPU,
         PartitionSchedule,
@@ -34,6 +34,7 @@ _TELEPORT_STROKE = "#4801b0"
 _TEXT_COLOR = "#102a43"
 _MUTED_TEXT = "#52606d"
 _QPU_COLORS = ["#4801b0", "#d702fe", "#3a86ff", "#7c3aed", "#06b6d4"]
+_CIRCUIT_LEGEND_WIDTH = 268.0
 _REMOTE_GATE_NAMES = {
     "cx": "rcx",
     "cp": "rcp",
@@ -86,7 +87,7 @@ class _MeasurementArrow:
 
 
 def plot_distributed_circuit(
-    dag: CircuitDAG,
+    circuit: Circuit,
     *,
     schedule: PartitionSchedule | None = None,
     windows: PartitionWindows | None = None,
@@ -108,7 +109,7 @@ def plot_distributed_circuit(
     rows, with dotted measurement arrows from ``M_z`` boxes to their targets.
 
     Args:
-        dag: Circuit DAG to render.
+        circuit: Circuit to render.
         schedule: Optional partition schedule used for QPU-aware placement.
         windows: Optional partition windows aligned with ``schedule``.
         start_window: First window to render.
@@ -131,8 +132,8 @@ def plot_distributed_circuit(
         raise ValueError("schedule and windows must be provided together.")
 
     if schedule is None or windows is None:
-        windows = [list(dag.ops)]
-        schedule = [_single_qpu_assignment(dag.ops)]
+        windows = [list(circuit.mono.ops)]
+        schedule = [_single_qpu_assignment(circuit.mono.ops)]
 
     if len(schedule) != len(windows):
         raise ValueError("schedule and windows must have the same length.")
@@ -149,7 +150,7 @@ def plot_distributed_circuit(
         raise ValueError("Selected window slice is empty.")
 
     slot_layout = _build_slot_layout(schedule)
-    classical_bits = _extract_classical_bits(dag)
+    classical_bits = _extract_classical_bits(circuit)
     classical_layout = (
         _build_classical_layout(classical_bits) if classical_bits else None
     )
@@ -157,16 +158,17 @@ def plot_distributed_circuit(
         _assignment_positions(window) for window in schedule
     ]
     swap_schedule = synthesize_state_teleportation_swaps(schedule)
+    header_visible = title != ""
+    resolved_title = "Distributed Circuit View" if title is None else title
+    legend_y = 24.0 if header_visible else 12.0
 
-    header_height = 136.0
+    header_height = 110.0 if header_visible else 62.0
     left_margin = 138.0
-    bottom_padding = 54.0
-    classical_section_gap = 34.0 if classical_layout is not None else 0.0
+    bottom_padding = 44.0
+    classical_section_gap = 28.0 if classical_layout is not None else 0.0
     op_step = 42.0
     inter_window_gap = 78.0
-    legend_width = 286.0
-    legend_gap = 28.0
-    trailing_padding = 36.0
+    trailing_padding = 26.0
     gate_column_count = sum(
         len(window.ops) + int(window.omitted_ops > 0)
         for window in selected_windows
@@ -177,7 +179,7 @@ def plot_distributed_circuit(
         + 24.0
     )
     plot_right = left_margin + body_width
-    width = int(plot_right + legend_gap + legend_width + trailing_padding)
+    width = int(max(plot_right + trailing_padding, 620.0))
     classical_height = (
         classical_layout.total_height if classical_layout is not None else 0.0
     )
@@ -221,16 +223,22 @@ def plot_distributed_circuit(
             )
             x_cursor += inter_window_gap
 
-    _draw_title(
+    if header_visible:
+        _draw_title(
+            canvas,
+            width=width,
+            center_x=46.0,
+            title=resolved_title,
+            subtitle=_circuit_subtitle(
+                selected_windows, windows, max_ops_per_window
+            ),
+            anchor="start",
+        )
+    _draw_circuit_legend(
         canvas,
-        width=width,
-        center_x=(left_margin + plot_right) / 2,
-        title=title or "Distributed Circuit View",
-        subtitle=_circuit_subtitle(
-            selected_windows, windows, max_ops_per_window
-        ),
+        x=width - _CIRCUIT_LEGEND_WIDTH - 24.0,
+        y=legend_y,
     )
-    _draw_circuit_legend(canvas, x=plot_right + legend_gap, y=34.0)
     _draw_circuit_background(
         canvas,
         bounds=window_bounds,
@@ -252,6 +260,12 @@ def plot_distributed_circuit(
         top=header_height,
     )
     if classical_layout is not None:
+        _draw_quantum_classical_separator(
+            canvas,
+            left=left_margin - 10.0,
+            right=plot_right,
+            y=classical_top - classical_section_gap / 2,
+        )
         _draw_classical_labels(
             canvas,
             classical_layout,
@@ -287,7 +301,7 @@ def plot_distributed_circuit(
                 label=_gate_label(op.name, is_remote),
                 is_remote=is_remote,
             )
-            cbit_key = _measurement_cbit_key(dag, op)
+            cbit_key = _measurement_cbit_key(circuit, op)
             if cbit_key is not None and classical_layout is not None:
                 measurement_arrows.append(
                     _MeasurementArrow(
@@ -373,26 +387,28 @@ def plot_partition_flow(
     qpu_ids = _sorted_qpu_ids(schedule)
     if show_node_counts is None:
         show_node_counts = len(schedule) <= 30
+    header_visible = title != ""
+    resolved_title = "Partition Flow" if title is None else title
 
-    top = 124.0
-    left = 84.0
-    right = 36.0
-    bottom = 50.0
-    lane_step = 86.0
-    window_step = 18.0 if len(schedule) > 60 else 28.0
-    base_width = left + right + (len(schedule) - 1) * window_step + 52.0
-    width = int(max(base_width, 760.0))
-    left += (width - base_width) / 2
-    height = int(top + bottom + max(1, len(qpu_ids) - 1) * lane_step + 52.0)
+    top = 102.0 if header_visible else 74.0
+    left = 54.0
+    right = 18.0
+    bottom = 36.0
+    lane_step = 72.0
+    window_step = 16.0 if len(schedule) > 60 else 22.0
+    base_width = left + right + (len(schedule) - 1) * window_step + 18.0
+    width = int(max(base_width, 480.0))
+    height = int(top + bottom + max(1, len(qpu_ids) - 1) * lane_step + 36.0)
     canvas = SvgCanvas(width=width, height=height, background="#ffffff")
 
-    _draw_title(
-        canvas,
-        width=width,
-        title=title or "Partition Flow",
-        subtitle="QPU occupancy and migration between partition windows",
-    )
-    _draw_flow_legend(canvas, x=width - 232.0, y=68.0)
+    if header_visible:
+        _draw_title(
+            canvas,
+            width=width,
+            title=resolved_title,
+            subtitle="QPU occupancy and migration between partition windows",
+        )
+    _draw_flow_legend(canvas, x=left, y=16.0 if not header_visible else 72.0)
 
     y_by_qpu = {
         qpu_id: top + idx * lane_step for idx, qpu_id in enumerate(qpu_ids)
@@ -439,9 +455,9 @@ def plot_partition_flow(
         for qpu, qubits in sorted(window.items(), key=lambda item: item[0].id):
             y = y_by_qpu[qpu.id]
             canvas.rect(
-                x=x - 7.0,
+                x=x - 6.0,
                 y=y - 16.0,
-                width=14.0,
+                width=12.0,
                 height=32.0,
                 fill="#ffffff",
                 stroke=_qpu_color(qpu.id),
@@ -462,7 +478,7 @@ def plot_partition_flow(
 
 
 def plot_window_activity(
-    dag: CircuitDAG,
+    circuit: Circuit,
     schedule: PartitionSchedule,
     windows: PartitionWindows,
     *,
@@ -473,7 +489,7 @@ def plot_window_activity(
     """Render per-window gate composition and movement pressure as SVG.
 
     Args:
-        dag: Circuit DAG providing the operation set.
+        circuit: Circuit providing the operation set.
         schedule: Partition schedule aligned with ``windows``.
         windows: Operation windows from the partitioner.
         title: Optional chart title.
@@ -489,8 +505,10 @@ def plot_window_activity(
         raise ValueError("schedule and windows must have the same length.")
     if not schedule:
         raise ValueError("schedule must contain at least one window.")
+    header_visible = title != ""
+    resolved_title = "Window Activity" if title is None else title
 
-    remote_ops = _remote_op_ids(dag, schedule, windows)
+    remote_ops = _remote_op_ids(circuit, schedule, windows)
     single_counts: list[int] = []
     local_two_counts: list[int] = []
     remote_two_counts: list[int] = []
@@ -521,26 +539,28 @@ def plot_window_activity(
     )
     max_movement = max(movement, default=0)
 
-    top = 108.0
-    left = 72.0
-    right = 64.0
-    bottom = 56.0
-    chart_height = 260.0
-    window_step = 16.0 if len(windows) > 80 else 26.0
+    top = 110.0 if header_visible else 86.0
+    left = 54.0
+    right = 42.0
+    bottom = 38.0
+    chart_height = 246.0
+    window_step = 14.0 if len(windows) > 80 else 22.0
     bar_width = max(5.0, min(18.0, window_step * 0.7))
-    base_width = left + right + (len(windows) - 1) * window_step + 48.0
-    width = int(max(base_width, 760.0))
-    left += (width - base_width) / 2
+    base_width = left + right + (len(windows) - 1) * window_step + 22.0
+    width = int(max(base_width, 500.0))
     height = int(top + bottom + chart_height)
     canvas = SvgCanvas(width=width, height=height, background="#ffffff")
 
-    _draw_title(
-        canvas,
-        width=width,
-        title=title or "Window Activity",
-        subtitle="Stacked gate counts with movement pressure overlay",
+    if header_visible:
+        _draw_title(
+            canvas,
+            width=width,
+            title=resolved_title,
+            subtitle="Stacked gate counts with movement pressure overlay",
+        )
+    _draw_activity_legend(
+        canvas, x=left, y=16.0 if not header_visible else 72.0
     )
-    _draw_activity_legend(canvas, x=36.0, y=68.0)
 
     chart_bottom = top + chart_height
     for tick in range(5):
@@ -727,10 +747,10 @@ def _build_slot_layout(schedule: PartitionSchedule) -> _SlotLayout:
 
 
 def _extract_classical_bits(
-    dag: CircuitDAG,
+    circuit: Circuit,
 ) -> tuple[tuple[str, int], ...]:
     declared_bits: list[tuple[str, int]] = []
-    for statement in dag.statements:
+    for statement in circuit.mono.statements:
         if isinstance(statement, CleanedClassicalDeclaration):
             declared_bits.extend(
                 (statement.name, index) for index in range(statement.size)
@@ -740,7 +760,7 @@ def _extract_classical_bits(
 
     measured_bits: list[tuple[str, int]] = []
     seen: set[tuple[str, int]] = set()
-    for statement in dag.statements:
+    for statement in circuit.mono.statements:
         if not isinstance(statement, CleanedQuantumMeasurementStatement):
             continue
         if statement.cbit is None:
@@ -789,6 +809,7 @@ def _draw_title(
     center_x: float | None = None,
     title: str,
     subtitle: str,
+    anchor: str = "middle",
 ) -> None:
     x = width / 2 if center_x is None else center_x
     canvas.text(
@@ -798,7 +819,7 @@ def _draw_title(
         fill=_TEXT_COLOR,
         font_size=26.0,
         font_weight="600",
-        anchor="middle",
+        anchor=anchor,
     )
     canvas.text(
         x=x,
@@ -806,7 +827,7 @@ def _draw_title(
         text=subtitle,
         fill=_MUTED_TEXT,
         font_size=12.0,
-        anchor="middle",
+        anchor=anchor,
     )
 
 
@@ -814,8 +835,8 @@ def _draw_circuit_legend(canvas: SvgCanvas, *, x: float, y: float) -> None:
     canvas.rect(
         x=x,
         y=y,
-        width=286.0,
-        height=74.0,
+        width=_CIRCUIT_LEGEND_WIDTH,
+        height=52.0,
         fill="#ffffff",
         stroke="#d8deea",
         stroke_width=0.9,
@@ -823,76 +844,76 @@ def _draw_circuit_legend(canvas: SvgCanvas, *, x: float, y: float) -> None:
         rx=10.0,
     )
     canvas.rect(
-        x=x + 14.0,
-        y=y + 11.0,
-        width=20.0,
-        height=12.0,
+        x=x + 12.0,
+        y=y + 10.0,
+        width=16.0,
+        height=10.0,
         fill=_LOCAL_GATE_FILL,
         stroke=_LOCAL_GATE_STROKE,
         stroke_width=0.9,
         rx=3.0,
     )
     canvas.text(
-        x=x + 42.0,
-        y=y + 21.0,
+        x=x + 36.0,
+        y=y + 18.0,
         text="Local gate",
         fill=_TEXT_COLOR,
-        font_size=11.0,
+        font_size=10.0,
     )
     canvas.rect(
-        x=x + 138.0,
-        y=y + 11.0,
-        width=20.0,
-        height=12.0,
+        x=x + 112.0,
+        y=y + 10.0,
+        width=16.0,
+        height=10.0,
         fill=_REMOTE_GATE_FILL,
         stroke=_REMOTE_GATE_STROKE,
         stroke_width=0.9,
         rx=3.0,
     )
     canvas.text(
-        x=x + 166.0,
-        y=y + 21.0,
+        x=x + 136.0,
+        y=y + 18.0,
         text="Remote gate",
         fill=_TEXT_COLOR,
-        font_size=11.0,
+        font_size=10.0,
     )
     canvas.path(
-        d=f"M {x + 14:.2f} {y + 38:.2f} C {x + 24:.2f} {y + 34:.2f}, "
-        f"{x + 34:.2f} {y + 44:.2f}, {x + 46:.2f} {y + 37:.2f}",
+        d=f"M {x + 12:.2f} {y + 34:.2f} C {x + 20:.2f} {y + 30:.2f}, "
+        f"{x + 28:.2f} {y + 40:.2f}, {x + 38:.2f} {y + 34:.2f}",
         stroke=_TELEPORT_STROKE,
         stroke_width=1.7,
     )
-    canvas.circle(cx=x + 14.0, cy=y + 38.0, r=2.4, fill=_TELEPORT_STROKE)
-    canvas.circle(cx=x + 46.0, cy=y + 37.0, r=2.4, fill=_TELEPORT_STROKE)
+    canvas.circle(cx=x + 12.0, cy=y + 34.0, r=2.2, fill=_TELEPORT_STROKE)
+    canvas.circle(cx=x + 38.0, cy=y + 34.0, r=2.2, fill=_TELEPORT_STROKE)
     canvas.text(
-        x=x + 56.0,
-        y=y + 41.0,
+        x=x + 48.0,
+        y=y + 38.0,
         text="State teleportation",
         fill=_TEXT_COLOR,
-        font_size=11.0,
+        font_size=10.0,
     )
     canvas.line(
-        x1=x + 170.0,
-        y1=y + 35.5,
-        x2=x + 202.0,
-        y2=y + 35.5,
+        x1=x + 166.0,
+        y1=y + 31.5,
+        x2=x + 192.0,
+        y2=y + 31.5,
         stroke=_LOCAL_GATE_STROKE,
         stroke_width=1.0,
     )
     canvas.line(
-        x1=x + 170.0,
-        y1=y + 40.5,
-        x2=x + 202.0,
-        y2=y + 40.5,
+        x1=x + 166.0,
+        y1=y + 36.5,
+        x2=x + 192.0,
+        y2=y + 36.5,
         stroke=_LOCAL_GATE_STROKE,
         stroke_width=1.0,
     )
     canvas.text(
-        x=x + 212.0,
-        y=y + 41.0,
-        text="Classical bit",
+        x=x + 202.0,
+        y=y + 38.0,
+        text="CBIT",
         fill=_TEXT_COLOR,
-        font_size=11.0,
+        font_size=10.0,
     )
 
 
@@ -944,15 +965,14 @@ def _draw_flow_legend(canvas: SvgCanvas, *, x: float, y: float) -> None:
 
 def _draw_activity_legend(canvas: SvgCanvas, *, x: float, y: float) -> None:
     legend_items = (
-        ("Single-qubit / measure", "#dbeafe"),
-        ("Local 2-qubit", "#c4b5fd"),
-        ("Remote 2-qubit", "#d702fe"),
+        ("Single-qubit / measure", "#dbeafe", x, y),
+        ("Local 2-qubit", "#c4b5fd", x + 120.0, y),
+        ("Remote 2-qubit", "#d702fe", x, y + 22.0),
     )
-    current_x = x
-    for label, fill in legend_items:
+    for label, fill, item_x, item_y in legend_items:
         canvas.rect(
-            x=current_x,
-            y=y,
+            x=item_x,
+            y=item_y,
             width=14.0,
             height=14.0,
             fill=fill,
@@ -960,29 +980,47 @@ def _draw_activity_legend(canvas: SvgCanvas, *, x: float, y: float) -> None:
             rx=2.0,
         )
         canvas.text(
-            x=current_x + 22.0,
-            y=y + 11.0,
+            x=item_x + 22.0,
+            y=item_y + 11.0,
             text=label,
             fill=_TEXT_COLOR,
             font_size=11.0,
         )
-        current_x += 126.0
-    line_y = y + 24.0
+    line_y = y + 29.0
     canvas.line(
-        x1=x,
+        x1=x + 152.0,
         y1=line_y,
-        x2=x + 20.0,
+        x2=x + 172.0,
         y2=line_y,
         stroke="#4801b0",
         stroke_width=2.0,
     )
-    canvas.circle(cx=x + 10.0, cy=line_y, r=2.6, fill="#4801b0")
+    canvas.circle(cx=x + 162.0, cy=line_y, r=2.6, fill="#4801b0")
     canvas.text(
-        x=x + 28.0,
+        x=x + 180.0,
         y=line_y + 4.0,
         text="Moved qubits",
         fill=_TEXT_COLOR,
         font_size=11.0,
+    )
+
+
+def _draw_quantum_classical_separator(
+    canvas: SvgCanvas,
+    *,
+    left: float,
+    right: float,
+    y: float,
+) -> None:
+    canvas.line(
+        x1=left,
+        y1=y,
+        x2=right,
+        y2=y,
+        stroke=_SEPARATOR_STROKE,
+        stroke_width=1.1,
+        opacity=0.36,
+        dasharray="5 6",
     )
 
 
@@ -1290,10 +1328,10 @@ def _draw_gate_text(
 
 
 def _measurement_cbit_key(
-    dag: CircuitDAG,
+    circuit: Circuit,
     op: Op,
 ) -> tuple[str, int] | None:
-    statement = dag.statements[op.statement_id]
+    statement = circuit.mono.statements[op.statement_id]
     if not isinstance(statement, CleanedQuantumMeasurementStatement):
         return None
     if statement.cbit is None:
@@ -1357,7 +1395,7 @@ def _movement_counts(assignments: list[dict[int, int]]) -> list[int]:
 
 
 def _remote_op_ids(
-    dag: CircuitDAG,
+    circuit: Circuit,
     schedule: PartitionSchedule,
     windows: PartitionWindows,
 ) -> set[int]:
@@ -1367,7 +1405,7 @@ def _remote_op_ids(
             op_to_window[op.op_id] = window_index
 
     remote_ops: set[int] = set()
-    for op in dag.ops:
+    for op in circuit.mono.ops:
         if len(op.qubits) != 2:
             continue
         window_index = op_to_window[op.op_id]

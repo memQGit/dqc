@@ -9,11 +9,13 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import random
 
 from openqasm3 import ast
 
+from memq_dqc._logging import StepTimer
 from memq_dqc.network import NetworkGraph
 from memq_dqc.partition.cisco.cisco import (
     _build_schedule,
@@ -23,6 +25,8 @@ from memq_dqc.partition.partitioner import QPU, BasePartitioner
 from memq_dqc.partition.utils import partition_cost
 from memq_dqc.preprocessing.qasm import count_total_qubits
 from memq_dqc.utils import create_initial_subcircuit_graph, get_windows
+
+logger = logging.getLogger(__name__)
 
 
 class BenchmarkRandomPartitioner(BasePartitioner):
@@ -54,14 +58,17 @@ class BenchmarkRandomPartitioner(BasePartitioner):
         Updates:
             cost, schedule, and windows with the latest partitioning results.
         """
-        num_qubits = count_total_qubits(self.program)
+        overall_timer = StepTimer()
+        num_qubits = count_total_qubits(self.circuit.mono.program)
         partition_sizes = _effective_partition_sizes(
             self.network.comp_qubits_per_qpu(),
             num_qubits,
         )
-        dag = self.dag
-        num_two_qubit_ops = dag.num_two_qubit_gates
+        circuit = self.circuit
+        num_two_qubit_ops = circuit.mono.num_two_qubit_gates
+        window_length_mode = "provided"
         if self.window_length is None:
+            window_length_mode = "auto"
             if num_two_qubit_ops == 0:
                 self.window_length = 1
             else:
@@ -73,23 +80,40 @@ class BenchmarkRandomPartitioner(BasePartitioner):
                 self.window_length = max(
                     min_window, min(int(round(base_window)), max_window)
                 )
-        windows = get_windows(dag, self.window_length)
+        logger.debug(
+            "Benchmark random partitioning parameters: logical_qubits=%d "
+            "two_qubit_ops=%d window_length=%d mode=%s partition_sizes=%s "
+            "seed=%s.",
+            num_qubits,
+            num_two_qubit_ops,
+            self.window_length,
+            window_length_mode,
+            partition_sizes,
+            self.seed,
+        )
+        windows_timer = StepTimer()
+        windows = get_windows(circuit, self.window_length)
         if not windows:
             raise ValueError(
                 "No operation windows generated from the circuit."
             )
+        logger.debug(
+            "Generated %d partition windows in %.3fs.",
+            len(windows),
+            windows_timer.elapsed_seconds(),
+        )
+        network_qpu_ids = sorted(
+            {qubit.qpu_id for qubit in self.network.qubit_type_map}
+        )
         self.windows = windows
 
-        qpus = [QPU(id=idx) for idx in range(len(partition_sizes))]
+        qpus = [QPU(id=qpu_id) for qpu_id in network_qpu_ids]
         random_partition = _build_random_partition(
             partition_sizes,
             num_qubits,
             seed=self.seed,
         )
-
-        network_qpu_ids = sorted(
-            {qubit.qpu_id for qubit in self.network.qubit_type_map}
-        )
+        logger.debug("Random partition assignment: %s.", random_partition)
 
         def _remote_ebit_multiplier(part_a: int, part_b: int) -> float:
             qpu_a = network_qpu_ids[part_a]
@@ -97,18 +121,35 @@ class BenchmarkRandomPartitioner(BasePartitioner):
             return float(self.network.remote_gate_ebit_cost(qpu_a, qpu_b))
 
         total_entanglement_cost = 0.0
-        for ops in windows:
+        for window_idx, ops in enumerate(windows):
+            window_timer = StepTimer()
             window_graph = create_initial_subcircuit_graph(num_qubits, ops)
-            total_entanglement_cost += partition_cost(
+            window_cost = partition_cost(
                 window_graph,
                 random_partition,
                 edge_cost=_remote_ebit_multiplier,
             )
+            total_entanglement_cost += window_cost
+            logger.debug(
+                "Window %d processed in %.3fs with cost=%.3f.",
+                window_idx,
+                window_timer.elapsed_seconds(),
+                window_cost,
+            )
 
         self.cost = total_entanglement_cost
+        schedule_timer = StepTimer()
         self.schedule = _build_schedule(
             [random_partition] * len(windows),
             qpus,
+        )
+        logger.debug(
+            "Built random schedule with %d windows in %.3fs. "
+            "Total cost=%.3f overall_runtime=%.3fs.",
+            len(self.schedule),
+            schedule_timer.elapsed_seconds(),
+            total_entanglement_cost,
+            overall_timer.elapsed_seconds(),
         )
 
 

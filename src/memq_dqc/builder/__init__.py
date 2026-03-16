@@ -9,11 +9,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from .extract_utils import (
+    circuit_qubit_physical_map,
     identify_remote_gates,
-    logical_physical_map,
     synthesize_state_teleportation_swaps,
     window_final_op_id_map,
 )
@@ -25,11 +25,16 @@ if TYPE_CHECKING:
     from memq_dqc.partition import Partitioner
 
 
-def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
+def extract_distributed_circuit(
+    partitioner: Partitioner,
+    *,
+    verbosity: Literal["quiet", "info", "debug"] = "quiet",
+) -> ast.Program:
     """Extract a distributed OpenQASM program from a completed partitioner.
 
     Args:
         partitioner: Partitioner with a completed partitioning run.
+        verbosity: Logging verbosity for this workflow call.
 
     Returns:
         Distributed OpenQASM program with communication operations inserted.
@@ -38,13 +43,16 @@ def extract_distributed_circuit(partitioner: Partitioner) -> ast.Program:
         extract_distributed_circuit as _extract_distributed_circuit,
     )
 
-    return _extract_distributed_circuit(partitioner)
+    return _extract_distributed_circuit(
+        partitioner,
+        verbosity=verbosity,
+    )
 
 
 __all__ = [
     "extract_distributed_circuit",
     "identify_remote_gates",
-    "logical_physical_map",
+    "circuit_qubit_physical_map",
     "synthesize_state_teleportation_swaps",
     "window_final_op_id_map",
     "rename_comm_qubits",

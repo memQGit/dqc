@@ -5,11 +5,14 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+from typing import Any, cast
 
 import pytest
 from openqasm3 import ast
 
-from memq_dqc.circuit import CircuitDAG
+from memq_dqc.circuit import Circuit
+from memq_dqc.network import NetworkGraph
+from memq_dqc.partition.partitioner import QPU
 from memq_dqc.preprocessing.qasm import (
     count_total_qubits,
     extract_qubit_index,
@@ -166,8 +169,8 @@ def test_create_initial_subcircuit_graph(
     simple1_circuit_path,
 ) -> None:
     program = load_qasm_program(str(simple1_circuit_path))
-    dag = CircuitDAG(program)
-    windows = get_windows(dag, window_length=2)
+    circuit = Circuit(program)
+    windows = get_windows(circuit, window_length=2)
     graph = create_initial_subcircuit_graph(6, windows[0])
 
     assert set(graph.nodes()) == set(range(6))
@@ -178,8 +181,8 @@ def test_build_window_interaction_graph_weights(
     simple1_circuit_path,
 ) -> None:
     program = load_qasm_program(str(simple1_circuit_path))
-    dag = CircuitDAG(program)
-    windows = get_windows(dag, window_length=2)
+    circuit = Circuit(program)
+    windows = get_windows(circuit, window_length=2)
     partition_map = {0: 0, 1: 0, 2: 1, 3: 1, 4: 1, 5: 1}
 
     graph, active_qubits = build_window_interaction_graph(
@@ -206,6 +209,45 @@ def test_movement_cost() -> None:
     assert movement_cost(new_partition, old_partition) == 2.0
 
 
+def test_movement_cost_uses_network_route_cost(simple1_network_path) -> None:
+    network = NetworkGraph(str(simple1_network_path))
+    old_partition = [{0}, {1}]
+    new_partition = [{0, 1}, set()]
+
+    assert (
+        movement_cost(
+            new_partition,
+            old_partition,
+            network=network,
+            qpu_ids=[1, 2],
+        )
+        == 0.0
+    )
+
+
+def test_movement_cost_returns_inf_for_unrouteable_swap(
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    old_partition = [{0}, {1}]
+    new_partition = [{0, 1}, set()]
+
+    assert movement_cost(
+        new_partition,
+        old_partition,
+        network=network,
+        qpu_ids=[0, 1],
+    ) == float("inf")
+
+
+def test_movement_cost_rejects_qpu_keyed_partitions() -> None:
+    old_partition = cast(Any, {QPU(id=1): {0}, QPU(id=3): {1}})
+    new_partition = cast(Any, {QPU(id=1): {1}, QPU(id=3): {0}})
+
+    with pytest.raises(TypeError, match="list-based partitions"):
+        movement_cost(new_partition, old_partition)
+
+
 def test_qubit_partition_map() -> None:
     partition = [{0, 2}, {1}]
 
@@ -221,9 +263,9 @@ def test_get_windows(
     simple1_circuit_path,
 ) -> None:
     program = load_qasm_program(str(simple1_circuit_path))
-    dag = CircuitDAG(program)
+    circuit = Circuit(program)
 
-    windows = get_windows(dag, window_length=3)
+    windows = get_windows(circuit, window_length=3)
 
     assert [len(window) for window in windows] == [3, 3, 2]
     assert sum(len(window) for window in windows) == 8

@@ -16,13 +16,23 @@ from memq_dqc.visualization.partition_visualizer import (
     plot_migration_timeline,
     plot_partition_heatmap,
 )
-from memq_dqc.visualization.svg_document import SvgDocument
+from memq_dqc.visualization.svg_document import (
+    SvgDashboardPanel,
+    SvgDashboardSection,
+    SvgDocument,
+    build_svg_dashboard_html,
+    write_svg_dashboard_html,
+)
 
 __all__ = [
+    "SvgDashboardPanel",
+    "SvgDashboardSection",
     "SvgDocument",
+    "build_svg_dashboard_html",
     "plot_distributed_circuit",
     "plot_migration_timeline",
     "plot_partition_flow",
     "plot_partition_heatmap",
     "plot_window_activity",
+    "write_svg_dashboard_html",
 ]
