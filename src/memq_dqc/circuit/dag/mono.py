@@ -5,48 +5,33 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Monolithic DAG representation for OpenQASM 3 quantum circuits."""
+"""Monolithic DAG representation for circuit operations."""
 
 from __future__ import annotations
 
 import networkx as nx
-from openqasm3 import ast
 
-from memq_dqc.circuit.layers import Layer
-from memq_dqc.circuit.ops import Op
-from memq_dqc.preprocessing.qasm import extract_cleaned_statements
-from memq_dqc.preprocessing.qasm.types import CircuitQubit, CleanedStatement
+from memq_dqc.circuit.layer import Layer
+from memq_dqc.circuit.op import Op
+from memq_dqc.preprocessing.qasm.types import CircuitQubit
 
 
 class CircuitDAG:
-    """Directed Acyclic Graph (DAG) for an OpenQASM 3 circuit.
+    """Directed acyclic graph for a circuit's operations.
 
-    The DAG captures operation dependencies and provides layered views suitable
-    for scheduling and partitioning.
+    The DAG captures dependencies between operations and provides layered
+    views suitable for scheduling and partitioning. Circuit-level metadata
+    such as statements and operation lists live on the higher-level circuit
+    model rather than on this DAG.
     """
 
-    def __init__(self, program: ast.Program) -> None:
-        """Initialize the DAG representation for a quantum program.
+    def __init__(self, ops: list[Op]) -> None:
+        """Initialize the DAG representation for operations in source order.
 
         Args:
-            program: The OpenQASM 3 program from which to extract operations
-                and build the corresponding directed acyclic graph.
+            ops: Operations in source order.
         """
-        self.program = program
-        cleaned_statements = extract_cleaned_statements(program)
-        self.num_barrier_statements = sum(
-            1
-            for statement in cleaned_statements
-            if isinstance(statement, CleanedStatement)
-            and isinstance(statement.node, ast.QuantumBarrier)
-        )
-        self.statements = [
-            statement
-            for statement in cleaned_statements
-            if not isinstance(statement.node, ast.QuantumBarrier)
-        ]
-        self.ops: list[Op] = self._extract_ops()
-        self.num_two_qubit_gates = self._count_two_qubit_gates()
+        self._ops = ops
         self.graph: nx.DiGraph = self._build_dag()
         self.layers: list[Layer] = self._extract_layers()
         self.depth = len(self.layers)
@@ -60,12 +45,13 @@ class CircuitDAG:
         """
         graph = nx.DiGraph()
 
-        for op in self.ops:
+        # Populate nodes of DAG
+        for op in self._ops:
             graph.add_node(op.op_id, op=op, name=op.name, qubits=op.qubits)
 
-        # Track the last operation touching each qubit.
+        # Track the last operation touching each qubit to form directed edges
         last_op_on_qubit: dict[CircuitQubit, int] = {}
-        for op in self.ops:
+        for op in self._ops:
             for qubit in op.qubits:
                 # Previous op exists on this qubit, so current op depends on it.
                 if qubit in last_op_on_qubit:
@@ -79,52 +65,6 @@ class CircuitDAG:
                 last_op_on_qubit[qubit] = op.op_id
 
         return graph
-
-    def _extract_ops(self) -> list[Op]:
-        """Extract operations from the program in source order.
-
-        Returns:
-            Operations extracted in program order.
-        """
-        ops: list[Op] = []
-
-        # Extract operations (gates & measurements) from statements
-        for statement_id, statement in enumerate(self.statements):
-            if not statement.is_op:
-                continue
-            op_id = len(ops)
-            if statement.name == "measure":
-                if statement.qubit is None:
-                    raise ValueError("Measurement statement missing qubit.")
-                qubits: tuple[CircuitQubit, ...] = (
-                    CircuitQubit(
-                        statement.qubit.register_name,
-                        statement.qubit.index,
-                    ),
-                )
-            else:
-                qubits = tuple(
-                    CircuitQubit(qubit.register_name, qubit.index)
-                    for qubit in statement.qubits
-                )
-            ops.append(
-                Op(
-                    op_id=op_id,
-                    statement_id=statement_id,
-                    name=statement.name,
-                    qubits=qubits,
-                    node=statement.node,
-                )
-            )
-        return ops
-
-    def _count_two_qubit_gates(self) -> int:
-        """Count operations that act on exactly two qubits.
-
-        Returns:
-            The number of two-qubit operations in the circuit.
-        """
-        return sum(1 for op in self.ops if op.is_two_qubit)
 
     def _extract_layers(self) -> list[Layer]:
         """Extract layers of operations from the DAG.
@@ -158,11 +98,3 @@ class CircuitDAG:
             ready_nodes = list(next_layer_nodes)
 
         return layers
-
-    def extract_layers(self) -> list[Layer]:
-        """Return the extracted operation layers for the circuit.
-
-        Returns:
-            Operation layers that can be executed in parallel.
-        """
-        return self.layers

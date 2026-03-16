@@ -43,3 +43,52 @@ To automatically format files instead:
 #### Tests (pytest)
 
     uv run pytest -q
+
+### Logging and verbosity
+
+The main workflow APIs support per-call verbosity control:
+
+- `quiet` (default): returns results without progress logging
+- `info`: logs major phase start/completion messages and elapsed time
+- `debug`: adds intermediate diagnostics such as chosen parameters,
+  per-phase summaries, and mapping details
+
+Example:
+
+```python
+from memq_dqc.builder import extract_distributed_circuit
+from memq_dqc.partition import Partitioner
+from memq_dqc.verify import verify_distributed_circuit
+
+partitioner = Partitioner(network_graph, qasm_program)
+partitioner.run(verbosity="info")
+
+distributed_program = extract_distributed_circuit(
+    partitioner,
+    verbosity="debug",
+)
+
+is_valid = verify_distributed_circuit(
+    "original.qasm",
+    "distributed.qasm",
+    verbosity="info",
+)
+```
+
+For advanced control, configure the standard Python logger named
+`memq_dqc`:
+
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+logging.getLogger("memq_dqc").setLevel(logging.DEBUG)
+```
+
+What each level gives you:
+
+- `quiet`: no informational output from memq-dqc workflow calls
+- `info`: algorithm/extraction/verification start and finish messages,
+  plus overall runtime and summary metrics
+- `debug`: everything in `info`, plus intermediate workflow diagnostics for
+  debugging and performance analysis

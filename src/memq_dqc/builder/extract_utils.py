@@ -4,7 +4,7 @@
 # This source code is licensed under the MIT License.
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
-"""Utility functions for circuit extraction."""
+"""Helpers for extracting distributed circuits from partition results."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 from memq_dqc.utils.common import qubit_partition_map, window_op_map
 
 if TYPE_CHECKING:
-    from memq_dqc.circuit.dag import CircuitDAG
-    from memq_dqc.circuit.ops import Op
+    from memq_dqc.circuit import Circuit
+    from memq_dqc.circuit.op import Op
     from memq_dqc.partition import Partitioner
     from memq_dqc.partition.partitioner import QPU
 
@@ -26,7 +26,7 @@ PartitionAssignment = dict["QPU", set[int]]
 
 @dataclass(frozen=True, slots=True)
 class SwapOp:
-    """Swap between two positions, recording logical qubits at emission."""
+    """Recording the qubits’ physical positions when the swap is generated."""
 
     q0: int
     q1: int
@@ -34,7 +34,6 @@ class SwapOp:
     pos1: Pos
 
 
-# TODO: this whole file, particular function below, needs review + cleanup
 def synthesize_state_teleportation_swaps(
     schedule: list[PartitionAssignment],
 ) -> list[list[SwapOp]]:
@@ -51,14 +50,14 @@ def synthesize_state_teleportation_swaps(
         ValueError: If the schedule changes QPU counts or partition sizes.
         RuntimeError: If swap synthesis fails to reach a target assignment.
     """
-    swaps_per_timestep: list[list[SwapOp]] = []
-    for step_idx in range(1, len(schedule)):
-        swaps_per_timestep.append(
-            _synthesize_swaps_for_timestep(
-                schedule[step_idx - 1],
-                schedule[step_idx],
-            )
+    swaps_per_timestep = [
+        _synthesize_swaps_for_timestep(prev_assignment, curr_assignment)
+        for prev_assignment, curr_assignment in zip(
+            schedule,
+            schedule[1:],
+            strict=False,
         )
+    ]
 
     # Rebase swap positions across timesteps so each swap references the
     # current physical positions resulting from previously emitted swaps.
@@ -88,6 +87,7 @@ def synthesize_state_teleportation_swaps(
 def _assignment_to_sorted_lists(
     assignment: PartitionAssignment,
 ) -> tuple[list[int], list[list[int]]]:
+    """Return sorted QPU IDs and sorted qubits assigned to each QPU."""
     items = sorted(assignment.items(), key=lambda item: item[0].id)
     qpu_ids = [qpu.id for qpu, _ in items]
     return qpu_ids, [sorted(qubits) for _, qubits in items]
@@ -105,40 +105,74 @@ def _assignment_initial_positions(
     return pos_by_qubit
 
 
+def _assignment_partition_map(
+    qpu_ids: list[int],
+    qubits_by_qpu: list[list[int]],
+) -> dict[int, int]:
+    """Return the assigned QPU for each logical qubit."""
+    qpu_by_qubit: dict[int, int] = {}
+    for qpu_id, qubits in zip(qpu_ids, qubits_by_qpu, strict=True):
+        for qubit in qubits:
+            qpu_by_qubit[qubit] = qpu_id
+    return qpu_by_qubit
+
+
+def _validate_assignment_shapes(
+    prev_qpu_ids: list[int],
+    prev_lists: list[list[int]],
+    curr_qpu_ids: list[int],
+    curr_lists: list[list[int]],
+) -> None:
+    """Validate that adjacent schedule windows can be connected by swaps."""
+    if prev_qpu_ids != curr_qpu_ids:
+        raise ValueError("QPU identities changed between timesteps.")
+
+    for prev_qpu_id, prev_qubits, curr_qubits in zip(
+        prev_qpu_ids,
+        prev_lists,
+        curr_lists,
+        strict=True,
+    ):
+        if len(prev_qubits) != len(curr_qubits):
+            raise ValueError(
+                "Partition size mismatch on QPU "
+                f"{prev_qpu_id}: {len(prev_qubits)} -> "
+                f"{len(curr_qubits)}"
+            )
+
+
+def _record_swap(
+    swaps: list[SwapOp],
+    pos_by_qubit: dict[int, Pos],
+    q0: int,
+    q1: int,
+) -> None:
+    """Append one swap and update the tracked physical positions."""
+    pos0 = pos_by_qubit[q0]
+    pos1 = pos_by_qubit[q1]
+    swaps.append(SwapOp(q0=q0, q1=q1, pos0=pos0, pos1=pos1))
+    pos_by_qubit[q0], pos_by_qubit[q1] = pos1, pos0
+
+
 def _synthesize_swaps_for_timestep(
     prev_assignment: PartitionAssignment,
     curr_assignment: PartitionAssignment,
 ) -> list[SwapOp]:
-    """Produce swaps that transform prev_assignment to curr_assignment.
-
-    Only cross-QPU swaps are emitted.
-    """
-    # TODO (important): must have a list of possible swaps, and ensure partition doesnt move between unreachable qpus'
-    # TODO: clarify / clean this
+    """Produce swaps that transform prev_assignment to curr_assignment."""
     if len(prev_assignment) != len(curr_assignment):
         raise ValueError("Number of QPUs changed between timesteps.")
 
     prev_qpu_ids, prev_lists = _assignment_to_sorted_lists(prev_assignment)
     curr_qpu_ids, curr_lists = _assignment_to_sorted_lists(curr_assignment)
-    if prev_qpu_ids != curr_qpu_ids:
-        raise ValueError("QPU identities changed between timesteps.")
+    _validate_assignment_shapes(
+        prev_qpu_ids,
+        prev_lists,
+        curr_qpu_ids,
+        curr_lists,
+    )
 
-    for qpu_idx in range(len(prev_lists)):
-        if len(prev_lists[qpu_idx]) != len(curr_lists[qpu_idx]):
-            raise ValueError(
-                "Partition size mismatch on QPU "
-                f"{qpu_idx}: {len(prev_lists[qpu_idx])} -> "
-                f"{len(curr_lists[qpu_idx])}"
-            )
-
-    current_qpu: dict[int, int] = {}
-    target_qpu: dict[int, int] = {}
-    for qpu_id, qubits in zip(prev_qpu_ids, prev_lists, strict=True):
-        for qubit in qubits:
-            current_qpu[qubit] = qpu_id
-    for qpu_id, qubits in zip(curr_qpu_ids, curr_lists, strict=True):
-        for qubit in qubits:
-            target_qpu[qubit] = qpu_id
+    current_qpu = _assignment_partition_map(prev_qpu_ids, prev_lists)
+    target_qpu = _assignment_partition_map(curr_qpu_ids, curr_lists)
 
     moved_qubits = {
         qubit for qubit, qpu in current_qpu.items() if target_qpu[qubit] != qpu
@@ -146,21 +180,9 @@ def _synthesize_swaps_for_timestep(
     if not moved_qubits:
         return []
 
-    pos_by_qubit: dict[int, Pos] = {}
-    for qpu_id, qubits in zip(prev_qpu_ids, prev_lists, strict=True):
-        for slot_idx, qubit in enumerate(qubits):
-            pos = (qpu_id, slot_idx)
-            pos_by_qubit[qubit] = pos
-
+    pos_by_qubit = _assignment_initial_positions(prev_assignment)
     swaps: list[SwapOp] = []
-
-    # TODO: no nested functions
-    def emit_swap(q0: int, q1: int) -> None:
-        pos0 = pos_by_qubit[q0]
-        pos1 = pos_by_qubit[q1]
-        swaps.append(SwapOp(q0=q0, q1=q1, pos0=pos0, pos1=pos1))
-        pos_by_qubit[q0], pos_by_qubit[q1] = pos1, pos0
-
+    # Iteratively swap until qubit is in correction position
     moved_remaining = set(moved_qubits)
     while moved_remaining:
         q0 = min(moved_remaining)
@@ -170,6 +192,7 @@ def _synthesize_swaps_for_timestep(
             moved_remaining.remove(q0)
             continue
 
+        # Identify all qubits on other QPU that need to be moved still
         candidates = [
             qubit
             for qubit in moved_remaining
@@ -181,7 +204,7 @@ def _synthesize_swaps_for_timestep(
                 f"destination QPU {q0_target_qpu}."
             )
         q1 = min(candidates)
-        emit_swap(q0, q1)
+        _record_swap(swaps, pos_by_qubit, q0, q1)
 
         for qubit in (q0, q1):
             if pos_by_qubit[qubit][0] == target_qpu[qubit]:
@@ -201,20 +224,20 @@ def _synthesize_swaps_for_timestep(
 
 
 def identify_remote_gates(
-    circuit_dag: CircuitDAG,
+    circuit: Circuit,
     partition: Partitioner,
 ) -> list[tuple[Op, dict[str, int]]]:
     """Identify remote gates in the scheduled circuit.
 
     Args:
-        circuit_dag: The CircuitDAG representing the quantum circuit.
+        circuit: The circuit representing the quantum circuit.
         partition: The Partitioner object containing the partitioning schedule.
 
     Returns:
         Augmented list of operations with two-qubit gates replaced with remote
         variants where applicable.
     """
-    ops = circuit_dag.ops
+    ops = circuit.mono.ops
     windows = partition.windows
     schedule = partition.schedule
     if windows is None or schedule is None:
@@ -223,14 +246,18 @@ def identify_remote_gates(
         )
     window_op_mapping = window_op_map(windows)
 
+    # Iterate through 2-qubit gates; mark remote if they use distinct QPUs
     remote_gates: list[tuple[Op, dict[str, int]]] = []
     for op in ops:
-        if len(op.qubits) == 1:
+        num_qubits = len(op.qubits)
+        if num_qubits == 1:
             continue
-        if len(op.qubits) > 2:
+        if num_qubits > 2:
             raise ValueError(
                 "Only single- and two-qubit gates are supported currently."
             )
+        if num_qubits != 2:
+            raise ValueError("Expected a two-qubit operation.")
         q1, q2 = op.qubits
         op_window_idx = window_op_mapping[op.op_id]
         qubit_map = qubit_partition_map(schedule[op_window_idx])
@@ -238,7 +265,6 @@ def identify_remote_gates(
         q2_qpu = qubit_map[q2.index]
         if q1_qpu == q2_qpu:
             continue
-        # TODO: theres probably a cleaner, more efficient way to do this
         remote_gates.append((op, {"q1_qpu": q1_qpu, "q2_qpu": q2_qpu}))
 
     return remote_gates
@@ -258,39 +284,32 @@ def window_final_op_id_map(windows: list[list[Op]]) -> dict[int, int]:
     Returns:
         A dictionary mapping window indices to the final operation ID.
     """
-    window_final_op_id: dict[int, int] = {}
-    for window_idx, window in enumerate(windows[:-1]):
-        final_op = window[-1]
-        window_final_op_id[window_idx] = final_op.op_id
-    return window_final_op_id
+    return {
+        window_idx: window[-1].op_id
+        for window_idx, window in enumerate(windows[:-1])
+    }
 
 
-# TODO: determine if this should be placed somewhere else - perhaps in DAG
-def logical_physical_map(
-    # TODO: this is not clean
+def circuit_qubit_physical_map(
     schedule: list[PartitionAssignment],
     swaps: list[list[SwapOp]],
 ) -> list[dict[int, tuple[int, int]]]:
-    """Create logical-to-physical qubit maps for each time interval.
+    """Create circuit-to-physical qubit maps for each time interval.
 
     A physical qubit is characterized by an (int, int) tuple, where first
     element represents QPU index, second element represents qubit index for
-    that given QPU.
+    that given QPU. A circuit qubit is the qubit index as defined in the
+    original input circuit.
 
     """
     if not schedule:
         raise ValueError("schedule must contain at least one window.")
 
-    initial_partition = schedule[0]
-    current_map: dict[int, tuple[int, int]] = {}
-    for qpu, qubit_set in sorted(
-        initial_partition.items(), key=lambda item: item[0].id
-    ):
-        for slot_idx, qubit in enumerate(sorted(qubit_set)):
-            current_map[qubit] = (qpu.id, slot_idx)
-
+    current_map = _assignment_initial_positions(schedule[0])
     interval_maps: list[dict[int, tuple[int, int]]] = [current_map.copy()]
 
+    # Each interval snapshot reflects the layout after the swaps for that
+    # boundary have been applied.
     for interval in swaps:
         for swap in interval:
             q0 = swap.q0

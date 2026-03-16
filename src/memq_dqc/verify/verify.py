@@ -7,12 +7,18 @@
 
 """Verification of distributed circuit."""
 
+from __future__ import annotations
+
+import logging
+from typing import Literal
+
 import qiskit.qasm3
 from openqasm3 import ast
 from qiskit import QuantumCircuit, transpile
 from qiskit.quantum_info import hellinger_fidelity
 from qiskit_aer import AerSimulator
 
+from memq_dqc._logging import StepTimer, workflow_logging
 from memq_dqc.preprocessing.qasm import (
     dump_qasm_program,
     is_comm_qubit_declaration,
@@ -22,6 +28,8 @@ from memq_dqc.preprocessing.qasm import (
     parse_qasm_source,
     rename_quantum_gate,
 )
+
+logger = logging.getLogger(__name__)
 
 _REMOTE_OPERATION_COSTS: dict[str, int] = {
     "rswap": 2,
@@ -39,6 +47,8 @@ def verify_distributed_circuit(
     dist_circuit_path: str,
     shots: int = 50000000,
     fidelity_threshold: float = 0.90,
+    *,
+    verbosity: Literal["quiet", "info", "debug"] = "quiet",
 ) -> bool:
     """Verify the correctness of a distributed circuit.
 
@@ -51,33 +61,80 @@ def verify_distributed_circuit(
         shots: Number of shots to execute the circuits for.
         fidelity_threshold: The minimum fidelity required for the distributed
             circuit to be considered correct (Hellinger fidelity).
+        verbosity: Logging verbosity for this workflow call.
 
     Returns:
         True if the distributed circuit gives nearly identical results to the
         original circuit, False otherwise - as determined by Hellinger fidelity
         between the two output distributions.
     """
-    qc_orig = qiskit.qasm3.load(original_circuit_path)
-    orig_counts = get_counts(qc_orig, shots=shots)
-    # print("Original circuit counts:", orig_counts)
-    mono_circuit = dist_to_mono_circuit(dist_circuit_path)
-    qc_dist_mono = qiskit.qasm3.loads(str(mono_circuit))
-    # print strng representation of monolithic circuit
-
-    mono_counts = get_counts(qc_dist_mono, shots=shots)
-    fidelity = hellinger_fidelity(orig_counts, mono_counts)
-    # TODO: replace print with proper logging (and update commented-out prints throughout)
-    if fidelity < fidelity_threshold:
-        print(
-            f"Verification failed: fidelity {fidelity} is below threshold {fidelity_threshold}"
+    with workflow_logging(verbosity):
+        overall_timer = StepTimer()
+        logger.info(
+            "Starting distributed circuit verification: shots=%d "
+            "fidelity_threshold=%.3f.",
+            shots,
+            fidelity_threshold,
         )
-        return False
-    print(
-        f"Verification succeeded: fidelity {fidelity} is above threshold {fidelity_threshold}"
-    )
-    return True
-    # print("Original circuit counts:", orig_counts)
-    # print("Monolithic version of distributed circuit counts:", mono_counts)
+
+        original_load_timer = StepTimer()
+        qc_orig = qiskit.qasm3.load(original_circuit_path)
+        logger.debug(
+            "Loaded original circuit in %.3fs.",
+            original_load_timer.elapsed_seconds(),
+        )
+
+        original_sim_timer = StepTimer()
+        orig_counts = get_counts(qc_orig, shots=shots)
+        logger.debug(
+            "Simulated original circuit in %.3fs with %d distinct outcomes.",
+            original_sim_timer.elapsed_seconds(),
+            len(orig_counts),
+        )
+
+        mono_timer = StepTimer()
+        mono_circuit = dist_to_mono_circuit(dist_circuit_path)
+        qc_dist_mono = qiskit.qasm3.loads(str(mono_circuit))
+        logger.debug(
+            "Converted distributed circuit to monolithic form in %.3fs.",
+            mono_timer.elapsed_seconds(),
+        )
+
+        distributed_sim_timer = StepTimer()
+        mono_counts = get_counts(qc_dist_mono, shots=shots)
+        logger.debug(
+            "Simulated monolithic distributed circuit in %.3fs with %d "
+            "distinct outcomes.",
+            distributed_sim_timer.elapsed_seconds(),
+            len(mono_counts),
+        )
+
+        fidelity_timer = StepTimer()
+        fidelity = hellinger_fidelity(orig_counts, mono_counts)
+        logger.debug(
+            "Computed fidelity in %.3fs: fidelity=%.6f threshold=%.6f.",
+            fidelity_timer.elapsed_seconds(),
+            fidelity,
+            fidelity_threshold,
+        )
+
+        elapsed = overall_timer.elapsed_seconds()
+        if fidelity < fidelity_threshold:
+            logger.warning(
+                "Verification failed in %.3fs: fidelity=%.6f threshold=%.6f.",
+                elapsed,
+                fidelity,
+                fidelity_threshold,
+            )
+            return False
+
+        logger.info(
+            "Verification succeeded in %.3fs: fidelity=%.6f threshold=%.6f.",
+            elapsed,
+            fidelity,
+            fidelity_threshold,
+        )
+        return True
 
 
 def get_counts(circuit: QuantumCircuit, shots: int) -> dict[str, int]:
