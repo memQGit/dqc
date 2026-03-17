@@ -339,9 +339,7 @@ class NetworkGraph:
             ValueError: If no directional route is available.
         """
         # TODO: right now this is for 'RSWAP' based routing - generalize
-        print("hello")
         if source_qpu_id == target_qpu_id:
-            print("source and target QPU are the same, no route needed")
             return [source_qpu_id]
 
         # Count how many direct remote communication pairs exist between QPUs.
@@ -361,7 +359,6 @@ class NetworkGraph:
             pair_counts=pair_counts,
         ):
             if neighbor_qpu == source_qpu_id:
-                print("neighbor = source, skipping")
                 continue
             try:
                 path_to_neighbor = self._shortest_qpu_path_with_min_pairs(
@@ -370,15 +367,12 @@ class NetworkGraph:
                     min_pairs=2,
                     pair_counts=pair_counts,
                 )
-                print("path to neighbor:", path_to_neighbor)
             except ValueError:
-                print("value error ... continuing")
                 continue
             # Reject routes that overshoot through the target before the end.
             if target_qpu_id in path_to_neighbor[:-1]:
                 continue
             candidates.append(path_to_neighbor + [target_qpu_id])
-        print("hello again")
         if not candidates:
             raise ValueError(
                 "No routed remote-gate path found for directional movement: "
