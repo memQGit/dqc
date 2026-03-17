@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from memq_dqc.builder import synthesize_state_teleportation_swaps
+from memq_dqc.circuit.dag import CircuitDAG
 from memq_dqc.preprocessing.qasm import (
     CleanedClassicalDeclaration,
     CleanedQuantumMeasurementStatement,
@@ -27,6 +28,10 @@ _LOCAL_GATE_FILL = "#f8fbff"
 _LOCAL_GATE_STROKE = "#6b7a90"
 _REMOTE_GATE_FILL = "#faedff"
 _REMOTE_GATE_STROKE = "#d702fe"
+_MEASURE_GATE_FILL = "#e6fffa"
+_MEASURE_GATE_STROKE = "#0f766e"
+_SWAP_GATE_FILL = "#fff4db"
+_SWAP_GATE_STROKE = "#b7791f"
 _WIRE_STROKE = "#d3dae6"
 _SEPARATOR_STROKE = "#4801b0"
 _WINDOW_FILL = "#f8f5ff"
@@ -84,6 +89,17 @@ class _MeasurementArrow:
     x: float
     start_y: float
     cbit_key: tuple[str, int]
+
+
+@dataclass(frozen=True, slots=True)
+class _GanttTask:
+    """One rendered operation row in the Gantt chart."""
+
+    time_index: int
+    window_index: int
+    op: Op
+    is_remote: bool
+    slot_positions: tuple[tuple[int, int], ...]
 
 
 def plot_distributed_circuit(
@@ -473,6 +489,204 @@ def plot_partition_flow(
                     font_size=9.0,
                     anchor="middle",
                 )
+
+    return canvas.to_document()
+
+
+def plot_operation_gantt(
+    circuit: Circuit,
+    *,
+    schedule: PartitionSchedule | None = None,
+    windows: PartitionWindows | None = None,
+    start_window: int = 0,
+    max_windows: int | None = None,
+    max_ops_per_window: int | None = None,
+    title: str | None = None,
+    ax: object | None = None,
+    show: bool = False,
+) -> SvgDocument:
+    """Render an operation-level Gantt chart as SVG.
+
+    Time progresses left-to-right in unit intervals, and every operation spans
+    one interval. Operations that share a DAG layer occupy the same time slot
+    and are stacked on separate rows so parallel work appears vertically
+    aligned instead of serialized along the x-axis.
+
+    Args:
+        circuit: Circuit to render.
+        schedule: Optional partition schedule used for QPU-aware placement.
+        windows: Optional partition windows aligned with ``schedule``.
+        start_window: First window to render.
+        max_windows: Optional cap on the number of windows to render.
+        max_ops_per_window: Optional cap on visible operations per window.
+        title: Optional chart title.
+        ax: Ignored legacy parameter retained for compatibility.
+        show: Ignored legacy parameter retained for compatibility.
+
+    Returns:
+        An SVG document containing the Gantt visualization.
+
+    Raises:
+        ValueError: If schedule and windows do not align or the selected
+            window slice is empty.
+    """
+    del ax, show
+
+    if not hasattr(circuit, "mono"):
+        raise ValueError(
+            "plot_operation_gantt expects a Circuit plus aligned "
+            "schedule/windows. Pass partitioner.circuit instead of "
+            "partitioner.circuit.distributed."
+        )
+
+    if (schedule is None) != (windows is None):
+        raise ValueError("schedule and windows must be provided together.")
+
+    if schedule is None or windows is None:
+        windows = [list(circuit.mono.ops)]
+        schedule = [_single_qpu_assignment(circuit.mono.ops)]
+
+    if len(schedule) != len(windows):
+        raise ValueError("schedule and windows must have the same length.")
+    if not schedule:
+        raise ValueError("schedule must contain at least one window.")
+
+    selected_windows = _select_windows(
+        windows,
+        start_window=start_window,
+        max_windows=max_windows,
+        max_ops_per_window=max_ops_per_window,
+    )
+    if not selected_windows:
+        raise ValueError("Selected window slice is empty.")
+
+    slot_layout = _build_slot_layout(schedule)
+    positions_by_window = [
+        _assignment_positions(window) for window in schedule
+    ]
+    remote_ops = _remote_op_ids(circuit, schedule, windows)
+    header_visible = title != ""
+    resolved_title = "Operation Gantt" if title is None else title
+    legend_y = 24.0 if header_visible else 12.0
+
+    header_height = 110.0 if header_visible else 62.0
+    left_margin = 138.0
+    right_padding = 28.0
+    bottom_padding = 52.0
+    bar_height = 18.0
+    interval_width = 88.0
+    axis_top = header_height - 6.0
+    lane_top = header_height + 8.0
+
+    tasks, window_time_bounds, total_intervals = _build_gantt_tasks(
+        selected_windows,
+        positions_by_window=positions_by_window,
+        remote_ops=remote_ops,
+    )
+    plot_right = left_margin + max(1, total_intervals) * interval_width
+    width = int(max(plot_right + right_padding, 760.0))
+    height = int(header_height + slot_layout.total_height + bottom_padding)
+    canvas = SvgCanvas(width=width, height=height, background="#fffdfc")
+
+    if header_visible:
+        _draw_title(
+            canvas,
+            width=width,
+            center_x=46.0,
+            title=resolved_title,
+            subtitle=_circuit_subtitle(
+                selected_windows,
+                windows,
+                max_ops_per_window,
+            ),
+            anchor="start",
+        )
+    _draw_gantt_legend(canvas, x=width - 252.0, y=legend_y)
+    _draw_gantt_window_backgrounds(
+        canvas,
+        bounds=window_time_bounds,
+        left_margin=left_margin,
+        interval_width=interval_width,
+        top=header_height - 18.0,
+        height=slot_layout.total_height + 18.0,
+    )
+    _draw_slot_labels(
+        canvas,
+        slot_layout,
+        left_margin=left_margin,
+        right=plot_right,
+        top=lane_top,
+    )
+    _draw_slot_wires(
+        canvas,
+        slot_layout,
+        left=left_margin,
+        right=plot_right,
+        top=lane_top,
+    )
+    _draw_gantt_time_axis(
+        canvas,
+        total_intervals=total_intervals,
+        left_margin=left_margin,
+        interval_width=interval_width,
+        top=axis_top,
+        bottom=lane_top + slot_layout.total_height - 12.0,
+        right=plot_right,
+    )
+    _draw_gantt_window_headers(
+        canvas,
+        bounds=window_time_bounds,
+        left_margin=left_margin,
+        interval_width=interval_width,
+        y=header_height - 28.0,
+    )
+
+    for task in tasks:
+        y_positions = tuple(
+            lane_top + slot_layout.y_by_position[position]
+            for position in task.slot_positions
+        )
+        _draw_gantt_operation(
+            canvas,
+            left=left_margin + task.time_index * interval_width + 10.0,
+            right=left_margin + (task.time_index + 1) * interval_width - 10.0,
+            y_positions=y_positions,
+            label=_gate_label(task.op.name, task.is_remote),
+            op_name=task.op.name,
+            is_remote=task.is_remote,
+            bar_height=bar_height,
+        )
+
+    for selected in selected_windows:
+        if selected.omitted_ops > 0:
+            omitted_x = _omitted_ops_x(
+                bounds=[
+                    (
+                        window_index,
+                        left_margin + start_time * interval_width,
+                        left_margin + end_time * interval_width,
+                    )
+                    for window_index, start_time, end_time in window_time_bounds
+                ],
+                window_index=selected.window_index,
+            )
+            canvas.text(
+                x=omitted_x,
+                y=header_height - 6.0,
+                text=f"+{selected.omitted_ops} ops",
+                fill=_MUTED_TEXT,
+                font_size=11.0,
+                anchor="middle",
+            )
+
+    canvas.text(
+        x=width / 2,
+        y=height - 18.0,
+        text="Time interval",
+        fill=_MUTED_TEXT,
+        font_size=12.0,
+        anchor="middle",
+    )
 
     return canvas.to_document()
 
@@ -1005,6 +1219,184 @@ def _draw_activity_legend(canvas: SvgCanvas, *, x: float, y: float) -> None:
     )
 
 
+def _draw_gantt_legend(canvas: SvgCanvas, *, x: float, y: float) -> None:
+    canvas.rect(
+        x=x,
+        y=y,
+        width=228.0,
+        height=52.0,
+        fill="#ffffff",
+        stroke="#d8deea",
+        stroke_width=0.9,
+        opacity=0.96,
+        rx=10.0,
+    )
+    legend_items = (
+        ("Local op", _LOCAL_GATE_FILL, _LOCAL_GATE_STROKE, x + 12.0, y + 10.0),
+        (
+            "Remote op",
+            _REMOTE_GATE_FILL,
+            _REMOTE_GATE_STROKE,
+            x + 118.0,
+            y + 10.0,
+        ),
+        (
+            "Measure",
+            _MEASURE_GATE_FILL,
+            _MEASURE_GATE_STROKE,
+            x + 12.0,
+            y + 30.0,
+        ),
+        ("Swap", _SWAP_GATE_FILL, _SWAP_GATE_STROKE, x + 118.0, y + 30.0),
+    )
+    for label, fill, stroke, item_x, item_y in legend_items:
+        canvas.rect(
+            x=item_x,
+            y=item_y,
+            width=16.0,
+            height=10.0,
+            fill=fill,
+            stroke=stroke,
+            stroke_width=0.9,
+            rx=3.0,
+        )
+        canvas.text(
+            x=item_x + 24.0,
+            y=item_y + 8.0,
+            text=label,
+            fill=_TEXT_COLOR,
+            font_size=10.0,
+        )
+
+
+def _build_gantt_tasks(
+    selected_windows: list[_SelectedWindow],
+    *,
+    positions_by_window: list[dict[int, tuple[int, int]]],
+    remote_ops: set[int],
+) -> tuple[list[_GanttTask], list[tuple[int, int, int]], int]:
+    """Build physical-slot tasks and time bounds for the Gantt chart."""
+    tasks: list[_GanttTask] = []
+    window_bounds: list[tuple[int, int, int]] = []
+    time_index = 0
+
+    for selected in selected_windows:
+        local_layers = CircuitDAG(list(selected.ops)).layers
+        window_positions = positions_by_window[selected.window_index]
+        window_start = time_index
+        for local_layer in local_layers:
+            for op in local_layer:
+                tasks.append(
+                    _GanttTask(
+                        time_index=time_index,
+                        window_index=selected.window_index,
+                        op=op,
+                        is_remote=op.op_id in remote_ops,
+                        slot_positions=tuple(
+                            window_positions[qubit]
+                            for qubit in op.qubit_indices
+                        ),
+                    )
+                )
+            time_index += 1
+        window_end = (
+            time_index if time_index > window_start else time_index + 1
+        )
+        window_bounds.append((selected.window_index, window_start, window_end))
+        if time_index == window_start:
+            time_index += 1
+
+    return tasks, window_bounds, max(1, time_index)
+
+
+def _draw_gantt_window_backgrounds(
+    canvas: SvgCanvas,
+    *,
+    bounds: list[tuple[int, int, int]],
+    left_margin: float,
+    interval_width: float,
+    top: float,
+    height: float,
+) -> None:
+    for window_index, start_time, end_time in bounds:
+        del window_index
+        canvas.rect(
+            x=left_margin + start_time * interval_width + 4.0,
+            y=top,
+            width=max(12.0, (end_time - start_time) * interval_width - 8.0),
+            height=height,
+            fill=_WINDOW_FILL,
+            stroke="none",
+            opacity=0.58,
+            rx=10.0,
+        )
+
+
+def _draw_gantt_time_axis(
+    canvas: SvgCanvas,
+    *,
+    total_intervals: int,
+    left_margin: float,
+    interval_width: float,
+    top: float,
+    bottom: float,
+    right: float,
+) -> None:
+    for interval in range(total_intervals + 1):
+        x = left_margin + interval * interval_width
+        canvas.line(
+            x1=x,
+            y1=top,
+            x2=x,
+            y2=bottom,
+            stroke="#e3e8f3",
+            stroke_width=1.0,
+        )
+        if interval < total_intervals:
+            canvas.text(
+                x=x + interval_width / 2,
+                y=top - 10.0,
+                text=f"t{interval}",
+                fill=_MUTED_TEXT,
+                font_size=11.0,
+                anchor="middle",
+            )
+    canvas.line(
+        x1=left_margin,
+        y1=bottom,
+        x2=right,
+        y2=bottom,
+        stroke="#c9d3e3",
+        stroke_width=1.1,
+    )
+
+
+def _draw_gantt_window_headers(
+    canvas: SvgCanvas,
+    bounds: list[tuple[int, int, int]],
+    *,
+    left_margin: float,
+    interval_width: float,
+    y: float,
+) -> None:
+    for window_index, start_time, end_time in bounds:
+        canvas.text(
+            x=left_margin + (start_time + end_time) * interval_width / 2,
+            y=y,
+            text=f"W{window_index}",
+            fill=_MUTED_TEXT,
+            font_size=12.0,
+            font_weight="600",
+            anchor="middle",
+        )
+
+
+def _gantt_row_label(op: Op, window_index: int) -> str:
+    """Format the left-hand row label for a Gantt operation."""
+    qubits = ", ".join(_op_qubit_label(qubit) for qubit in op.qubits)
+    return f"W{window_index}  #{op.op_id}  {op.name} {qubits}".strip()
+
+
 def _draw_quantum_classical_separator(
     canvas: SvgCanvas,
     *,
@@ -1288,6 +1680,86 @@ def _draw_measurement_arrow(
     )
 
 
+def _draw_gantt_operation(
+    canvas: SvgCanvas,
+    *,
+    left: float,
+    right: float,
+    y_positions: tuple[float, ...],
+    label: str,
+    op_name: str,
+    is_remote: bool,
+    bar_height: float,
+) -> None:
+    fill, stroke, dasharray = _gantt_bar_style(op_name, is_remote)
+    width = right - left
+    center_x = (left + right) / 2
+    half_height = bar_height / 2
+    if len(y_positions) == 1:
+        y = y_positions[0]
+        canvas.rect(
+            x=left,
+            y=y - half_height,
+            width=width,
+            height=bar_height,
+            fill=fill,
+            stroke=stroke,
+            stroke_width=1.0,
+            dasharray=dasharray,
+            rx=5.5,
+        )
+        _draw_gate_text(
+            canvas,
+            x=center_x,
+            y=y + 4.0,
+            label=label,
+        )
+        return
+
+    top_y = min(y_positions)
+    bottom_y = max(y_positions)
+    canvas.line(
+        x1=center_x,
+        y1=top_y,
+        x2=center_x,
+        y2=bottom_y,
+        stroke=stroke,
+        stroke_width=1.0,
+        dasharray=dasharray,
+    )
+    for y in y_positions:
+        canvas.rect(
+            x=left,
+            y=y - half_height,
+            width=width,
+            height=bar_height,
+            fill=fill,
+            stroke=stroke,
+            stroke_width=1.0,
+            dasharray=dasharray,
+            rx=5.5,
+        )
+    badge_width = min(42.0, width + 6.0)
+    badge_y = (top_y + bottom_y) / 2
+    canvas.rect(
+        x=center_x - badge_width / 2,
+        y=badge_y - 9.0,
+        width=badge_width,
+        height=18.0,
+        fill=fill,
+        stroke=stroke,
+        stroke_width=1.0,
+        dasharray=dasharray,
+        rx=5.0,
+    )
+    _draw_gate_text(
+        canvas,
+        x=center_x,
+        y=badge_y + 4.0,
+        label=label,
+    )
+
+
 def _draw_gate_text(
     canvas: SvgCanvas,
     *,
@@ -1337,6 +1809,26 @@ def _measurement_cbit_key(
     if statement.cbit is None:
         return None
     return (statement.cbit.register_name, statement.cbit.index)
+
+
+def _gantt_bar_style(
+    op_name: str,
+    is_remote: bool,
+) -> tuple[str, str, str | None]:
+    if is_remote:
+        return _REMOTE_GATE_FILL, _REMOTE_GATE_STROKE, "4 4"
+    if op_name == "measure":
+        return _MEASURE_GATE_FILL, _MEASURE_GATE_STROKE, None
+    if op_name == "swap":
+        return _SWAP_GATE_FILL, _SWAP_GATE_STROKE, None
+    return _LOCAL_GATE_FILL, _LOCAL_GATE_STROKE, None
+
+
+def _op_qubit_label(qubit: object) -> str:
+    """Format a qubit-like object for compact row labels."""
+    register_name = getattr(qubit, "register_name", "q")
+    index = getattr(qubit, "index", "?")
+    return f"{register_name}[{index}]"
 
 
 def _gate_label(name: str, is_remote: bool) -> str:

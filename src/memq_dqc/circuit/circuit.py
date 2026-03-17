@@ -34,6 +34,8 @@ if TYPE_CHECKING:
     from memq_dqc.network import NetworkGraph
     from memq_dqc.partition.partitioner import QPU
 
+_REMOTE_OP_NAMES = frozenset({"rcx", "rcp", "rcry", "rcz", "rswap"})
+
 
 def extract_program_statements(
     program: ast.Program,
@@ -87,6 +89,7 @@ def extract_ops(statements: list[CleanedStatement]) -> list[Op]:
                 ),
             )
             name = statement.name
+            is_remote = False
 
         # Quantum Gate Operation
         elif isinstance(statement, CleanedQuantumGate):
@@ -95,6 +98,7 @@ def extract_ops(statements: list[CleanedStatement]) -> list[Op]:
                 for qubit in statement.qubits
             )
             name = statement.name
+            is_remote = _is_remote_op_name(name)
         else:
             raise ValueError("Unsupported operation statement type.")
 
@@ -103,11 +107,17 @@ def extract_ops(statements: list[CleanedStatement]) -> list[Op]:
                 op_id=op_id,
                 statement_id=statement_id,
                 name=name,
+                is_remote=is_remote,
                 qubits=qubits,
                 node=statement.node,
             )
         )
     return ops
+
+
+def _is_remote_op_name(name: str) -> bool:
+    """Return whether an operation name denotes a remote distributed op."""
+    return name in _REMOTE_OP_NAMES
 
 
 def count_two_qubit_ops(ops: list[Op]) -> int:
