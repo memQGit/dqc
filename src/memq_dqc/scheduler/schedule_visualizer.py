@@ -156,7 +156,7 @@ def plot_schedule_gantt(
 
 
 def _operation_fill(op: ScheduleEvent) -> str:
-    """Return the face color for a scheduled schedule event."""
+    """Return the face color for a scheduled event."""
     if isinstance(op, EntanglementGeneration):
         return _ENTANGLEMENT_FILL
     if op.name == "rswap":
