@@ -55,9 +55,9 @@ class BasePartitioner(ABC):
         """
         self.network = network
         self.circuit = Circuit(program)
-        # TODO: check correctness (should be total e-bits; not based on partition graph)
+        self._reported_cost: float | None = None
+        self._exact_cost: float | None = None
         self.schedule: PartitionSchedule | None = None
-        self.cost: float | None = None
         self.windows: PartitionWindows | None = None
 
     @abstractmethod
@@ -68,6 +68,38 @@ class BasePartitioner(ABC):
             cost, schedule, and windows with the latest partitioning results.
         """
         raise NotImplementedError
+
+    @property
+    def cost(self) -> float | None:
+        """Return the latest entanglement cost, if available.
+
+        When a schedule and windowing are available, cost is derived from the
+        total routed e-bit usage implied by remote gates and inter-window
+        qubit movement.
+        """
+        if self._exact_cost is not None:
+            return self._exact_cost
+
+        schedule = self.schedule
+        windows = self.windows
+        if (
+            schedule is None
+            or windows is None
+            or len(schedule) != len(windows)
+        ):
+            return self._reported_cost
+
+        return _total_schedule_ebit_cost(schedule, windows, self.network)
+
+    @cost.setter
+    def cost(self, value: float | None) -> None:
+        """Store an algorithm-reported cost estimate."""
+        self._reported_cost = value
+        self._exact_cost = None
+
+    def _set_exact_cost(self, value: float | None) -> None:
+        """Store an exact entanglement cost override."""
+        self._exact_cost = value
 
 
 class Partitioner:
@@ -230,3 +262,51 @@ def _circuit_qubit_physical_map(
         for slot_idx, logical_qubit in enumerate(sorted(logical_qubits)):
             mapping[logical_qubit] = (qpu.id, slot_idx)
     return dict(sorted(mapping.items(), key=lambda item: item[0]))
+
+
+def _total_schedule_ebit_cost(
+    schedule: PartitionSchedule,
+    windows: PartitionWindows,
+    network: NetworkGraph,
+) -> float:
+    """Return total routed e-bit usage implied by a schedule."""
+    total_cost = 0.0
+    previous_assignment: dict[int, int] | None = None
+    remote_gate_ebit_cost = network.remote_gate_ebit_cost
+    remote_swap_ebit_cost = network.remote_swap_ebit_cost
+
+    for assignment, ops in zip(schedule, windows, strict=True):
+        current_assignment: dict[int, int] = {}
+        for qpu, logical_qubits in assignment.items():
+            qpu_id = qpu.id
+            for logical_qubit in logical_qubits:
+                current_assignment[logical_qubit] = qpu_id
+
+        if previous_assignment is not None:
+            for logical_qubit, current_qpu_id in current_assignment.items():
+                previous_qpu_id = previous_assignment.get(logical_qubit)
+                if (
+                    previous_qpu_id is not None
+                    and previous_qpu_id != current_qpu_id
+                ):
+                    total_cost += float(
+                        remote_swap_ebit_cost(
+                            previous_qpu_id,
+                            current_qpu_id,
+                        )
+                    )
+
+        for op in ops:
+            if not op.is_two_qubit:
+                continue
+            left_qubit, right_qubit = op.qubit_indices
+            left_qpu_id = current_assignment[left_qubit]
+            right_qpu_id = current_assignment[right_qubit]
+            if left_qpu_id != right_qpu_id:
+                total_cost += float(
+                    remote_gate_ebit_cost(left_qpu_id, right_qpu_id)
+                )
+
+        previous_assignment = current_assignment
+
+    return total_cost

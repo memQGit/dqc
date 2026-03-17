@@ -18,6 +18,7 @@ from memq_dqc.visualization import (
     SvgDocument,
     build_svg_dashboard_html,
     plot_distributed_circuit,
+    plot_operation_gantt,
     plot_partition_flow,
     plot_window_activity,
 )
@@ -94,6 +95,115 @@ def test_plot_partition_flow_draws_paths() -> None:
     assert isinstance(document, SvgDocument)
     assert "<path" in document.svg
     assert "QPU 0" in document.svg
+
+
+def test_plot_operation_gantt_renders_operation_bars(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    circuit = Circuit(program)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo_kwargs={"window_length": 3},
+    )
+    partitioner.run()
+    assert partitioner.schedule is not None
+    assert partitioner.windows is not None
+
+    document = plot_operation_gantt(
+        circuit,
+        schedule=partitioner.schedule,
+        windows=partitioner.windows,
+    )
+
+    assert isinstance(document, SvgDocument)
+    assert "Operation Gantt" in document.svg
+    assert "Time interval" in document.svg
+    assert "W0" in document.svg
+    assert "RCX" in document.svg
+
+
+def test_plot_operation_gantt_limits_visible_ops(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    circuit = Circuit(program)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo_kwargs={"window_length": 3},
+    )
+    partitioner.run()
+    assert partitioner.schedule is not None
+    assert partitioner.windows is not None
+
+    document = plot_operation_gantt(
+        circuit,
+        schedule=partitioner.schedule,
+        windows=partitioner.windows,
+        max_ops_per_window=1,
+    )
+
+    assert isinstance(document, SvgDocument)
+    assert "+2 ops" in document.svg
+    assert "first 1 ops per window" in document.svg
+
+
+def test_plot_operation_gantt_validates_schedule_and_windows(
+    bell_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(bell_circuit_path))
+    circuit = Circuit(program)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo_kwargs={"window_length": 1},
+    )
+    partitioner.run()
+    assert partitioner.schedule is not None
+    assert partitioner.windows is not None
+
+    with pytest.raises(ValueError, match="same length"):
+        plot_operation_gantt(
+            circuit,
+            schedule=partitioner.schedule[:-1],
+            windows=partitioner.windows,
+        )
+
+
+def test_plot_operation_gantt_stacks_parallel_ops_in_same_interval(
+    tmp_path,
+) -> None:
+    qasm_path = tmp_path / "parallel.qasm"
+    qasm_path.write_text(
+        "\n".join(
+            [
+                "OPENQASM 3.0;",
+                'include "stdgates.inc";',
+                "",
+                "qubit[2] q;",
+                "",
+                "h q[0];",
+                "x q[1];",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    circuit = Circuit(str(qasm_path))
+
+    document = plot_operation_gantt(circuit)
+
+    assert isinstance(document, SvgDocument)
+    assert "QPU 0" in document.svg
+    assert "t0" in document.svg
+    assert "t1" not in document.svg
 
 
 def test_plot_window_activity_returns_svg(

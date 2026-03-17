@@ -131,7 +131,7 @@ def extract_distributed_circuit(
         # TODO: make this exact and confirm cost calculations
         assert actual_statement_count >= expected_statement_count
         exact_cost = _exact_entanglement_cost(distributed)
-        partitioner._algorithm.cost = exact_cost
+        partitioner._algorithm._set_exact_cost(exact_cost)
         logger.info(
             "Distributed circuit extraction completed in %.3fs: "
             "remote_gates=%d swaps=%d statements=%d exact_cost=%.3f.",
