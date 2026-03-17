@@ -27,7 +27,7 @@ _GATE_TELEPORT_TIME = (
     _LOCAL_2Q_GATE_TIME + _MEASUREMENT_TIME + _LOCAL_1Q_GATE_TIME
 )
 
-# TODO: General -> detemrine which type of r-swap we want to use
+# TODO: General -> determine which type of r-swap we want to use
 # determine if we want to have buffer qubits if we use dual state teleport
 
 
