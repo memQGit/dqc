@@ -230,6 +230,45 @@ def test_plot_schedule_gantt_marks_communication_qubit_boxes(
     plt.close("all")
 
 
+def test_plot_schedule_gantt_explicit_ops_renders_one_row_per_event(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    distributed_circuit = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+    )
+    schedule = fifo_schedule(distributed_circuit)
+
+    axes = plot_schedule_gantt(schedule, explicit_ops=True)
+
+    assert axes.get_ylabel() == "Operation"
+    assert [tick.get_text() for tick in axes.get_yticklabels()] == [
+        "1: x",
+        "2: h",
+        "3: epr",
+        "4: rcx",
+    ]
+    assert len(axes.patches) == 4
+
+    hatched_patches = [
+        patch for patch in axes.patches if patch.get_hatch() == "///"
+    ]
+    plain_patches = [
+        patch for patch in axes.patches if patch.get_hatch() in {"", None}
+    ]
+
+    assert len(hatched_patches) == 2
+    assert len(plain_patches) == 2
+    assert {text.get_text() for text in axes.texts} >= {
+        "x",
+        "h",
+        "epr",
+        "rcx",
+    }
+    plt.close("all")
+
+
 def test_operation_schedule_accepts_entanglement_generation_events() -> None:
     scheduled_events = [
         EntanglementGeneration(

@@ -34,6 +34,8 @@ demo/
 .cache/
 
 # Local notes
+scheduler_breakdown.md
+src/memq_dqc/scheduler/scheduler_plan.md
 notes.txt
 CLEANUP.txt
 

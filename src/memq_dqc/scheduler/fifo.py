@@ -27,6 +27,8 @@ class FIFOScheduler(BaseScheduler):
         # need to add: check of available e-bit
         for layer in self.distributed_circuit.dag.layers:
             for op in layer:
+                # we would like to forward look to see if local operations
+                # can be done simultaneously with remote operations
                 qubits = tuple(
                     _physical_qubit_label(qubit) for qubit in op.qubits
                 )
@@ -37,6 +39,7 @@ class FIFOScheduler(BaseScheduler):
 
                 entanglement_events: list[EntanglementGeneration] = []
                 if op.is_remote:
+                    # TODO: handle multiplex entanglement
                     ebits = op.ebit_pairs
                     if ebits is not None:
                         # Entanglement generation is just-in-time (not FIFO)
@@ -152,6 +155,10 @@ def _schedule_entanglement_generation(
             for pair in ebit_qubits
         ], start_time
 
+    else:
+        pass
+        # Non-multiplexed entanglement: generate same-qpu e-bits sequentially
+        # we will implement this with DES
     start_time = data_ready
     total_pairs = len(ebit_qubits)
     for index, pair in enumerate(ebit_qubits):
