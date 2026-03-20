@@ -1,0 +1,638 @@
+{
+  "processors": {
+    "0": {
+      "id": 0,
+      "qubits": {
+        "computation": [
+          "q_0_0",
+          "q_0_1",
+          "q_0_2",
+          "q_0_3",
+          "q_0_4",
+          "q_0_5"
+        ],
+        "communication": [
+          "c_0_0",
+          "c_0_1",
+          "c_0_2",
+          "c_0_3"
+        ]
+      }
+    },
+    "1": {
+      "id": 1,
+      "qubits": {
+        "computation": [
+          "q_1_0",
+          "q_1_1",
+          "q_1_2",
+          "q_1_3",
+          "q_1_4",
+          "q_1_5"
+        ],
+        "communication": [
+          "c_1_0",
+          "c_1_1",
+          "c_1_2",
+          "c_1_3"
+        ]
+      }
+    },
+    "2": {
+      "id": 2,
+      "qubits": {
+        "computation": [
+          "q_2_0",
+          "q_2_1",
+          "q_2_2",
+          "q_2_3",
+          "q_2_4",
+          "q_2_5"
+        ],
+        "communication": [
+          "c_2_0",
+          "c_2_1",
+          "c_2_2",
+          "c_2_3"
+        ]
+      }
+    }
+  },
+  "qubits": {
+    "c_0_0": {
+      "id": "c_0_0",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 0,
+      "localIndex": 0,
+      "label": "c(0,0)",
+      "localConnections": [
+        "q_0_0"
+      ],
+      "remoteConnections": [
+        "c_2_2"
+      ]
+    },
+    "c_0_1": {
+      "id": "c_0_1",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 0,
+      "localIndex": 1,
+      "label": "c(0,1)",
+      "localConnections": [
+        "q_0_2"
+      ],
+      "remoteConnections": [
+        "c_2_3"
+      ]
+    },
+    "q_0_0": {
+      "id": "q_0_0",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 0,
+      "localIndex": 0,
+      "label": "q(0,0)",
+      "localConnections": [
+        "c_0_0",
+        "q_0_1",
+        "q_0_2"
+      ],
+      "remoteConnections": []
+    },
+    "q_0_1": {
+      "id": "q_0_1",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 0,
+      "localIndex": 1,
+      "label": "q(0,1)",
+      "localConnections": [
+        "q_0_0",
+        "c_0_2"
+      ],
+      "remoteConnections": []
+    },
+    "q_0_2": {
+      "id": "q_0_2",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 0,
+      "localIndex": 2,
+      "label": "q(0,2)",
+      "localConnections": [
+        "q_0_0",
+        "c_0_1",
+        "q_0_3",
+        "q_0_4"
+      ],
+      "remoteConnections": []
+    },
+    "q_0_3": {
+      "id": "q_0_3",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 0,
+      "localIndex": 3,
+      "label": "q(0,3)",
+      "localConnections": [
+        "q_0_2",
+        "c_0_3",
+        "q_0_5"
+      ],
+      "remoteConnections": []
+    },
+    "q_0_4": {
+      "id": "q_0_4",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 0,
+      "localIndex": 4,
+      "label": "q(0,4)",
+      "localConnections": [
+        "q_0_2"
+      ],
+      "remoteConnections": []
+    },
+    "q_0_5": {
+      "id": "q_0_5",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 0,
+      "localIndex": 5,
+      "label": "q(0,5)",
+      "localConnections": [
+        "q_0_3"
+      ],
+      "remoteConnections": []
+    },
+    "c_0_2": {
+      "id": "c_0_2",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 0,
+      "localIndex": 2,
+      "label": "c(0,2)",
+      "localConnections": [
+        "q_0_1"
+      ],
+      "remoteConnections": [
+        "c_1_0"
+      ]
+    },
+    "c_0_3": {
+      "id": "c_0_3",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 0,
+      "localIndex": 3,
+      "label": "c(0,3)",
+      "localConnections": [
+        "q_0_3"
+      ],
+      "remoteConnections": [
+        "c_1_1"
+      ]
+    },
+    "c_1_0": {
+      "id": "c_1_0",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 1,
+      "localIndex": 0,
+      "label": "c(1,0)",
+      "localConnections": [
+        "q_1_0"
+      ],
+      "remoteConnections": [
+        "c_0_2"
+      ]
+    },
+    "c_1_1": {
+      "id": "c_1_1",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 1,
+      "localIndex": 1,
+      "label": "c(1,1)",
+      "localConnections": [
+        "q_1_2"
+      ],
+      "remoteConnections": [
+        "c_0_3"
+      ]
+    },
+    "q_1_0": {
+      "id": "q_1_0",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 1,
+      "localIndex": 0,
+      "label": "q(1,0)",
+      "localConnections": [
+        "c_1_0",
+        "q_1_1",
+        "q_1_2"
+      ],
+      "remoteConnections": []
+    },
+    "q_1_1": {
+      "id": "q_1_1",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 1,
+      "localIndex": 1,
+      "label": "q(1,1)",
+      "localConnections": [
+        "q_1_0",
+        "c_1_2"
+      ],
+      "remoteConnections": []
+    },
+    "q_1_2": {
+      "id": "q_1_2",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 1,
+      "localIndex": 2,
+      "label": "q(1,2)",
+      "localConnections": [
+        "q_1_0",
+        "c_1_1",
+        "q_1_3",
+        "q_1_4"
+      ],
+      "remoteConnections": []
+    },
+    "q_1_3": {
+      "id": "q_1_3",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 1,
+      "localIndex": 3,
+      "label": "q(1,3)",
+      "localConnections": [
+        "q_1_2",
+        "c_1_3",
+        "q_1_5"
+      ],
+      "remoteConnections": []
+    },
+    "q_1_4": {
+      "id": "q_1_4",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 1,
+      "localIndex": 4,
+      "label": "q(1,4)",
+      "localConnections": [
+        "q_1_2"
+      ],
+      "remoteConnections": []
+    },
+    "q_1_5": {
+      "id": "q_1_5",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 1,
+      "localIndex": 5,
+      "label": "q(1,5)",
+      "localConnections": [
+        "q_1_3"
+      ],
+      "remoteConnections": []
+    },
+    "c_1_2": {
+      "id": "c_1_2",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 1,
+      "localIndex": 2,
+      "label": "c(1,2)",
+      "localConnections": [
+        "q_1_1"
+      ],
+      "remoteConnections": [
+        "c_2_0"
+      ]
+    },
+    "c_1_3": {
+      "id": "c_1_3",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 1,
+      "localIndex": 3,
+      "label": "c(1,3)",
+      "localConnections": [
+        "q_1_3"
+      ],
+      "remoteConnections": [
+        "c_2_1"
+      ]
+    },
+    "c_2_0": {
+      "id": "c_2_0",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 2,
+      "localIndex": 0,
+      "label": "c(2,0)",
+      "localConnections": [
+        "q_2_0"
+      ],
+      "remoteConnections": [
+        "c_1_2"
+      ]
+    },
+    "c_2_1": {
+      "id": "c_2_1",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 2,
+      "localIndex": 1,
+      "label": "c(2,1)",
+      "localConnections": [
+        "q_2_2"
+      ],
+      "remoteConnections": [
+        "c_1_3"
+      ]
+    },
+    "q_2_0": {
+      "id": "q_2_0",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 2,
+      "localIndex": 0,
+      "label": "q(2,0)",
+      "localConnections": [
+        "c_2_0",
+        "q_2_1",
+        "q_2_2"
+      ],
+      "remoteConnections": []
+    },
+    "q_2_1": {
+      "id": "q_2_1",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 2,
+      "localIndex": 1,
+      "label": "q(2,1)",
+      "localConnections": [
+        "q_2_0",
+        "c_2_2"
+      ],
+      "remoteConnections": []
+    },
+    "q_2_2": {
+      "id": "q_2_2",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 2,
+      "localIndex": 2,
+      "label": "q(2,2)",
+      "localConnections": [
+        "q_2_0",
+        "c_2_1",
+        "q_2_3",
+        "q_2_4"
+      ],
+      "remoteConnections": []
+    },
+    "q_2_3": {
+      "id": "q_2_3",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 2,
+      "localIndex": 3,
+      "label": "q(2,3)",
+      "localConnections": [
+        "q_2_2",
+        "c_2_3",
+        "q_2_5"
+      ],
+      "remoteConnections": []
+    },
+    "q_2_4": {
+      "id": "q_2_4",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 2,
+      "localIndex": 4,
+      "label": "q(2,4)",
+      "localConnections": [
+        "q_2_2"
+      ],
+      "remoteConnections": []
+    },
+    "q_2_5": {
+      "id": "q_2_5",
+      "kind": "computation",
+      "type": "computation",
+      "processorId": 2,
+      "localIndex": 5,
+      "label": "q(2,5)",
+      "localConnections": [
+        "q_2_3"
+      ],
+      "remoteConnections": []
+    },
+    "c_2_2": {
+      "id": "c_2_2",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 2,
+      "localIndex": 2,
+      "label": "c(2,2)",
+      "localConnections": [
+        "q_2_1"
+      ],
+      "remoteConnections": [
+        "c_0_0"
+      ]
+    },
+    "c_2_3": {
+      "id": "c_2_3",
+      "kind": "communication",
+      "type": "communication",
+      "processorId": 2,
+      "localIndex": 3,
+      "label": "c(2,3)",
+      "localConnections": [
+        "q_2_3"
+      ],
+      "remoteConnections": [
+        "c_0_1"
+      ]
+    }
+  },
+  "connections": [
+    {
+      "qubit1": "c_0_2",
+      "qubit2": "c_1_0",
+      "type": "remote"
+    },
+    {
+      "qubit1": "c_0_3",
+      "qubit2": "c_1_1",
+      "type": "remote"
+    },
+    {
+      "qubit1": "c_1_2",
+      "qubit2": "c_2_0",
+      "type": "remote"
+    },
+    {
+      "qubit1": "c_1_3",
+      "qubit2": "c_2_1",
+      "type": "remote"
+    },
+    {
+      "qubit1": "c_2_2",
+      "qubit2": "c_0_0",
+      "type": "remote"
+    },
+    {
+      "qubit1": "c_2_3",
+      "qubit2": "c_0_1",
+      "type": "remote"
+    },
+    {
+      "qubit1": "c_0_0",
+      "qubit2": "q_0_0",
+      "type": "local"
+    },
+    {
+      "qubit1": "c_1_0",
+      "qubit2": "q_1_0",
+      "type": "local"
+    },
+    {
+      "qubit1": "c_2_0",
+      "qubit2": "q_2_0",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_0_0",
+      "qubit2": "q_0_1",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_1_0",
+      "qubit2": "q_1_1",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_2_0",
+      "qubit2": "q_2_1",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_1_1",
+      "qubit2": "c_1_2",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_0_1",
+      "qubit2": "c_0_2",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_2_1",
+      "qubit2": "c_2_2",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_0_0",
+      "qubit2": "q_0_2",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_1_0",
+      "qubit2": "q_1_2",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_2_0",
+      "qubit2": "q_2_2",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_0_2",
+      "qubit2": "c_0_1",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_1_2",
+      "qubit2": "c_1_1",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_2_2",
+      "qubit2": "c_2_1",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_0_2",
+      "qubit2": "q_0_3",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_1_2",
+      "qubit2": "q_1_3",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_2_2",
+      "qubit2": "q_2_3",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_0_3",
+      "qubit2": "c_0_3",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_1_3",
+      "qubit2": "c_1_3",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_2_3",
+      "qubit2": "c_2_3",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_0_2",
+      "qubit2": "q_0_4",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_1_2",
+      "qubit2": "q_1_4",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_2_2",
+      "qubit2": "q_2_4",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_0_3",
+      "qubit2": "q_0_5",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_1_3",
+      "qubit2": "q_1_5",
+      "type": "local"
+    },
+    {
+      "qubit1": "q_2_3",
+      "qubit2": "q_2_5",
+      "type": "local"
+    }
+  ]
+}
