@@ -251,6 +251,10 @@ def _get_algorithm_class(name: str) -> type[BaseScheduler]:
         from memq_dqc.scheduler.fifo import FIFOScheduler
 
         return FIFOScheduler
+    if name in {"des", "des_epr", "des_entanglement"}:
+        from memq_dqc.scheduler.des_epr import DESEntanglementScheduler
+
+        return DESEntanglementScheduler
     if name in {"epr_min", "epr_minimization", "EPRMinimization"}:
         from memq_dqc.scheduler.epr_min import EPRMinimizationScheduler
 

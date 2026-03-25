@@ -45,7 +45,7 @@ class FIFOScheduler(BaseScheduler):
                         # Entanglement generation is just-in-time (not FIFO)
                         entanglement_events, start_time = (
                             _schedule_entanglement_generation(
-                                data_qubits=qubits[:2],
+                                data_qubits=(qubits[0], qubits[1]),
                                 ebit_qubits=tuple(
                                     (
                                         _physical_qubit_label(ebit[0]),
@@ -115,7 +115,7 @@ def fifo_schedule(
         An operation-level schedule with per-qubit timelines.
     """
     scheduler = FIFOScheduler(
-        distributed_circuit,
+        distributed_circuit=distributed_circuit,
         multiplex_entangle=multiplex_entangle,
     )
     scheduler.run()

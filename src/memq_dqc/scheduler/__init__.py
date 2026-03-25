@@ -7,6 +7,7 @@
 
 """Public scheduler interface for distributed circuit execution planning."""
 
+from .des_epr import DESEntanglementScheduler, des_epr_schedule
 from .epr_min import EPRMinimizationScheduler
 from .fifo import FIFOScheduler, fifo_schedule
 from .schedule import (
@@ -22,6 +23,7 @@ from .schedule_visualizer import plot_schedule_gantt
 
 __all__ = [
     "BaseScheduler",
+    "DESEntanglementScheduler",
     "EPRMinimizationScheduler",
     "EntanglementGeneration",
     "FIFOScheduler",
@@ -30,6 +32,7 @@ __all__ = [
     "Scheduler",
     "ScheduledOperation",
     "ScheduledQubitTimeline",
+    "des_epr_schedule",
     "fifo_schedule",
     "plot_schedule_gantt",
 ]
