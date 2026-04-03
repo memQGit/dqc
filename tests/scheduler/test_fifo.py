@@ -20,10 +20,13 @@ from memq_dqc.scheduler import (
     OperationSchedule,
     ScheduledOperation,
     Scheduler,
+    SchedulerHardwareProfile,
     fifo_schedule,
     plot_schedule_gantt,
 )
 from memq_dqc.scheduler.schedule import _build_qubit_timelines
+
+_DEFAULT_EPR_DURATION = 1.0 / 3.5e-6
 
 
 class _TwoQpuPartitioner(BasePartitioner):
@@ -76,20 +79,20 @@ def test_fifo_schedule_returns_operation_schedule(
     x_op, h_op, epr_op, remote_op = schedule.operations
     assert x_op.qubits == ("q0[0]",)
     assert x_op.start_time == 0.0
-    assert x_op.duration == 1.0
+    assert x_op.duration == 10.0
     assert h_op.qubits == ("q1[0]",)
     assert h_op.start_time == 0.0
-    assert h_op.duration == 1.0
+    assert h_op.duration == 10.0
     assert epr_op.qubits == ("c0[0]", "c1[0]")
     assert epr_op.start_time == 0.0
-    assert epr_op.duration == 10.0
-    assert epr_op.end_time == 10.0
+    assert epr_op.duration == pytest.approx(_DEFAULT_EPR_DURATION)
+    assert epr_op.end_time == pytest.approx(_DEFAULT_EPR_DURATION)
     assert remote_op.qubits == ("q0[0]", "q1[0]", "c0[0]", "c1[0]")
-    assert remote_op.start_time == epr_op.end_time
-    assert remote_op.duration == 6.0
-    assert remote_op.end_time == 16.0
+    assert remote_op.start_time == pytest.approx(epr_op.end_time)
+    assert remote_op.duration == 513.0
+    assert remote_op.end_time == pytest.approx(_DEFAULT_EPR_DURATION + 513.0)
     assert remote_op.is_remote is True
-    assert schedule.makespan == 16.0
+    assert schedule.makespan == pytest.approx(_DEFAULT_EPR_DURATION + 513.0)
 
 
 def test_scheduler_runs_fifo_by_default(
@@ -113,6 +116,105 @@ def test_scheduler_runs_fifo_by_default(
         "epr",
         "rcx",
     ]
+
+
+def test_scheduler_accepts_explicit_multiplex_setting(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    distributed_circuit = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+    )
+
+    scheduler = Scheduler(
+        distributed_circuit,
+        multiplex_entangle=False,
+    )
+
+    assert scheduler.multiplex_entangle is False
+
+
+@pytest.mark.parametrize(
+    (
+        "modality",
+        "expected_one_qubit",
+        "expected_remote_duration",
+        "expected_entanglement_duration",
+    ),
+    [
+        ("trapped_ion.sr", 13.0, 216.0, 1.0 / 3.5e-6),
+        ("neutral_atom", 1.0, 4.8, 1.0 / 3.5e-6),
+    ],
+)
+def test_scheduler_accepts_explicit_modality(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+    modality,
+    expected_one_qubit,
+    expected_remote_duration,
+    expected_entanglement_duration,
+) -> None:
+    distributed_circuit = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+    )
+
+    scheduler = Scheduler(distributed_circuit, modality=modality)
+    scheduler.run()
+
+    assert scheduler.schedule is not None
+    x_op, h_op, epr_op, remote_op = scheduler.schedule.operations
+    assert x_op.duration == pytest.approx(expected_one_qubit)
+    assert h_op.duration == pytest.approx(expected_one_qubit)
+    assert epr_op.duration == pytest.approx(expected_entanglement_duration)
+    assert remote_op.duration == pytest.approx(expected_remote_duration)
+
+
+def test_scheduler_accepts_explicit_entanglement_profile(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    distributed_circuit = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+    )
+
+    scheduler = Scheduler(
+        distributed_circuit,
+        entanglement_profile="ion.polarization",
+    )
+    scheduler.run()
+
+    assert scheduler.schedule is not None
+    _x_op, _h_op, epr_op, remote_op = scheduler.schedule.operations
+    assert epr_op.duration == pytest.approx(400.0)
+    assert remote_op.duration == pytest.approx(513.0)
+
+
+def test_scheduler_profile_object_supports_cross_family_mix(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    distributed_circuit = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+    )
+
+    scheduler = Scheduler(
+        distributed_circuit,
+        profile=SchedulerHardwareProfile.neutral_atom(
+            entanglement_profile="ion.polarization"
+        ),
+    )
+    scheduler.run()
+
+    assert scheduler.schedule is not None
+    x_op, h_op, epr_op, remote_op = scheduler.schedule.operations
+    assert x_op.duration == pytest.approx(1.0)
+    assert h_op.duration == pytest.approx(1.0)
+    assert epr_op.duration == pytest.approx(400.0)
+    assert remote_op.duration == pytest.approx(4.8)
 
 
 def test_scheduler_rejects_unknown_algorithm(

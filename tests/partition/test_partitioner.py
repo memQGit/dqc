@@ -40,6 +40,24 @@ def test_partitioner_cisco_default(
     assert len(windows) == len(schedule)
 
 
+def test_partitioner_accepts_network_and_qasm_paths(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    partitioner = Partitioner(
+        three_comp_one_comm_x2_network_path,
+        simple1_circuit_path,
+        algo_kwargs={"window_length": 2},
+    )
+
+    partitioner.run()
+
+    assert isinstance(partitioner.network, NetworkGraph)
+    assert isinstance(partitioner.circuit, Circuit)
+    assert partitioner.schedule
+    assert partitioner.windows
+
+
 def test_partitioner_benchmark_static_schedule_is_stationary(
     simple1_circuit_path,
     three_comp_one_comm_x2_network_path,

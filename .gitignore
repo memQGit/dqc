@@ -29,7 +29,7 @@ coverage.xml
 # Local testing / playground scripts
 scripts/
 results/
-demo/
+nvidia_demo/
 # Local caching
 .cache/
 

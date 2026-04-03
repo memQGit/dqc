@@ -8,6 +8,7 @@
 import pytest
 from openqasm3 import ast
 
+import memq_dqc.scheduler.schedule as schedule_module
 from memq_dqc.builder import extract_distributed_circuit
 from memq_dqc.circuit import DistributedCircuit
 from memq_dqc.circuit.dag import DistributedCircuitDAG
@@ -21,6 +22,7 @@ from memq_dqc.scheduler import (
     DESEntanglementScheduler,
     OperationSchedule,
     Scheduler,
+    SchedulerHardwareProfile,
     des_epr_schedule,
 )
 
@@ -129,10 +131,36 @@ def _remote_swap_gate(
     )
 
 
+def _patch_scheduler_timing_model(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    rate: float,
+    local_one_qubit_gate_time: float = 10.0,
+    local_two_qubit_gate_time: float = 500.0,
+) -> None:
+    def _load_timing_model(
+        hardware_profile: SchedulerHardwareProfile,
+    ) -> schedule_module.SchedulerTimingModel:
+        return schedule_module.SchedulerTimingModel(
+            hardware_profile=hardware_profile,
+            local_one_qubit_gate_time=local_one_qubit_gate_time,
+            local_two_qubit_gate_time=local_two_qubit_gate_time,
+            entanglement_generation_rate=rate,
+        )
+
+    monkeypatch.setattr(
+        schedule_module,
+        "_load_scheduler_timing_model",
+        _load_timing_model,
+    )
+
+
 def test_des_epr_schedule_single_cycle_success(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
+    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
     distributed_circuit = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -143,28 +171,25 @@ def test_des_epr_schedule_single_cycle_success(
         ),
     )
 
-    schedule = des_epr_schedule(
-        distributed_circuit,
-        t_cycle=5.0,
-        p_success=1.0,
-        seed=0,
-    )
+    schedule = des_epr_schedule(distributed_circuit, seed=0)
 
     assert isinstance(schedule, OperationSchedule)
     assert [event.name for event in schedule.operations] == ["epr", "rcx"]
 
     epr_event, remote_op = schedule.operations
     assert epr_event.start_time == 0.0
-    assert epr_event.duration == 5.0
-    assert remote_op.start_time == 5.0
-    assert remote_op.duration == 6.0
-    assert schedule.makespan == 11.0
+    assert epr_event.duration == 1.0
+    assert remote_op.start_time == 1.0
+    assert remote_op.duration == 513.0
+    assert schedule.makespan == 514.0
 
 
 def test_des_epr_schedule_retries_until_seeded_success(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
+    _patch_scheduler_timing_model(monkeypatch, rate=0.5)
     distributed_circuit = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -175,23 +200,20 @@ def test_des_epr_schedule_retries_until_seeded_success(
         ),
     )
 
-    schedule = des_epr_schedule(
-        distributed_circuit,
-        t_cycle=5.0,
-        p_success=0.5,
-        seed=0,
-    )
+    schedule = des_epr_schedule(distributed_circuit, seed=0)
 
     epr_event, remote_op = schedule.operations
-    assert epr_event.duration == 15.0
-    assert remote_op.start_time == 15.0
-    assert schedule.makespan == 21.0
+    assert epr_event.duration == 3.0
+    assert remote_op.start_time == 3.0
+    assert schedule.makespan == 516.0
 
 
 def test_des_epr_schedule_waits_for_data_qubits_before_request(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
+    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
     distributed_circuit = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -204,12 +226,7 @@ def test_des_epr_schedule_waits_for_data_qubits_before_request(
         ),
     )
 
-    schedule = des_epr_schedule(
-        distributed_circuit,
-        t_cycle=5.0,
-        p_success=1.0,
-        seed=0,
-    )
+    schedule = des_epr_schedule(distributed_circuit, seed=0)
 
     assert [event.name for event in schedule.operations] == [
         "x",
@@ -219,18 +236,20 @@ def test_des_epr_schedule_waits_for_data_qubits_before_request(
     ]
 
     x_op, h_op, epr_event, remote_op = schedule.operations
-    assert x_op.end_time == 1.0
-    assert h_op.end_time == 1.0
-    assert epr_event.start_time == 1.0
-    assert epr_event.duration == 5.0
-    assert remote_op.start_time == 6.0
-    assert schedule.makespan == 12.0
+    assert x_op.end_time == 10.0
+    assert h_op.end_time == 10.0
+    assert epr_event.start_time == 10.0
+    assert epr_event.duration == 1.0
+    assert remote_op.start_time == 11.0
+    assert schedule.makespan == 524.0
 
 
 def test_des_epr_schedule_runs_parallel_requests_on_disjoint_links(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
+    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
     template = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -262,12 +281,7 @@ def test_des_epr_schedule_runs_parallel_requests_on_disjoint_links(
         ],
     )
 
-    schedule = des_epr_schedule(
-        distributed_circuit,
-        t_cycle=5.0,
-        p_success=1.0,
-        seed=0,
-    )
+    schedule = des_epr_schedule(distributed_circuit, seed=0)
 
     assert [event.name for event in schedule.operations] == [
         "epr",
@@ -278,15 +292,17 @@ def test_des_epr_schedule_runs_parallel_requests_on_disjoint_links(
     first_epr, second_epr, first_remote, second_remote = schedule.operations
     assert first_epr.start_time == 0.0
     assert second_epr.start_time == 0.0
-    assert first_remote.start_time == 5.0
-    assert second_remote.start_time == 5.0
-    assert schedule.makespan == 11.0
+    assert first_remote.start_time == 1.0
+    assert second_remote.start_time == 1.0
+    assert schedule.makespan == 514.0
 
 
 def test_scheduler_runs_des_epr_via_registry(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
+    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
     distributed_circuit = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -300,7 +316,7 @@ def test_scheduler_runs_des_epr_via_registry(
     scheduler = Scheduler(
         distributed_circuit,
         algo="des_epr",
-        algo_kwargs={"t_cycle": 5.0, "p_success": 1.0, "seed": 0},
+        algo_kwargs={"seed": 0},
     )
     scheduler.run()
 
@@ -311,7 +327,7 @@ def test_scheduler_runs_des_epr_via_registry(
     ]
 
 
-def test_des_epr_schedule_rejects_invalid_parameters(
+def test_des_epr_scheduler_uses_profile_rate_defaults(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
@@ -325,25 +341,58 @@ def test_des_epr_schedule_rejects_invalid_parameters(
         ),
     )
 
-    with pytest.raises(ValueError, match="t_cycle"):
-        DESEntanglementScheduler(
-            distributed_circuit,
-            t_cycle=0.0,
-            p_success=1.0,
-        ).run()
+    scheduler = DESEntanglementScheduler(
+        distributed_circuit,
+        profile=SchedulerHardwareProfile.sr_trapped_ion(
+            entanglement_profile="neutral_atom.polarization"
+        ),
+    )
 
-    with pytest.raises(ValueError, match="p_success"):
-        DESEntanglementScheduler(
-            distributed_circuit,
-            t_cycle=5.0,
-            p_success=0.0,
-        ).run()
+    assert scheduler.t_cycle == pytest.approx(1.0)
+    assert scheduler.p_success == pytest.approx(3.2e-2)
 
 
-def test_des_epr_schedule_supports_rswap_with_two_pairs(
+def test_des_epr_schedule_rejects_invalid_parameters(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
+    class _InvalidTimingModel:
+        local_one_qubit_gate_time = 10.0
+        local_two_qubit_gate_time = 500.0
+        measurement_time = 3.0
+        entanglement_generation_rate = 0.5
+        entanglement_time = 2.0
+        state_teleport_time = 523.0
+        gate_teleport_time = 513.0
+        des_t_cycle = 0.0
+        des_success_probability = 0.0
+
+    monkeypatch.setattr(
+        schedule_module,
+        "_load_scheduler_timing_model",
+        lambda hardware_profile: _InvalidTimingModel(),
+    )
+    distributed_circuit = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[2] q;\n"
+            "cx q[0], q[1];\n"
+        ),
+    )
+
+    with pytest.raises(ValueError, match="t_cycle"):
+        DESEntanglementScheduler(distributed_circuit).run()
+
+
+def test_des_epr_schedule_supports_rswap_with_two_pairs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
     template = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -369,12 +418,7 @@ def test_des_epr_schedule_supports_rswap_with_two_pairs(
         ],
     )
 
-    schedule = des_epr_schedule(
-        distributed_circuit,
-        t_cycle=5.0,
-        p_success=1.0,
-        seed=0,
-    )
+    schedule = des_epr_schedule(distributed_circuit, seed=0)
 
     assert [event.name for event in schedule.operations] == [
         "epr",
@@ -382,17 +426,19 @@ def test_des_epr_schedule_supports_rswap_with_two_pairs(
         "rswap",
     ]
     first_epr, second_epr, rswap_op = schedule.operations
-    assert first_epr.duration == 5.0
-    assert second_epr.duration == 5.0
-    assert rswap_op.start_time == 5.0
-    assert rswap_op.duration == 7.0
-    assert schedule.makespan == 12.0
+    assert first_epr.duration == 1.0
+    assert second_epr.duration == 1.0
+    assert rswap_op.start_time == 1.0
+    assert rswap_op.duration == 523.0
+    assert schedule.makespan == 524.0
 
 
 def test_des_epr_schedule_waits_for_both_rswap_pairs(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
+    _patch_scheduler_timing_model(monkeypatch, rate=0.5)
     template = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -418,15 +464,10 @@ def test_des_epr_schedule_waits_for_both_rswap_pairs(
         ],
     )
 
-    schedule = des_epr_schedule(
-        distributed_circuit,
-        t_cycle=5.0,
-        p_success=0.5,
-        seed=1,
-    )
+    schedule = des_epr_schedule(distributed_circuit, seed=1)
 
     first_epr, second_epr, rswap_op = schedule.operations
-    assert first_epr.duration == 5.0
-    assert second_epr.duration == 15.0
-    assert rswap_op.start_time == 15.0
-    assert schedule.makespan == 22.0
+    assert first_epr.duration == 1.0
+    assert second_epr.duration == 3.0
+    assert rswap_op.start_time == 3.0
+    assert schedule.makespan == 526.0

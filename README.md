@@ -57,10 +57,12 @@ Example:
 
 ```python
 from memq_dqc.builder import extract_distributed_circuit
+from memq_dqc.network import NetworkGraph
 from memq_dqc.partition import Partitioner
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.verify import verify_distributed_circuit
 
-partitioner = Partitioner(network_graph, qasm_program)
+partitioner = Partitioner("network.json", "circuit.qasm")
 partitioner.run(verbosity="info")
 
 distributed_program = extract_distributed_circuit(
@@ -73,6 +75,19 @@ is_valid = verify_distributed_circuit(
     "distributed.qasm",
     verbosity="info",
 )
+```
+
+`Partitioner` accepts either loaded objects or file paths:
+
+- network: `NetworkGraph` or a network JSON path
+- program: parsed OpenQASM `Program` or a circuit QASM path
+
+So these are still valid when you need lower-level control:
+
+```python
+network_graph = NetworkGraph("network.json")
+qasm_program = load_qasm_program("circuit.qasm")
+partitioner = Partitioner(network_graph, qasm_program)
 ```
 
 For advanced control, configure the standard Python logger named

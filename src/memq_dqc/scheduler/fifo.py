@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from memq_dqc.circuit import DistributedCircuit
 from memq_dqc.scheduler.schedule import (
-    _ENTANGLEMENT_TIME,
+    DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE,
+    DEFAULT_SCHEDULER_MODALITY,
     BaseScheduler,
     EntanglementGeneration,
     OperationSchedule,
     ScheduledOperation,
     ScheduleEvent,
+    SchedulerEntanglementProfile,
+    SchedulerHardwareProfile,
+    SchedulerModality,
     _build_qubit_timelines,
     _operation_duration,
     _physical_qubit_label,
@@ -54,6 +58,7 @@ class FIFOScheduler(BaseScheduler):
                                     for ebit in ebits
                                 ),
                                 qubit_timers=qubit_timers,
+                                entanglement_time=self.timing_model.entanglement_time,
                                 multiplex_entangle=self.multiplex_entangle,
                             )
                         )
@@ -76,7 +81,7 @@ class FIFOScheduler(BaseScheduler):
                     name=op.name,
                     qubits=qubits,
                     start_time=start_time,
-                    duration=_operation_duration(op),
+                    duration=_operation_duration(op, self.timing_model),
                     is_remote=op.is_remote,
                 )
                 scheduled_operations.append(scheduled_op)
@@ -102,12 +107,25 @@ class FIFOScheduler(BaseScheduler):
 
 def fifo_schedule(
     distributed_circuit: DistributedCircuit,
+    *,
+    profile: SchedulerHardwareProfile | None = None,
+    modality: SchedulerModality = DEFAULT_SCHEDULER_MODALITY,
+    entanglement_profile: SchedulerEntanglementProfile = (
+        DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+    ),
     multiplex_entangle: bool = True,
 ) -> OperationSchedule:
     """Build a FIFO schedule for a distributed circuit DAG.
 
     Args:
         distributed_circuit: Distributed circuit to schedule.
+        profile: Optional convenience object selecting both modality and
+            entanglement profile. When provided, ``modality`` and
+            ``entanglement_profile`` must be left at their defaults.
+        modality: Hardware timing profile used for local 1Q/2Q gate
+            durations. Defaults to ``"trapped_ion.ba"`` (Ba+ trapped ion).
+        entanglement_profile: Entanglement-generation profile used for
+            entanglement timing. Defaults to ``"ion.time_bin"``.
         multiplex_entangle: Reserved for future entanglement multiplexing
             behavior.
 
@@ -116,6 +134,9 @@ def fifo_schedule(
     """
     scheduler = FIFOScheduler(
         distributed_circuit=distributed_circuit,
+        profile=profile,
+        modality=modality,
+        entanglement_profile=entanglement_profile,
         multiplex_entangle=multiplex_entangle,
     )
     scheduler.run()
@@ -129,6 +150,7 @@ def _schedule_entanglement_generation(
     data_qubits: tuple[str, str],
     ebit_qubits: tuple[tuple[str, str], ...],
     qubit_timers: dict[str, float],
+    entanglement_time: float,
     multiplex_entangle: bool,
 ) -> tuple[list[EntanglementGeneration], float]:
     """Return just-in-time entanglement events and the remote-op start time."""
@@ -143,14 +165,15 @@ def _schedule_entanglement_generation(
             data_ready,
             max(
                 max(qubit_timers[pair[0]], qubit_timers[pair[1]])
-                + _ENTANGLEMENT_TIME
+                + entanglement_time
                 for pair in ebit_qubits
             ),
         )
         return [
             EntanglementGeneration(
                 qubits=pair,
-                start_time=start_time - _ENTANGLEMENT_TIME,
+                start_time=start_time - entanglement_time,
+                duration=entanglement_time,
             )
             for pair in ebit_qubits
         ], start_time
@@ -166,14 +189,14 @@ def _schedule_entanglement_generation(
         pair_ready = max(qubit_timers[pair[0]], qubit_timers[pair[1]])
         start_time = max(
             start_time,
-            pair_ready + (slot_count * _ENTANGLEMENT_TIME),
+            pair_ready + (slot_count * entanglement_time),
         )
 
     return [
         EntanglementGeneration(
             qubits=pair,
-            start_time=start_time
-            - ((total_pairs - index) * _ENTANGLEMENT_TIME),
+            start_time=start_time - ((total_pairs - index) * entanglement_time),
+            duration=entanglement_time,
         )
         for index, pair in enumerate(ebit_qubits)
     ], start_time
