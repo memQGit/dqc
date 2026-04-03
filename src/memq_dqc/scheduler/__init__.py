@@ -11,6 +11,8 @@ from .des_epr import DESEntanglementScheduler, des_epr_schedule
 from .epr_min import EPRMinimizationScheduler
 from .fifo import FIFOScheduler, fifo_schedule
 from .schedule import (
+    DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE,
+    DEFAULT_SCHEDULER_MODALITY,
     BaseScheduler,
     EntanglementGeneration,
     OperationSchedule,
@@ -18,16 +20,24 @@ from .schedule import (
     ScheduledQubitTimeline,
     ScheduleEvent,
     Scheduler,
+    SchedulerEntanglementProfile,
+    SchedulerHardwareProfile,
+    SchedulerModality,
 )
 from .schedule_visualizer import plot_schedule_gantt
 
 __all__ = [
     "BaseScheduler",
+    "DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE",
+    "DEFAULT_SCHEDULER_MODALITY",
     "DESEntanglementScheduler",
     "EPRMinimizationScheduler",
     "EntanglementGeneration",
     "FIFOScheduler",
     "OperationSchedule",
+    "SchedulerEntanglementProfile",
+    "SchedulerHardwareProfile",
+    "SchedulerModality",
     "ScheduleEvent",
     "Scheduler",
     "ScheduledOperation",

@@ -11,6 +11,17 @@ This module provides a small, stable surface for imports and package
 metadata.
 """
 
+from .settings import (
+    EntanglementGenerationProfile,
+    GlobalSettings,
+    ModalityProfile,
+    Settings,
+    VerificationSettings,
+    default_settings_path,
+    load_settings,
+    load_settings_file,
+)
+
 
 def hello() -> str:
     """Return a simple greeting used for sanity checks.
@@ -20,3 +31,16 @@ def hello() -> str:
     """
     # TODO: update this
     return "Hello from memq-dqc!"
+
+
+__all__ = [
+    "EntanglementGenerationProfile",
+    "GlobalSettings",
+    "ModalityProfile",
+    "Settings",
+    "VerificationSettings",
+    "default_settings_path",
+    "hello",
+    "load_settings",
+    "load_settings_file",
+]

@@ -17,7 +17,8 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Literal, TypeVar
+from os import PathLike
+from typing import Any, Literal, TypeAlias, TypeVar
 
 from openqasm3 import ast
 
@@ -25,6 +26,7 @@ from memq_dqc._logging import StepTimer, workflow_logging
 from memq_dqc.circuit import Circuit
 from memq_dqc.circuit.op import Op
 from memq_dqc.network import NetworkGraph
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,8 @@ class QPU:
 
 PartitionSchedule = list[dict[QPU, set[int]]]
 PartitionWindows = list[list[Op]]
+NetworkInput: TypeAlias = NetworkGraph | str | PathLike[str]
+ProgramInput: TypeAlias = ast.Program | str | PathLike[str]
 
 _Algorithm = TypeVar("_Algorithm", bound="BasePartitioner")
 
@@ -107,8 +111,8 @@ class Partitioner:
 
     def __init__(
         self,
-        network: NetworkGraph,
-        program: ast.Program,
+        network: NetworkInput,
+        program: ProgramInput,
         *,
         algo: str | type[_Algorithm] | _Algorithm = "cisco",
         algo_kwargs: dict[str, Any] | None = None,
@@ -116,13 +120,16 @@ class Partitioner:
         """Initialize the partitioner and select the algorithm.
 
         Args:
-            network: Network graph describing available resources.
-            program: Parsed OpenQASM 3 program.
+            network: Network graph describing available resources, or a path
+                to a network JSON file.
+            program: Parsed OpenQASM 3 program, or a path to a QASM file.
             algo: Algorithm name, class, or preconfigured instance.
             algo_kwargs: Keyword arguments forwarded to the algorithm.
         """
+        resolved_network = _resolve_network_input(network)
+        resolved_program = _resolve_program_input(program)
         self._algorithm = self._resolve_algorithm(
-            network, program, algo, algo_kwargs
+            resolved_network, resolved_program, algo, algo_kwargs
         )
 
     def run(
@@ -221,6 +228,20 @@ class Partitioner:
             algo_class = algo
 
         return algo_class(network, program, **algo_kwargs)
+
+
+def _resolve_network_input(network: NetworkInput) -> NetworkGraph:
+    """Return a loaded network graph for a supported partitioner input."""
+    if isinstance(network, NetworkGraph):
+        return network
+    return NetworkGraph(str(network))
+
+
+def _resolve_program_input(program: ProgramInput) -> ast.Program:
+    """Return a parsed OpenQASM program for a supported partitioner input."""
+    if isinstance(program, ast.Program):
+        return program
+    return load_qasm_program(str(program))
 
 
 def _get_algorithm_class(name: str) -> type[BasePartitioner]:

@@ -4,31 +4,99 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import cache
 from typing import Any, Literal, TypeAlias, TypeVar
 
 from memq_dqc._logging import StepTimer, workflow_logging
 from memq_dqc.circuit import DistributedCircuit, Op
 from memq_dqc.network import PhysicalQubit
 from memq_dqc.preprocessing.qasm.types import CircuitQubit
+from memq_dqc.settings import load_settings
 
 logger = logging.getLogger(__name__)
 
-
-# TODO: must solidify this
-_LOCAL_1Q_GATE_TIME = 1.0
-_LOCAL_2Q_GATE_TIME = 2.0
 _MEASUREMENT_TIME = 3.0
-_ENTANGLEMENT_TIME = 10.0
-_STATE_TELEPORT_TIME = (
-    _LOCAL_2Q_GATE_TIME + (2 * _LOCAL_1Q_GATE_TIME) + _MEASUREMENT_TIME
+SchedulerModality: TypeAlias = Literal[
+    "trapped_ion.ba",
+    "trapped_ion.sr",
+    "neutral_atom",
+]
+SchedulerEntanglementProfile: TypeAlias = Literal[
+    "ion.time_bin",
+    "ion.polarization",
+    "neutral_atom.polarization",
+]
+DEFAULT_SCHEDULER_MODALITY: SchedulerModality = "trapped_ion.ba"
+DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE: SchedulerEntanglementProfile = (
+    "ion.time_bin"
 )
-_GATE_TELEPORT_TIME = (
-    _LOCAL_2Q_GATE_TIME + _MEASUREMENT_TIME + _LOCAL_1Q_GATE_TIME
-)
+_DES_RATE_TIME_STEP = 1.0
 
-# TODO: General -> determine which type of r-swap we want to use
-# determine if we want to have buffer qubits if we use dual state teleport
+
+@dataclass(frozen=True, slots=True)
+class SchedulerHardwareProfile:
+    """User-facing hardware selection for scheduler timing.
+
+    Attributes:
+        modality: Modality profile used for local gate times.
+        entanglement_profile: Entanglement-generation profile used for
+            entanglement timing.
+    """
+
+    modality: SchedulerModality = DEFAULT_SCHEDULER_MODALITY
+    entanglement_profile: SchedulerEntanglementProfile = (
+        DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+    )
+
+    @classmethod
+    def ba_trapped_ion(
+        cls,
+        *,
+        entanglement_profile: SchedulerEntanglementProfile = (
+            DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+        ),
+    ) -> SchedulerHardwareProfile:
+        """Return the Ba+ trapped-ion hardware selection."""
+        return cls(
+            modality="trapped_ion.ba",
+            entanglement_profile=entanglement_profile,
+        )
+
+    @classmethod
+    def sr_trapped_ion(
+        cls,
+        *,
+        entanglement_profile: SchedulerEntanglementProfile = (
+            DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+        ),
+    ) -> SchedulerHardwareProfile:
+        """Return the Sr+ trapped-ion hardware selection."""
+        return cls(
+            modality="trapped_ion.sr",
+            entanglement_profile=entanglement_profile,
+        )
+
+    @classmethod
+    def neutral_atom(
+        cls,
+        *,
+        entanglement_profile: SchedulerEntanglementProfile = (
+            DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+        ),
+    ) -> SchedulerHardwareProfile:
+        """Return the neutral-atom hardware selection."""
+        return cls(
+            modality="neutral_atom",
+            entanglement_profile=entanglement_profile,
+        )
+
+
+def _default_entanglement_duration() -> float:
+    """Return the default entanglement duration for manual event creation."""
+    return _load_scheduler_timing_model(
+        SchedulerHardwareProfile()
+    ).entanglement_time
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +133,7 @@ class EntanglementGeneration:
 
     qubits: tuple[str, str]
     start_time: float
-    duration: float = _ENTANGLEMENT_TIME
+    duration: float = field(default_factory=_default_entanglement_duration)
 
     @property
     def name(self) -> str:
@@ -122,6 +190,59 @@ class OperationSchedule:
 _Algorithm = TypeVar("_Algorithm", bound="BaseScheduler")
 
 
+@dataclass(frozen=True, slots=True)
+class SchedulerTimingModel:
+    """Timing values used to schedule local and derived remote operations.
+
+    Attributes:
+        hardware_profile: Selected scheduler hardware profile.
+        local_one_qubit_gate_time: Duration of a local single-qubit gate.
+        local_two_qubit_gate_time: Duration of a local two-qubit gate.
+        entanglement_generation_rate: Entanglement-generation probability per
+            microsecond.
+        measurement_time: Duration of a measurement operation.
+    """
+
+    hardware_profile: SchedulerHardwareProfile
+    local_one_qubit_gate_time: float
+    local_two_qubit_gate_time: float
+    entanglement_generation_rate: float
+    measurement_time: float = _MEASUREMENT_TIME
+
+    @property
+    def state_teleport_time(self) -> float:
+        """Return the derived state-teleport duration."""
+        return (
+            self.local_two_qubit_gate_time
+            + (2 * self.local_one_qubit_gate_time)
+            + self.measurement_time
+        )
+
+    @property
+    def entanglement_time(self) -> float:
+        """Return the expected FIFO entanglement duration in microseconds."""
+        return 1.0 / self.entanglement_generation_rate
+
+    @property
+    def des_t_cycle(self) -> float:
+        """Return the DES entanglement-attempt cycle length."""
+        return _DES_RATE_TIME_STEP
+
+    @property
+    def des_success_probability(self) -> float:
+        """Return the DES per-cycle entanglement success probability."""
+        return self.entanglement_generation_rate
+
+    @property
+    def gate_teleport_time(self) -> float:
+        """Return the derived remote-gate teleport duration."""
+        return (
+            self.local_two_qubit_gate_time
+            + self.measurement_time
+            + self.local_one_qubit_gate_time
+        )
+
+
 class BaseScheduler(ABC):
     """Base class for distributed scheduling algorithm implementations."""
 
@@ -129,17 +250,38 @@ class BaseScheduler(ABC):
         self,
         distributed_circuit: DistributedCircuit,
         *,
+        profile: SchedulerHardwareProfile | None = None,
+        modality: SchedulerModality = DEFAULT_SCHEDULER_MODALITY,
+        entanglement_profile: SchedulerEntanglementProfile = (
+            DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+        ),
         multiplex_entangle: bool = True,
     ) -> None:
         """Initialize the scheduler with a distributed circuit.
 
         Args:
             distributed_circuit: Distributed circuit DAG to schedule.
+            profile: Optional convenience object selecting both modality and
+                entanglement profile. When provided, ``modality`` and
+                ``entanglement_profile`` must be left at their defaults.
+            modality: Hardware timing profile used for local 1Q/2Q gate
+                durations. Defaults to ``"trapped_ion.ba"`` (Ba+ trapped ion).
+            entanglement_profile: Entanglement-generation profile used for
+                entanglement timing. Defaults to ``"ion.time_bin"``.
             multiplex_entangle: True if we can perform entanglement generation
                 for comm qubits on same chip simultaneously
         """
+        hardware_profile = _resolve_scheduler_hardware_profile(
+            profile=profile,
+            modality=modality,
+            entanglement_profile=entanglement_profile,
+        )
         self.distributed_circuit = distributed_circuit
+        self.hardware_profile = hardware_profile
+        self.modality = hardware_profile.modality
+        self.entanglement_profile = hardware_profile.entanglement_profile
         self.multiplex_entangle = multiplex_entangle
+        self.timing_model = _load_scheduler_timing_model(hardware_profile)
         self.schedule: OperationSchedule | None = None
 
     @abstractmethod
@@ -156,6 +298,13 @@ class Scheduler:
         distributed_circuit: DistributedCircuit,
         *,
         algo: str | type[_Algorithm] | _Algorithm = "fifo",
+        profile: SchedulerHardwareProfile | None = None,
+        modality: SchedulerModality = DEFAULT_SCHEDULER_MODALITY,
+        entanglement_profile: SchedulerEntanglementProfile = (
+            DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+        ),
+        # TODO: make explicit / check
+        multiplex_entangle: bool = True,
         algo_kwargs: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the scheduler and select the algorithm.
@@ -163,11 +312,24 @@ class Scheduler:
         Args:
             distributed_circuit: Distributed circuit DAG to schedule.
             algo: Algorithm name, class, or preconfigured instance.
+            profile: Optional convenience object selecting both modality and
+                entanglement profile. When provided, ``modality`` and
+                ``entanglement_profile`` must be left at their defaults.
+            modality: Hardware timing profile used for local 1Q/2Q gate
+                durations. Defaults to ``"trapped_ion.ba"`` (Ba+ trapped ion).
+            entanglement_profile: Entanglement-generation profile used for
+                entanglement timing. Defaults to ``"ion.time_bin"``.
+            multiplex_entangle: Whether entanglement generation may overlap
+                across independent communication resources.
             algo_kwargs: Keyword arguments forwarded to the algorithm.
         """
         self._algorithm = self._resolve_algorithm(
             distributed_circuit,
             algo,
+            profile,
+            modality,
+            entanglement_profile,
+            multiplex_entangle,
             algo_kwargs,
         )
 
@@ -227,12 +389,26 @@ class Scheduler:
         self,
         distributed_circuit: DistributedCircuit,
         algo: str | type[_Algorithm] | _Algorithm,
+        profile: SchedulerHardwareProfile | None,
+        modality: SchedulerModality,
+        entanglement_profile: SchedulerEntanglementProfile,
+        multiplex_entangle: bool,
         algo_kwargs: dict[str, Any] | None,
     ) -> BaseScheduler:
         if isinstance(algo, BaseScheduler):
-            if algo_kwargs:
+            if (
+                algo_kwargs
+                or profile is not None
+                or modality != DEFAULT_SCHEDULER_MODALITY
+                or entanglement_profile
+                != DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+                or multiplex_entangle is not True
+            ):
                 raise ValueError(
-                    "algo_kwargs cannot be provided with an algorithm instance."
+                    "algo_kwargs, profile, modality, entanglement_profile, "
+                    "and multiplex_entangle "
+                    "cannot be provided with an "
+                    "algorithm instance."
                 )
             return algo
 
@@ -242,7 +418,14 @@ class Scheduler:
         else:
             algo_class = algo
 
-        return algo_class(distributed_circuit, **algo_kwargs)
+        return algo_class(
+            distributed_circuit,
+            profile=profile,
+            modality=modality,
+            entanglement_profile=entanglement_profile,
+            multiplex_entangle=multiplex_entangle,
+            **algo_kwargs,
+        )
 
 
 def _get_algorithm_class(name: str) -> type[BaseScheduler]:
@@ -272,17 +455,66 @@ def _physical_qubit_label(
     return f"{qubit.register_name}[{qubit.index}]"
 
 
-def _operation_duration(op: Op) -> float:
+def _resolve_scheduler_hardware_profile(
+    *,
+    profile: SchedulerHardwareProfile | None,
+    modality: SchedulerModality,
+    entanglement_profile: SchedulerEntanglementProfile,
+) -> SchedulerHardwareProfile:
+    """Resolve one effective hardware profile from user inputs."""
+    if profile is not None:
+        if (
+            modality != DEFAULT_SCHEDULER_MODALITY
+            or entanglement_profile
+            != DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+        ):
+            raise ValueError(
+                "profile cannot be combined with modality or "
+                "entanglement_profile overrides."
+            )
+        return profile
+    return SchedulerHardwareProfile(
+        modality=modality,
+        entanglement_profile=entanglement_profile,
+    )
+
+
+@cache
+def _load_scheduler_timing_model(
+    hardware_profile: SchedulerHardwareProfile,
+) -> SchedulerTimingModel:
+    """Load scheduler timing values for one supported hardware profile."""
+    settings = load_settings()
+    modality_profile = settings.modality_profile(hardware_profile.modality)
+    entanglement_profile = settings.entanglement_profile(
+        hardware_profile.entanglement_profile
+    )
+    if entanglement_profile.entanglement_rate > 1.0:
+        raise ValueError(
+            "Scheduler entanglement rates must be at most 1 pair per "
+            "microsecond."
+        )
+    return SchedulerTimingModel(
+        hardware_profile=hardware_profile,
+        local_one_qubit_gate_time=modality_profile.one_qubit_gate_time,
+        local_two_qubit_gate_time=modality_profile.two_qubit_gate_time,
+        entanglement_generation_rate=entanglement_profile.entanglement_rate,
+    )
+
+
+def _operation_duration(op: Op, timing_model: SchedulerTimingModel) -> float:
     """Return the execution time for an operation."""
     if op.is_remote:
         return (
-            _STATE_TELEPORT_TIME if op.name == "rswap" else _GATE_TELEPORT_TIME
+            timing_model.state_teleport_time
+            if op.name == "rswap"
+            else timing_model.gate_teleport_time
         )
     if op.name == "measure":
-        return _MEASUREMENT_TIME
+        return timing_model.measurement_time
     if len(op.qubits) == 1:
-        return _LOCAL_1Q_GATE_TIME
-    return _LOCAL_2Q_GATE_TIME
+        return timing_model.local_one_qubit_gate_time
+    return timing_model.local_two_qubit_gate_time
 
 
 def _build_qubit_timelines(

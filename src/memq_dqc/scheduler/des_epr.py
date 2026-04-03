@@ -10,12 +10,16 @@ from typing import TypeAlias
 
 from memq_dqc.circuit import DistributedCircuit, Op
 from memq_dqc.scheduler.schedule import (
-    _ENTANGLEMENT_TIME,
+    DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE,
+    DEFAULT_SCHEDULER_MODALITY,
     BaseScheduler,
     EntanglementGeneration,
     OperationSchedule,
     ScheduledOperation,
     ScheduleEvent,
+    SchedulerEntanglementProfile,
+    SchedulerHardwareProfile,
+    SchedulerModality,
     _build_qubit_timelines,
     _operation_duration,
     _physical_qubit_label,
@@ -84,28 +88,39 @@ class DESEntanglementScheduler(BaseScheduler):
     def __init__(
         self,
         distributed_circuit: DistributedCircuit,
-        p_success: float,
         *,
+        profile: SchedulerHardwareProfile | None = None,
+        modality: SchedulerModality = DEFAULT_SCHEDULER_MODALITY,
+        entanglement_profile: SchedulerEntanglementProfile = (
+            DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+        ),
         multiplex_entangle: bool = True,
-        t_cycle: float = _ENTANGLEMENT_TIME,
         seed: int | None = None,
     ) -> None:
         """Initialize the scheduler with DES link parameters.
 
         Args:
             distributed_circuit: Distributed circuit DAG to schedule.
+            profile: Optional convenience object selecting both modality and
+                entanglement profile. When provided, ``modality`` and
+                ``entanglement_profile`` must be left at their defaults.
+            modality: Hardware timing profile used for local 1Q/2Q gate
+                durations. Defaults to ``"trapped_ion.ba"`` (Ba+ trapped ion).
+            entanglement_profile: Entanglement-generation profile used for
+                entanglement timing. Defaults to ``"ion.time_bin"``.
             multiplex_entangle: Preserved for API compatibility. The DES still
                 enforces one active entanglement process per link.
-            t_cycle: Duration of one entanglement-generation attempt cycle.
-            p_success: Per-attempt entanglement success probability.
             seed: Optional random seed for deterministic simulations.
         """
         super().__init__(
             distributed_circuit,
+            profile=profile,
+            modality=modality,
+            entanglement_profile=entanglement_profile,
             multiplex_entangle=multiplex_entangle,
         )
-        self.t_cycle = t_cycle
-        self.p_success = p_success
+        self.t_cycle = self.timing_model.des_t_cycle
+        self.p_success = self.timing_model.des_success_probability
         self.seed = seed
         self._rng = random.Random()
         self._op_by_id: dict[int, Op] = {}
@@ -271,7 +286,7 @@ class DESEntanglementScheduler(BaseScheduler):
             name=op.name,
             qubits=op_labels,
             start_time=start_time,
-            duration=_operation_duration(op),
+            duration=_operation_duration(op, self.timing_model),
             is_remote=False,
         )
         self._record_scheduled_event(scheduled_op)
@@ -532,7 +547,7 @@ class DESEntanglementScheduler(BaseScheduler):
             name=request.op.name,
             qubits=request.op_qubits,
             start_time=event.time,
-            duration=_operation_duration(request.op),
+            duration=_operation_duration(request.op, self.timing_model),
             is_remote=True,
         )
         self._record_scheduled_event(scheduled_op)
@@ -587,19 +602,27 @@ class DESEntanglementScheduler(BaseScheduler):
 def des_epr_schedule(
     distributed_circuit: DistributedCircuit,
     *,
+    profile: SchedulerHardwareProfile | None = None,
+    modality: SchedulerModality = DEFAULT_SCHEDULER_MODALITY,
+    entanglement_profile: SchedulerEntanglementProfile = (
+        DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+    ),
     multiplex_entangle: bool = True,
-    t_cycle: float = _ENTANGLEMENT_TIME,
-    p_success: float = 1.0,
     seed: int | None = None,
 ) -> OperationSchedule:
     """Build a DES-based schedule for a distributed circuit DAG.
 
     Args:
         distributed_circuit: Distributed circuit to schedule.
+        profile: Optional convenience object selecting both modality and
+            entanglement profile. When provided, ``modality`` and
+            ``entanglement_profile`` must be left at their defaults.
+        modality: Hardware timing profile used for local 1Q/2Q gate
+            durations. Defaults to ``"trapped_ion.ba"`` (Ba+ trapped ion).
+        entanglement_profile: Entanglement-generation profile used for
+            entanglement timing. Defaults to ``"ion.time_bin"``.
         multiplex_entangle: Preserved for API compatibility. The DES still
             enforces one active entanglement process per link.
-        t_cycle: Duration of one entanglement-generation attempt cycle.
-        p_success: Per-attempt entanglement success probability.
         seed: Optional random seed for deterministic simulations.
 
     Returns:
@@ -607,9 +630,10 @@ def des_epr_schedule(
     """
     scheduler = DESEntanglementScheduler(
         distributed_circuit,
+        profile=profile,
+        modality=modality,
+        entanglement_profile=entanglement_profile,
         multiplex_entangle=multiplex_entangle,
-        t_cycle=t_cycle,
-        p_success=p_success,
         seed=seed,
     )
     scheduler.run()
