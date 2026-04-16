@@ -32,6 +32,7 @@ DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE: SchedulerEntanglementProfile = (
     "ion.time_bin"
 )
 _DES_RATE_TIME_STEP = 1.0
+_DEFAULT_EPR_LIFETIME = 50.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,11 +130,19 @@ class ScheduledOperation:
 
 @dataclass(frozen=True, slots=True)
 class EntanglementGeneration:
-    """Schedule entanglement generation between two available qubits."""
+    """Schedule entanglement generation between two available qubits.
+
+    Attributes:
+        qubits: Communication qubits used for entanglement generation.
+        start_time: Time at which generation begins.
+        duration: Total time the EPR pair occupies the link.
+        was_used: Whether the generated pair was consumed before expiration.
+    """
 
     qubits: tuple[str, str]
     start_time: float
     duration: float = field(default_factory=_default_entanglement_duration)
+    was_used: bool = True
 
     @property
     def name(self) -> str:
@@ -200,6 +209,7 @@ class SchedulerTimingModel:
         local_two_qubit_gate_time: Duration of a local two-qubit gate.
         entanglement_generation_rate: Entanglement-generation probability per
             microsecond.
+        epr_lifetime: Maximum lifetime of a generated EPR pair.
         measurement_time: Duration of a measurement operation.
     """
 
@@ -207,6 +217,7 @@ class SchedulerTimingModel:
     local_one_qubit_gate_time: float
     local_two_qubit_gate_time: float
     entanglement_generation_rate: float
+    epr_lifetime: float = _DEFAULT_EPR_LIFETIME
     measurement_time: float = _MEASUREMENT_TIME
 
     @property
@@ -434,11 +445,27 @@ def _get_algorithm_class(name: str) -> type[BaseScheduler]:
         from memq_dqc.scheduler.fifo import FIFOScheduler
 
         return FIFOScheduler
-    if name in {"des", "des_epr", "des_entanglement"}:
-        from memq_dqc.scheduler.des_epr import DESEntanglementScheduler
+    if name == "ilp":
+        from memq_dqc.scheduler.ilp_scheduler import ILPScheduler
 
-        return DESEntanglementScheduler
-    if name in {"epr_min", "epr_minimization", "EPRMinimization"}:
+        return ILPScheduler
+    if name == "des_link_fifo":
+        from memq_dqc.scheduler.des_link_fifo import DESLinkFIFOScheduler
+
+        return DESLinkFIFOScheduler
+    if name == "des_link_shortest_duration":
+        from memq_dqc.scheduler.des_link_shortest_duration import (
+            DESLinkShortestDurationScheduler,
+        )
+
+        return DESLinkShortestDurationScheduler
+    if name == "des_link_critical_path":
+        from memq_dqc.scheduler.des_link_critical_path import (
+            DESLinkCriticalPathScheduler,
+        )
+
+        return DESLinkCriticalPathScheduler
+    if name == "epr_min":
         from memq_dqc.scheduler.epr_min import EPRMinimizationScheduler
 
         return EPRMinimizationScheduler
@@ -465,8 +492,7 @@ def _resolve_scheduler_hardware_profile(
     if profile is not None:
         if (
             modality != DEFAULT_SCHEDULER_MODALITY
-            or entanglement_profile
-            != DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+            or entanglement_profile != DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
         ):
             raise ValueError(
                 "profile cannot be combined with modality or "
@@ -499,6 +525,7 @@ def _load_scheduler_timing_model(
         local_one_qubit_gate_time=modality_profile.one_qubit_gate_time,
         local_two_qubit_gate_time=modality_profile.two_qubit_gate_time,
         entanglement_generation_rate=entanglement_profile.entanglement_rate,
+        epr_lifetime=entanglement_profile.epr_lifetime,
     )
 
 

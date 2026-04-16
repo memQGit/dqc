@@ -23,6 +23,7 @@ _REMOTE_FILL = "#f5d0fe"
 _MEASURE_FILL = "#ccfbf1"
 _SWAP_FILL = "#fde68a"
 _ENTANGLEMENT_FILL = "#fecaca"
+_ENTANGLEMENT_UNUSED_FILL = "#dc2626"
 _EDGE_COLOR = "#475569"
 _COMM_EDGE_COLOR = "#7c2d12"
 _CONNECTOR_COLOR = "#7c3aed"
@@ -101,7 +102,12 @@ def plot_schedule_gantt(
             Patch(
                 facecolor=_ENTANGLEMENT_FILL,
                 edgecolor=_EDGE_COLOR,
-                label="Entangle",
+                label="Entangle (used)",
+            ),
+            Patch(
+                facecolor=_ENTANGLEMENT_UNUSED_FILL,
+                edgecolor=_EDGE_COLOR,
+                label="Entangle (unused)",
             ),
             Patch(
                 facecolor="white",
@@ -217,6 +223,8 @@ def _plot_operation_rows(ax: Axes, schedule: OperationSchedule) -> None:
 def _operation_fill(op: ScheduleEvent) -> str:
     """Return the face color for a scheduled event."""
     if isinstance(op, EntanglementGeneration):
+        if not op.was_used:
+            return _ENTANGLEMENT_UNUSED_FILL
         return _ENTANGLEMENT_FILL
     if op.name == "rswap":
         return _SWAP_FILL
@@ -230,6 +238,8 @@ def _operation_fill(op: ScheduleEvent) -> str:
 def _event_label(op: ScheduleEvent) -> str:
     """Return the chart label for one scheduled event."""
     if isinstance(op, EntanglementGeneration):
+        if not op.was_used:
+            return "unused epr"
         return "epr"
     return op.name
 

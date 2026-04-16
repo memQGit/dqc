@@ -1,5 +1,10 @@
 """Module for resource (EPR pair) management in the scheudler."""
 
+from dataclasses import dataclass
+from enum import StrEnum
+
+from memq_dqc.network import NetworkGraph, PhysicalQubit
+
 """
     Manages the allocation and deallocation of EPR pairs in the scheduler.
 
@@ -24,10 +29,6 @@ AVAILABLE = "available"  # link is unused, available for scheduling
 HOLD = "hold"  # attempt to generate e-bit on this link is in progress
 UNAVAILABLE = "unavailable"  # link is in-use for a remote gate
 
-from dataclasses import dataclass
-from enum import StrEnum
-from memq_dqc.network import NetworkGraph, PhysicalQubit
-
 
 class LinkState(StrEnum):
     """Valid states for a communication link."""
@@ -47,9 +48,7 @@ class LinkStatus:
 
 
 class ResourceManager:
-    """
-    Manages the allocation and deallocation of EPR pairs for the scheduler.
-    """
+    """Manages the allocation and deallocation of EPR pairs."""
 
     def __init__(self, network: NetworkGraph) -> None:
         """Initialize the resource manager with the communication pairs."""
@@ -59,6 +58,7 @@ class ResourceManager:
     def initialize_link_states(
         self,
     ) -> dict[tuple[PhysicalQubit, PhysicalQubit], LinkStatus]:
+        """Create an initial AVAILABLE status for each remote link."""
         network = self.network
         remote_links = network._get_remote_edges()
         link_states = {
@@ -70,7 +70,10 @@ class ResourceManager:
         print("initialized link states", link_states)
         return link_states
 
-    def handle_request(self, pair: tuple[PhysicalQubit, PhysicalQubit]):
+    def handle_request(
+        self, pair: tuple[PhysicalQubit, PhysicalQubit]
+    ) -> None:
+        """Validate a communication-pair request against tracked links."""
         # figure out what to return ... maybe just string
         # also figure out what form comm qubit request is in ... is it really
         # tuple (str, str)?
@@ -103,3 +106,4 @@ class ResourceManager:
             raise ValueError(
                 f"Communication pair {pair} is not recognized by the resource manager."
             )
+        return True

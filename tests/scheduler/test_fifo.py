@@ -8,6 +8,7 @@
 import matplotlib.pyplot as plt
 import pytest
 from matplotlib.axes import Axes
+from matplotlib.colors import to_hex
 
 from memq_dqc.builder import extract_distributed_circuit
 from memq_dqc.network import NetworkGraph
@@ -410,4 +411,36 @@ def test_operation_schedule_accepts_entanglement_generation_events() -> None:
     axes = plot_schedule_gantt(schedule)
 
     assert {text.get_text() for text in axes.texts} >= {"epr", "rcx"}
+    plt.close("all")
+
+
+def test_plot_schedule_gantt_marks_unused_epr_pairs() -> None:
+    scheduled_events = [
+        EntanglementGeneration(
+            qubits=("c0[0]", "c1[0]"),
+            start_time=0.0,
+            duration=51.0,
+            was_used=False,
+        ),
+        ScheduledOperation(
+            op_id=0,
+            statement_id=0,
+            name="rcx",
+            qubits=("q0[0]", "q1[0]", "c0[0]", "c1[0]"),
+            start_time=60.0,
+            duration=6.0,
+            is_remote=True,
+        ),
+    ]
+    qubit_order = ("q0[0]", "q1[0]", "c0[0]", "c1[0]")
+    schedule = OperationSchedule(
+        operations=tuple(scheduled_events),
+        timelines=_build_qubit_timelines(scheduled_events, qubit_order),
+        makespan=max(event.end_time for event in scheduled_events),
+    )
+
+    axes = plot_schedule_gantt(schedule, explicit_ops=True)
+
+    assert "unused epr" in {text.get_text() for text in axes.texts}
+    assert to_hex(axes.patches[0].get_facecolor()) == "#dc2626"
     plt.close("all")

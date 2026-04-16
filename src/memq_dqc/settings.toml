@@ -15,12 +15,15 @@ time_unit = "us"
 
 [entanglement_gen.ion.time_bin] # Saha et al.' (Experimental value)
 entanglement_rate = 3.5e-6 # pairs per microsecond
+epr_lifetime = 50 # microseconds
 
 [entanglement_gen.ion.polarization] # O'Reilly et al. (Experimental value)
 entanglement_rate = 2.5e-3 # pairs per microsecond
+epr_lifetime = 50 # microseconds
 
 [entanglement_gen.neutral_atom.polarization] # Young et al. (Experimental value)
 entanglement_rate = 3.2e-2 # pairs per microsecond
+epr_lifetime = 50 # microseconds
 
 [verification]
 shots = 10000000 # TODO: determine appropriate number or heuristics for this value
