@@ -49,10 +49,12 @@ class EntanglementGenerationProfile:
     Attributes:
         path: Selector path used to identify the profile.
         entanglement_rate: Nominal entanglement generation rate.
+        epr_lifetime: Maximum lifetime of a generated EPR pair.
     """
 
     path: tuple[str, ...]
     entanglement_rate: float
+    epr_lifetime: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,9 +83,7 @@ class Settings:
 
     global_settings: GlobalSettings
     modality_profiles: dict[tuple[str, ...], ModalityProfile]
-    entanglement_profiles: dict[
-        tuple[str, ...], EntanglementGenerationProfile
-    ]
+    entanglement_profiles: dict[tuple[str, ...], EntanglementGenerationProfile]
     verification: VerificationSettings
 
     def modality_profile(self, *path: str) -> ModalityProfile:
@@ -221,13 +221,18 @@ def _parse_entanglement_profiles(
     profiles: dict[tuple[str, ...], EntanglementGenerationProfile] = {}
     for path, leaf in _iter_leaf_tables(
         entanglement_table,
-        required_keys=("entanglement_rate",),
+        required_keys=("entanglement_rate", "epr_lifetime"),
     ):
         profiles[path] = EntanglementGenerationProfile(
             path=path,
             entanglement_rate=_require_positive_number(
                 leaf,
                 "entanglement_rate",
+                context=f"settings.entanglement_gen.{'.'.join(path)}",
+            ),
+            epr_lifetime=_require_positive_number(
+                leaf,
+                "epr_lifetime",
                 context=f"settings.entanglement_gen.{'.'.join(path)}",
             ),
         )
@@ -247,9 +252,7 @@ def _parse_verification_settings(
     if isinstance(shots, bool) or not isinstance(shots, int):
         raise ValueError("settings.verification.shots must be an integer.")
     if shots <= 0:
-        raise ValueError(
-            "settings.verification.shots must be greater than 0."
-        )
+        raise ValueError("settings.verification.shots must be greater than 0.")
 
     fidelity_threshold = _require_number(
         verification,
@@ -258,8 +261,7 @@ def _parse_verification_settings(
     )
     if not 0.0 <= fidelity_threshold <= 1.0:
         raise ValueError(
-            "settings.verification.fidelity_threshold must be between 0 "
-            "and 1."
+            "settings.verification.fidelity_threshold must be between 0 and 1."
         )
 
     return VerificationSettings(
@@ -294,9 +296,7 @@ def _iter_leaf_tables(
     """Yield nested leaf tables that contain a required key set."""
     has_required_keys = all(key in table for key in required_keys)
     nested_items = [
-        (key, value)
-        for key, value in table.items()
-        if isinstance(value, dict)
+        (key, value) for key, value in table.items() if isinstance(value, dict)
     ]
 
     if has_required_keys:

@@ -19,11 +19,11 @@ from memq_dqc.partition.partitioner import QPU, BasePartitioner
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.preprocessing.qasm.types import CircuitQubit
 from memq_dqc.scheduler import (
-    DESEntanglementScheduler,
+    DESLinkFIFOScheduler,
     OperationSchedule,
     Scheduler,
     SchedulerHardwareProfile,
-    des_epr_schedule,
+    des_link_fifo_schedule,
 )
 
 
@@ -137,6 +137,7 @@ def _patch_scheduler_timing_model(
     rate: float,
     local_one_qubit_gate_time: float = 10.0,
     local_two_qubit_gate_time: float = 500.0,
+    epr_lifetime: float = 50.0,
 ) -> None:
     def _load_timing_model(
         hardware_profile: SchedulerHardwareProfile,
@@ -146,6 +147,7 @@ def _patch_scheduler_timing_model(
             local_one_qubit_gate_time=local_one_qubit_gate_time,
             local_two_qubit_gate_time=local_two_qubit_gate_time,
             entanglement_generation_rate=rate,
+            epr_lifetime=epr_lifetime,
         )
 
     monkeypatch.setattr(
@@ -155,7 +157,7 @@ def _patch_scheduler_timing_model(
     )
 
 
-def test_des_epr_schedule_single_cycle_success(
+def test_des_link_fifo_schedule_single_cycle_success(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -171,7 +173,7 @@ def test_des_epr_schedule_single_cycle_success(
         ),
     )
 
-    schedule = des_epr_schedule(distributed_circuit, seed=0)
+    schedule = des_link_fifo_schedule(distributed_circuit, seed=0)
 
     assert isinstance(schedule, OperationSchedule)
     assert [event.name for event in schedule.operations] == ["epr", "rcx"]
@@ -184,7 +186,7 @@ def test_des_epr_schedule_single_cycle_success(
     assert schedule.makespan == 514.0
 
 
-def test_des_epr_schedule_retries_until_seeded_success(
+def test_des_link_fifo_schedule_retries_until_seeded_success(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -200,7 +202,7 @@ def test_des_epr_schedule_retries_until_seeded_success(
         ),
     )
 
-    schedule = des_epr_schedule(distributed_circuit, seed=0)
+    schedule = des_link_fifo_schedule(distributed_circuit, seed=0)
 
     epr_event, remote_op = schedule.operations
     assert epr_event.duration == 3.0
@@ -208,7 +210,7 @@ def test_des_epr_schedule_retries_until_seeded_success(
     assert schedule.makespan == 516.0
 
 
-def test_des_epr_schedule_waits_for_data_qubits_before_request(
+def test_des_link_fifo_schedule_waits_for_data_qubits_before_request(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -226,7 +228,7 @@ def test_des_epr_schedule_waits_for_data_qubits_before_request(
         ),
     )
 
-    schedule = des_epr_schedule(distributed_circuit, seed=0)
+    schedule = des_link_fifo_schedule(distributed_circuit, seed=0)
 
     assert [event.name for event in schedule.operations] == [
         "x",
@@ -244,7 +246,7 @@ def test_des_epr_schedule_waits_for_data_qubits_before_request(
     assert schedule.makespan == 524.0
 
 
-def test_des_epr_schedule_runs_parallel_requests_on_disjoint_links(
+def test_des_link_fifo_schedule_runs_parallel_requests_on_disjoint_links(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -281,7 +283,7 @@ def test_des_epr_schedule_runs_parallel_requests_on_disjoint_links(
         ],
     )
 
-    schedule = des_epr_schedule(distributed_circuit, seed=0)
+    schedule = des_link_fifo_schedule(distributed_circuit, seed=0)
 
     assert [event.name for event in schedule.operations] == [
         "epr",
@@ -297,7 +299,7 @@ def test_des_epr_schedule_runs_parallel_requests_on_disjoint_links(
     assert schedule.makespan == 514.0
 
 
-def test_scheduler_runs_des_epr_via_registry(
+def test_scheduler_runs_des_link_fifo_via_registry(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -315,7 +317,7 @@ def test_scheduler_runs_des_epr_via_registry(
 
     scheduler = Scheduler(
         distributed_circuit,
-        algo="des_epr",
+        algo="des_link_fifo",
         algo_kwargs={"seed": 0},
     )
     scheduler.run()
@@ -327,7 +329,7 @@ def test_scheduler_runs_des_epr_via_registry(
     ]
 
 
-def test_des_epr_scheduler_uses_profile_rate_defaults(
+def test_des_link_fifo_scheduler_uses_profile_rate_defaults(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
@@ -341,7 +343,7 @@ def test_des_epr_scheduler_uses_profile_rate_defaults(
         ),
     )
 
-    scheduler = DESEntanglementScheduler(
+    scheduler = DESLinkFIFOScheduler(
         distributed_circuit,
         profile=SchedulerHardwareProfile.sr_trapped_ion(
             entanglement_profile="neutral_atom.polarization"
@@ -352,7 +354,7 @@ def test_des_epr_scheduler_uses_profile_rate_defaults(
     assert scheduler.p_success == pytest.approx(3.2e-2)
 
 
-def test_des_epr_schedule_rejects_invalid_parameters(
+def test_des_link_fifo_schedule_rejects_invalid_parameters(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -363,6 +365,7 @@ def test_des_epr_schedule_rejects_invalid_parameters(
         measurement_time = 3.0
         entanglement_generation_rate = 0.5
         entanglement_time = 2.0
+        epr_lifetime = 50.0
         state_teleport_time = 523.0
         gate_teleport_time = 513.0
         des_t_cycle = 0.0
@@ -384,10 +387,10 @@ def test_des_epr_schedule_rejects_invalid_parameters(
     )
 
     with pytest.raises(ValueError, match="t_cycle"):
-        DESEntanglementScheduler(distributed_circuit).run()
+        DESLinkFIFOScheduler(distributed_circuit).run()
 
 
-def test_des_epr_schedule_supports_rswap_with_two_pairs(
+def test_des_link_fifo_schedule_supports_rswap_with_two_pairs(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -418,7 +421,7 @@ def test_des_epr_schedule_supports_rswap_with_two_pairs(
         ],
     )
 
-    schedule = des_epr_schedule(distributed_circuit, seed=0)
+    schedule = des_link_fifo_schedule(distributed_circuit, seed=0)
 
     assert [event.name for event in schedule.operations] == [
         "epr",
@@ -433,7 +436,7 @@ def test_des_epr_schedule_supports_rswap_with_two_pairs(
     assert schedule.makespan == 524.0
 
 
-def test_des_epr_schedule_waits_for_both_rswap_pairs(
+def test_des_link_fifo_schedule_waits_for_both_rswap_pairs(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -464,10 +467,85 @@ def test_des_epr_schedule_waits_for_both_rswap_pairs(
         ],
     )
 
-    schedule = des_epr_schedule(distributed_circuit, seed=1)
+    schedule = des_link_fifo_schedule(distributed_circuit, seed=1)
 
     first_epr, second_epr, rswap_op = schedule.operations
-    assert first_epr.duration == 1.0
+    assert first_epr.duration == 3.0
     assert second_epr.duration == 3.0
     assert rswap_op.start_time == 3.0
     assert schedule.makespan == 526.0
+
+
+def test_des_link_fifo_schedule_regenerates_expired_pairs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    _patch_scheduler_timing_model(
+        monkeypatch,
+        rate=1.0,
+        epr_lifetime=50.0,
+    )
+    template = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[2] q;\n"
+            "cx q[0], q[1];\n"
+        ),
+    )
+    distributed_circuit = _build_manual_distributed_circuit(
+        template,
+        [
+            _remote_swap_gate(
+                op_id=0,
+                statement_id=0,
+                data_register_a="q0",
+                data_register_b="q1",
+                comm_register_a0="c0",
+                comm_register_b0="c1",
+                comm_register_a1="c0",
+                comm_register_b1="c1",
+            )
+        ],
+    )
+
+    def _resolve_link_parameters(
+        self: DESLinkFIFOScheduler,
+        link_key: tuple[str, str],
+    ) -> tuple[float, float]:
+        del self
+        if link_key == ("c0[0]", "c1[0]"):
+            return 1.0, 1.0
+        return 60.0, 1.0
+
+    monkeypatch.setattr(
+        DESLinkFIFOScheduler,
+        "_resolve_link_parameters",
+        _resolve_link_parameters,
+    )
+
+    schedule = des_link_fifo_schedule(distributed_circuit, seed=0)
+
+    unused_epr, slow_epr, regenerated_epr, rswap_op = schedule.operations
+    assert [event.name for event in schedule.operations] == [
+        "epr",
+        "epr",
+        "epr",
+        "rswap",
+    ]
+    assert isinstance(unused_epr, schedule_module.EntanglementGeneration)
+    assert isinstance(slow_epr, schedule_module.EntanglementGeneration)
+    assert isinstance(regenerated_epr, schedule_module.EntanglementGeneration)
+    assert unused_epr.was_used is False
+    assert unused_epr.start_time == 0.0
+    assert unused_epr.duration == 51.0
+    assert slow_epr.was_used is True
+    assert slow_epr.start_time == 0.0
+    assert slow_epr.duration == 60.0
+    assert regenerated_epr.was_used is True
+    assert regenerated_epr.start_time == 51.0
+    assert regenerated_epr.duration == 9.0
+    assert rswap_op.start_time == 60.0
+    assert schedule.makespan == 583.0

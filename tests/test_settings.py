@@ -33,6 +33,7 @@ def test_load_settings_resolves_profiles() -> None:
     assert ba_profile.one_qubit_gate_time == pytest.approx(10.0)
     assert ba_profile.two_qubit_gate_time == pytest.approx(500.0)
     assert time_bin_profile.entanglement_rate == pytest.approx(3.5e-6)
+    assert time_bin_profile.epr_lifetime == pytest.approx(50.0)
 
 
 def test_default_settings_path_points_to_packaged_file() -> None:
@@ -45,7 +46,9 @@ def test_default_settings_path_points_to_packaged_file() -> None:
 
 def test_load_settings_file_rejects_invalid_toml(tmp_path: Path) -> None:
     settings_path = tmp_path / "bad_settings.toml"
-    settings_path.write_text("[verification]\nshots = 1e7 * 2\n", encoding="utf-8")
+    settings_path.write_text(
+        "[verification]\nshots = 1e7 * 2\n", encoding="utf-8"
+    )
 
     with pytest.raises(ValueError, match="Invalid TOML"):
         load_settings_file(settings_path)
@@ -63,6 +66,7 @@ def test_load_settings_file_rejects_missing_required_keys(
 
 [entanglement_gen.ion.time_bin]
 entanglement_rate = 3.5e-6
+epr_lifetime = 50
 """.strip(),
         encoding="utf-8",
     )

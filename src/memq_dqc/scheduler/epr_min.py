@@ -1,4 +1,4 @@
-"""EPR-minimization distributed scheduler skeleton."""
+"""Placeholder scheduler for future EPR-minimization work."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ from memq_dqc.scheduler.schedule import BaseScheduler
 
 
 class EPRMinimizationScheduler(BaseScheduler):
-    """Skeleton scheduler for future EPR-minimization strategies."""
+    """Placeholder scheduler reserved for EPR-minimization heuristics."""
 
     def run(self) -> None:
-        """Run the EPR-minimization scheduling algorithm."""
+        """Raise until the EPR-minimization scheduler is implemented."""
         raise NotImplementedError(
             "EPR-minimization scheduling is not yet implemented."
         )

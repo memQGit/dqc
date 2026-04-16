@@ -7,9 +7,18 @@
 
 """Public scheduler interface for distributed circuit execution planning."""
 
-from .des_epr import DESEntanglementScheduler, des_epr_schedule
+from .des_link_critical_path import (
+    DESLinkCriticalPathScheduler,
+    des_link_critical_path_schedule,
+)
+from .des_link_fifo import DESLinkFIFOScheduler, des_link_fifo_schedule
+from .des_link_shortest_duration import (
+    DESLinkShortestDurationScheduler,
+    des_link_shortest_duration_schedule,
+)
 from .epr_min import EPRMinimizationScheduler
 from .fifo import FIFOScheduler, fifo_schedule
+from .ilp_scheduler import ILPScheduler
 from .schedule import (
     DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE,
     DEFAULT_SCHEDULER_MODALITY,
@@ -30,10 +39,13 @@ __all__ = [
     "BaseScheduler",
     "DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE",
     "DEFAULT_SCHEDULER_MODALITY",
-    "DESEntanglementScheduler",
+    "DESLinkCriticalPathScheduler",
+    "DESLinkFIFOScheduler",
+    "DESLinkShortestDurationScheduler",
     "EPRMinimizationScheduler",
     "EntanglementGeneration",
     "FIFOScheduler",
+    "ILPScheduler",
     "OperationSchedule",
     "SchedulerEntanglementProfile",
     "SchedulerHardwareProfile",
@@ -42,7 +54,9 @@ __all__ = [
     "Scheduler",
     "ScheduledOperation",
     "ScheduledQubitTimeline",
-    "des_epr_schedule",
+    "des_link_critical_path_schedule",
+    "des_link_fifo_schedule",
+    "des_link_shortest_duration_schedule",
     "fifo_schedule",
     "plot_schedule_gantt",
 ]

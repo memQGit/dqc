@@ -195,7 +195,8 @@ def _schedule_entanglement_generation(
     return [
         EntanglementGeneration(
             qubits=pair,
-            start_time=start_time - ((total_pairs - index) * entanglement_time),
+            start_time=start_time
+            - ((total_pairs - index) * entanglement_time),
             duration=entanglement_time,
         )
         for index, pair in enumerate(ebit_qubits)
