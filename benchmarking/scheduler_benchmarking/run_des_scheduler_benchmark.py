@@ -130,9 +130,7 @@ def _local_gate(*, op_id: int, name: str, register_name: str) -> Op:
         statement_id=op_id,
         name=name,
         is_remote=False,
-        qubits=(
-            CircuitQubit(register_name=register_name, index=0),
-        ),
+        qubits=(CircuitQubit(register_name=register_name, index=0),),
         node=ast.QuantumGate(
             modifiers=[],
             name=ast.Identifier(name),
@@ -233,6 +231,23 @@ BENCHMARK_CASES: tuple[BenchmarkCase, ...] = (
         description=(
             "Larger three-QPU chain-like example taken from the existing full "
             "algorithm sample."
+        ),
+    ),
+    BenchmarkCase(
+        name="qv_12_line_topology",
+        circuit_path=(
+            REPO_ROOT / "benchmarking" / "circuits" / "qv_12_line_seed7.qasm"
+        ),
+        network_path=(
+            REPO_ROOT
+            / "benchmarking"
+            / "networks"
+            / "line_4qpu_3qubits_each.json"
+        ),
+        compiler_algo=DEFAULT_COMPILER_ALGO,
+        description=(
+            "Seeded 12-qubit quantum volume circuit on a four-QPU line "
+            "topology where processors 1-2-3-4 form a chain."
         ),
     ),
     BenchmarkCase(

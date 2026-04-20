@@ -77,6 +77,7 @@ class ResourceManager:
         # figure out what to return ... maybe just string
         # also figure out what form comm qubit request is in ... is it really
         # tuple (str, str)?
+        # TODO: this must be finished
         self._validate_comm_pair(pair)
         state = self.link_states[pair]
         if state.status is LinkState.AVAILABLE:

@@ -69,7 +69,9 @@ def _build_distributed_circuit(tmp_path, network_path):
     return partitioner.circuit.distributed
 
 
-def _remote_gate(op_id: int, name: str, data_register_a: str, data_register_b: str) -> Op:
+def _remote_gate(
+    op_id: int, name: str, data_register_a: str, data_register_b: str
+) -> Op:
     qubits: tuple[CircuitQubit, ...] = (
         CircuitQubit(register_name=data_register_a, index=0),
         CircuitQubit(register_name=data_register_b, index=0),
@@ -216,9 +218,7 @@ def test_scheduler_rejects_removed_legacy_registry_names(
         three_comp_one_comm_x2_network_path,
     )
 
-    with pytest.raises(
-        ValueError, match="Unknown scheduling algorithm"
-    ):
+    with pytest.raises(ValueError, match="Unknown scheduling algorithm"):
         Scheduler(distributed_circuit, algo=removed_name)
 
 
