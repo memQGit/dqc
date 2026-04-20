@@ -9,4 +9,7 @@
 
 from .network_graph import NetworkGraph, PhysicalQubit
 
-__all__ = ["NetworkGraph", "PhysicalQubit"]
+__all__ = [
+    "NetworkGraph",
+    "PhysicalQubit",
+]
