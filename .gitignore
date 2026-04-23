@@ -48,8 +48,6 @@ examples/
 .codex/
 AGENTS.md
 local_only/
-src/memq_dqc/network/canonical_config.py
-tests/network/
 
 # Jupyter checkpoints
 .ipynb_checkpoints/
