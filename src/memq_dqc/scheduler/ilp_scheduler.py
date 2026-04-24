@@ -7,11 +7,13 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
+from typing import cast
 
 import networkx as nx
 import pulp
 
 from memq_dqc.circuit import DistributedCircuit, Op
+from memq_dqc.network import PhysicalQubit
 from memq_dqc.scheduler.schedule import (
     DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE,
     DEFAULT_SCHEDULER_MODALITY,
@@ -24,8 +26,11 @@ from memq_dqc.scheduler.schedule import (
     SchedulerHardwareProfile,
     SchedulerModality,
     _build_qubit_timelines,
+    _ebit_assignment_labels,
     _operation_duration,
     _physical_qubit_label,
+    _remote_ebit_assignment_candidates,
+    _remote_operation_qubit_labels,
 )
 
 _PROGRESS_BAR_WIDTH = 24
@@ -48,21 +53,34 @@ class _EprWindow:
 
 
 @dataclass(frozen=True, slots=True)
-class _OperationActivity:
-    """Discrete-time activity data for one circuit operation."""
+class _OperationMode:
+    """One scheduler-selectable resource mode for an operation."""
 
-    op: Op
+    mode_index: int
     qubits: tuple[str, ...]
-    duration: float
-    duration_steps: int
     epr_windows: tuple[_EprWindow, ...]
 
     @property
     def earliest_start(self) -> int:
-        """Return the earliest non-negative start for this activity."""
+        """Return the earliest non-negative start for this mode."""
         if not self.epr_windows:
             return 0
         return max(window.start_offset_steps for window in self.epr_windows)
+
+
+@dataclass(frozen=True, slots=True)
+class _OperationActivity:
+    """Discrete-time activity data for one circuit operation."""
+
+    op: Op
+    duration: float
+    duration_steps: int
+    modes: tuple[_OperationMode, ...]
+
+    @property
+    def earliest_start(self) -> int:
+        """Return the earliest non-negative start across operation modes."""
+        return min(mode.earliest_start for mode in self.modes)
 
 
 class _ProgressReporter:
@@ -213,13 +231,14 @@ class ILPScheduler(BaseScheduler):
             reporter.advance("Creating ILP variables")
             problem = pulp.LpProblem("memq_dqc_ilp_schedule", pulp.LpMinimize)
             start_variables = self._build_start_variables(
+                activities=activities,
                 earliest_starts=earliest_starts,
                 latest_starts=latest_starts,
             )
             start_expressions = {
                 op_id: pulp.lpSum(
                     start_time * variable
-                    for start_time, variable in variables.items()
+                    for (_, start_time), variable in variables.items()
                 )
                 for op_id, variables in start_variables.items()
             }
@@ -271,10 +290,10 @@ class ILPScheduler(BaseScheduler):
             )
 
         reporter.advance("Reconstructing schedule")
-        start_steps = self._extract_start_steps(start_variables)
+        selected_modes = self._extract_selected_modes(start_variables)
         scheduled_operations = self._build_schedule_events(
             activities=activities,
-            start_steps=start_steps,
+            selected_modes=selected_modes,
         )
         makespan = max(
             (
@@ -299,34 +318,51 @@ class ILPScheduler(BaseScheduler):
         for op in self.distributed_circuit.ops:
             duration = _operation_duration(op, self.timing_model)
             duration_steps = _duration_to_steps(duration, self.time_step)
-            qubits = tuple(_physical_qubit_label(qubit) for qubit in op.qubits)
-            epr_windows = self._build_epr_windows(op)
             activities[op.op_id] = _OperationActivity(
                 op=op,
-                qubits=qubits,
                 duration=_steps_to_time(duration_steps, self.time_step),
                 duration_steps=duration_steps,
-                epr_windows=epr_windows,
+                modes=self._build_modes(op),
             )
         return activities
 
-    def _build_epr_windows(self, op: Op) -> tuple[_EprWindow, ...]:
-        ebit_pairs = op.ebit_pairs
-        if ebit_pairs is None:
-            return ()
+    def _build_modes(self, op: Op) -> tuple[_OperationMode, ...]:
+        """Build scheduler resource modes for one operation."""
+        if not op.is_remote:
+            return (
+                _OperationMode(
+                    mode_index=0,
+                    qubits=tuple(
+                        _physical_qubit_label(qubit) for qubit in op.qubits
+                    ),
+                    epr_windows=(),
+                ),
+            )
 
+        modes: list[_OperationMode] = []
+        for mode_index, assignment in enumerate(
+            _remote_ebit_assignment_candidates(self.distributed_circuit, op)
+        ):
+            modes.append(
+                _OperationMode(
+                    mode_index=mode_index,
+                    qubits=_remote_operation_qubit_labels(op, assignment),
+                    epr_windows=self._build_epr_windows(assignment),
+                )
+            )
+        return tuple(modes)
+
+    def _build_epr_windows(
+        self,
+        assignment: tuple[tuple[PhysicalQubit, PhysicalQubit], ...],
+    ) -> tuple[_EprWindow, ...]:
+        """Build just-in-time EPR windows for one e-bit assignment."""
         duration_steps = _duration_to_steps(
             self.timing_model.entanglement_time,
             self.time_step,
         )
         duration_time = _steps_to_time(duration_steps, self.time_step)
-        pair_labels = tuple(
-            (
-                _physical_qubit_label(pair[0]),
-                _physical_qubit_label(pair[1]),
-            )
-            for pair in ebit_pairs
-        )
+        pair_labels = _ebit_assignment_labels(assignment)
         if self.multiplex_entangle or len(pair_labels) == 1:
             return tuple(
                 _EprWindow(
@@ -358,11 +394,12 @@ class ILPScheduler(BaseScheduler):
         qubit_order: list[str] = []
         seen_qubits: set[str] = set()
         for op in self.distributed_circuit.ops:
-            for qubit in activities[op.op_id].qubits:
-                if qubit in seen_qubits:
-                    continue
-                seen_qubits.add(qubit)
-                qubit_order.append(qubit)
+            for mode in activities[op.op_id].modes:
+                for qubit in mode.qubits:
+                    if qubit in seen_qubits:
+                        continue
+                    seen_qubits.add(qubit)
+                    qubit_order.append(qubit)
         return tuple(qubit_order)
 
     def _build_horizon(self, activities: dict[int, _OperationActivity]) -> int:
@@ -379,50 +416,62 @@ class ILPScheduler(BaseScheduler):
         for layer in self.distributed_circuit.dag.layers:
             for op in layer:
                 activity = activities[op.op_id]
-                for qubit in activity.qubits:
-                    qubit_timers.setdefault(qubit, 0)
+                best_start_time: int | None = None
+                best_mode: _OperationMode | None = None
+                for mode in activity.modes:
+                    for qubit in mode.qubits:
+                        qubit_timers.setdefault(qubit, 0)
 
-                start_time = max(
-                    (qubit_timers[qubit] for qubit in activity.qubits),
-                    default=0,
-                )
-                if activity.epr_windows:
-                    data_qubits = activity.qubits[:2]
                     start_time = max(
-                        (qubit_timers[qubit] for qubit in data_qubits),
+                        (qubit_timers[qubit] for qubit in mode.qubits),
                         default=0,
                     )
-                    if (
-                        self.multiplex_entangle
-                        or len(activity.epr_windows) == 1
-                    ):
+                    if mode.epr_windows:
+                        data_qubits = mode.qubits[:2]
                         start_time = max(
-                            start_time,
-                            max(
+                            (qubit_timers[qubit] for qubit in data_qubits),
+                            default=0,
+                        )
+                        if (
+                            self.multiplex_entangle
+                            or len(mode.epr_windows) == 1
+                        ):
+                            start_time = max(
+                                start_time,
                                 max(
+                                    max(
+                                        qubit_timers[window.qubits[0]],
+                                        qubit_timers[window.qubits[1]],
+                                    )
+                                    + window.duration_steps
+                                    for window in mode.epr_windows
+                                ),
+                            )
+                        else:
+                            total_pairs = len(mode.epr_windows)
+                            for index, window in enumerate(mode.epr_windows):
+                                slot_count = total_pairs - index
+                                pair_ready = max(
                                     qubit_timers[window.qubits[0]],
                                     qubit_timers[window.qubits[1]],
                                 )
-                                + window.duration_steps
-                                for window in activity.epr_windows
-                            ),
-                        )
-                    else:
-                        total_pairs = len(activity.epr_windows)
-                        for index, window in enumerate(activity.epr_windows):
-                            slot_count = total_pairs - index
-                            pair_ready = max(
-                                qubit_timers[window.qubits[0]],
-                                qubit_timers[window.qubits[1]],
-                            )
-                            start_time = max(
-                                start_time,
-                                pair_ready
-                                + (slot_count * window.duration_steps),
-                            )
+                                start_time = max(
+                                    start_time,
+                                    pair_ready
+                                    + (slot_count * window.duration_steps),
+                                )
 
-                end_time = start_time + activity.duration_steps
-                for qubit in activity.qubits:
+                    if best_start_time is None or start_time < best_start_time:
+                        best_start_time = start_time
+                        best_mode = mode
+
+                if best_start_time is None or best_mode is None:
+                    raise RuntimeError(
+                        f"Operation {op.op_id} has no ILP activity modes."
+                    )
+
+                end_time = best_start_time + activity.duration_steps
+                for qubit in best_mode.qubits:
                     qubit_timers[qubit] = end_time
         return max(qubit_timers.values(), default=0)
 
@@ -475,10 +524,11 @@ class ILPScheduler(BaseScheduler):
     def _build_start_variables(
         self,
         *,
+        activities: dict[int, _OperationActivity],
         earliest_starts: dict[int, int],
         latest_starts: dict[int, int],
-    ) -> dict[int, dict[int, pulp.LpVariable]]:
-        start_variables: dict[int, dict[int, pulp.LpVariable]] = {}
+    ) -> dict[int, dict[tuple[int, int], pulp.LpVariable]]:
+        start_variables: dict[int, dict[tuple[int, int], pulp.LpVariable]] = {}
         for op_id in earliest_starts:
             earliest_start = earliest_starts[op_id]
             latest_start = latest_starts[op_id]
@@ -488,13 +538,19 @@ class ILPScheduler(BaseScheduler):
                     f"operation {op_id}: [{earliest_start}, {latest_start}]."
                 )
 
-            start_variables[op_id] = {
-                start_time: pulp.LpVariable(
-                    f"start_{op_id}_{start_time}",
-                    cat=pulp.LpBinary,
+            start_variables[op_id] = {}
+            for mode in activities[op_id].modes:
+                mode_earliest_start = max(
+                    earliest_start,
+                    mode.earliest_start,
                 )
-                for start_time in range(earliest_start, latest_start + 1)
-            }
+                for start_time in range(mode_earliest_start, latest_start + 1):
+                    start_variables[op_id][(mode.mode_index, start_time)] = (
+                        pulp.LpVariable(
+                            f"start_{op_id}_{mode.mode_index}_{start_time}",
+                            cat=pulp.LpBinary,
+                        )
+                    )
             if not start_variables[op_id]:
                 raise RuntimeError(
                     f"ILP scheduler found no feasible starts for operation {op_id}."
@@ -504,7 +560,7 @@ class ILPScheduler(BaseScheduler):
     def _add_unique_start_constraints(
         self,
         problem: pulp.LpProblem,
-        start_variables: dict[int, dict[int, pulp.LpVariable]],
+        start_variables: dict[int, dict[tuple[int, int], pulp.LpVariable]],
     ) -> None:
         for op_id, variables in start_variables.items():
             problem += (
@@ -533,23 +589,25 @@ class ILPScheduler(BaseScheduler):
         *,
         problem: pulp.LpProblem,
         activities: dict[int, _OperationActivity],
-        start_variables: dict[int, dict[int, pulp.LpVariable]],
+        start_variables: dict[int, dict[tuple[int, int], pulp.LpVariable]],
         horizon: int,
     ) -> None:
         qubit_terms: dict[tuple[str, int], list[pulp.LpVariable]] = {}
         for activity in activities.values():
-            for start_time, variable in start_variables[
+            modes_by_index = {mode.mode_index: mode for mode in activity.modes}
+            for (mode_index, start_time), variable in start_variables[
                 activity.op.op_id
             ].items():
+                mode = modes_by_index[mode_index]
                 for active_time in range(
                     start_time,
                     start_time + activity.duration_steps,
                 ):
-                    for qubit in activity.qubits:
+                    for qubit in mode.qubits:
                         qubit_terms.setdefault(
                             (qubit, active_time), []
                         ).append(variable)
-                for window in activity.epr_windows:
+                for window in mode.epr_windows:
                     epr_start_time = start_time - window.start_offset_steps
                     for active_time in range(
                         epr_start_time,
@@ -600,41 +658,46 @@ class ILPScheduler(BaseScheduler):
             start_expressions.values()
         )
 
-    def _extract_start_steps(
+    def _extract_selected_modes(
         self,
-        start_variables: dict[int, dict[int, pulp.LpVariable]],
-    ) -> dict[int, int]:
-        start_steps: dict[int, int] = {}
+        start_variables: dict[int, dict[tuple[int, int], pulp.LpVariable]],
+    ) -> dict[int, tuple[int, int]]:
+        selected_modes: dict[int, tuple[int, int]] = {}
         for op_id, variables in start_variables.items():
-            chosen_starts: list[int] = []
-            for start_time, variable in variables.items():
-                variable_value = pulp.value(variable)
+            chosen_modes: list[tuple[int, int]] = []
+            for mode_and_start, variable in variables.items():
+                variable_value = cast(float | None, pulp.value(variable))
                 if variable_value is None:
                     continue
                 if float(variable_value) > 1.0 - _BINARY_TOLERANCE:
-                    chosen_starts.append(start_time)
-            if len(chosen_starts) != 1:
+                    chosen_modes.append(mode_and_start)
+            if len(chosen_modes) != 1:
                 raise RuntimeError(
                     "ILP scheduler expected exactly one selected start for "
-                    f"operation {op_id}, found {chosen_starts!r}."
+                    f"operation {op_id}, found {chosen_modes!r}."
                 )
-            start_steps[op_id] = chosen_starts[0]
-        return start_steps
+            selected_modes[op_id] = chosen_modes[0]
+        return selected_modes
 
     def _build_schedule_events(
         self,
         *,
         activities: dict[int, _OperationActivity],
-        start_steps: dict[int, int],
+        selected_modes: dict[int, tuple[int, int]],
     ) -> list[ScheduleEvent]:
         ordered_events: list[
             tuple[tuple[int, int, int, int], ScheduleEvent]
         ] = []
         for op in self.distributed_circuit.ops:
             activity = activities[op.op_id]
-            op_start_step = start_steps[op.op_id]
+            selected_mode_index, op_start_step = selected_modes[op.op_id]
+            mode = next(
+                mode
+                for mode in activity.modes
+                if mode.mode_index == selected_mode_index
+            )
             op_start_time = _steps_to_time(op_start_step, self.time_step)
-            for window in activity.epr_windows:
+            for window in mode.epr_windows:
                 epr_start_step = op_start_step - window.start_offset_steps
                 ordered_events.append(
                     (
@@ -657,7 +720,7 @@ class ILPScheduler(BaseScheduler):
                         op_id=op.op_id,
                         statement_id=op.statement_id,
                         name=op.name,
-                        qubits=activity.qubits,
+                        qubits=mode.qubits,
                         start_time=op_start_time,
                         duration=activity.duration,
                         is_remote=op.is_remote,

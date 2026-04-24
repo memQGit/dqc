@@ -59,6 +59,28 @@ class DistributedCircuitDAG(CircuitDAG):
     distributed-specific utilities and attributes.
     """
 
+    def __init__(
+        self,
+        ops: list[Op],
+        *,
+        ignore_remote_ebit_dependencies: bool = False,
+    ) -> None:
+        """Initialize a distributed DAG.
+
+        Args:
+            ops: Distributed operations in source order.
+            ignore_remote_ebit_dependencies: Whether remote-operation
+                communication operands should be ignored for dependency edges.
+        """
+        self.ignore_remote_ebit_dependencies = ignore_remote_ebit_dependencies
+        super().__init__(ops)
+
+    def _dependency_qubits(self, op: Op) -> tuple[CircuitQubit, ...]:
+        """Return qubits that contribute dependencies for a distributed op."""
+        if self.ignore_remote_ebit_dependencies and op.is_remote:
+            return op.qubits[:2]
+        return op.qubits
+
 
 def _build_remote_or_routed_gate_statements(
     statement: CleanedQuantumGate,
