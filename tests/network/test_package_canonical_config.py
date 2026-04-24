@@ -15,7 +15,9 @@ from memq_dqc.network import (
 def test_canonical_config_submodule_is_importable() -> None:
     module = import_module("memq_dqc.network.canonical_config")
 
-    assert module.CanonicalNetworkConfigBuilder is CanonicalNetworkConfigBuilder
+    assert (
+        module.CanonicalNetworkConfigBuilder is CanonicalNetworkConfigBuilder
+    )
 
 
 def test_build_canonical_network_config_normalizes_sections() -> None:

@@ -67,7 +67,7 @@ class ResourceManager:
             )
             for qubit1, qubit2 in remote_links
         }
-        print("initialized link states", link_states)
+        #     print("initialized link states", link_states)
         return link_states
 
     def handle_request(

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from memq_dqc.circuit import DistributedCircuit
+from memq_dqc.circuit import DistributedCircuit, Op
 from memq_dqc.scheduler.schedule import (
     DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE,
     DEFAULT_SCHEDULER_MODALITY,
@@ -15,8 +15,11 @@ from memq_dqc.scheduler.schedule import (
     SchedulerHardwareProfile,
     SchedulerModality,
     _build_qubit_timelines,
+    _ebit_assignment_labels,
     _operation_duration,
     _physical_qubit_label,
+    _remote_ebit_assignment_candidates,
+    _remote_operation_qubit_labels,
 )
 
 
@@ -33,45 +36,34 @@ class FIFOScheduler(BaseScheduler):
             for op in layer:
                 # we would like to forward look to see if local operations
                 # can be done simultaneously with remote operations
-                qubits = tuple(
-                    _physical_qubit_label(qubit) for qubit in op.qubits
-                )
+                entanglement_events: list[EntanglementGeneration] = []
+                if op.is_remote:
+                    (
+                        qubits,
+                        entanglement_events,
+                        start_time,
+                    ) = _select_remote_ebit_assignment(
+                        distributed_circuit=self.distributed_circuit,
+                        op=op,
+                        qubit_timers=qubit_timers,
+                        entanglement_time=(
+                            self.timing_model.entanglement_time
+                        ),
+                        multiplex_entangle=self.multiplex_entangle,
+                    )
+                else:
+                    qubits = tuple(
+                        _physical_qubit_label(qubit) for qubit in op.qubits
+                    )
+                    start_time = max(
+                        (qubit_timers.get(qubit, 0.0) for qubit in qubits),
+                        default=0.0,
+                    )
+
                 for qubit in qubits:
                     if qubit not in qubit_timers:
                         qubit_timers[qubit] = 0.0
                         qubit_order.append(qubit)
-
-                entanglement_events: list[EntanglementGeneration] = []
-                if op.is_remote:
-                    # TODO: handle multiplex entanglement
-                    ebits = op.ebit_pairs
-                    if ebits is not None:
-                        # Entanglement generation is just-in-time (not FIFO)
-                        entanglement_events, start_time = (
-                            _schedule_entanglement_generation(
-                                data_qubits=(qubits[0], qubits[1]),
-                                ebit_qubits=tuple(
-                                    (
-                                        _physical_qubit_label(ebit[0]),
-                                        _physical_qubit_label(ebit[1]),
-                                    )
-                                    for ebit in ebits
-                                ),
-                                qubit_timers=qubit_timers,
-                                entanglement_time=self.timing_model.entanglement_time,
-                                multiplex_entangle=self.multiplex_entangle,
-                            )
-                        )
-                    else:
-                        start_time = max(
-                            (qubit_timers[qubit] for qubit in qubits),
-                            default=0.0,
-                        )
-                else:
-                    start_time = max(
-                        (qubit_timers[qubit] for qubit in qubits),
-                        default=0.0,
-                    )
 
                 scheduled_operations.extend(entanglement_events)
 
@@ -145,6 +137,43 @@ def fifo_schedule(
     return scheduler.schedule
 
 
+def _select_remote_ebit_assignment(
+    *,
+    distributed_circuit: DistributedCircuit,
+    op: Op,
+    qubit_timers: dict[str, float],
+    entanglement_time: float,
+    multiplex_entangle: bool,
+) -> tuple[tuple[str, ...], list[EntanglementGeneration], float]:
+    """Choose the FIFO e-bit assignment with earliest remote start."""
+    best_score: tuple[float, int] | None = None
+    best_result: (
+        tuple[tuple[str, ...], list[EntanglementGeneration], float] | None
+    ) = None
+
+    for index, assignment in enumerate(
+        _remote_ebit_assignment_candidates(distributed_circuit, op)
+    ):
+        qubits = _remote_operation_qubit_labels(op, assignment)
+        entanglement_events, start_time = _schedule_entanglement_generation(
+            data_qubits=(qubits[0], qubits[1]),
+            ebit_qubits=_ebit_assignment_labels(assignment),
+            qubit_timers=qubit_timers,
+            entanglement_time=entanglement_time,
+            multiplex_entangle=multiplex_entangle,
+        )
+        score = (start_time, index)
+        if best_score is None or score < best_score:
+            best_score = score
+            best_result = (qubits, entanglement_events, start_time)
+
+    if best_result is None:
+        raise ValueError(
+            f"Remote operation {op.op_id} has no viable e-bit assignments."
+        )
+    return best_result
+
+
 def _schedule_entanglement_generation(
     *,
     data_qubits: tuple[str, str],
@@ -155,7 +184,7 @@ def _schedule_entanglement_generation(
 ) -> tuple[list[EntanglementGeneration], float]:
     """Return just-in-time entanglement events and the remote-op start time."""
     data_ready = max(
-        (qubit_timers[qubit] for qubit in data_qubits), default=0.0
+        (qubit_timers.get(qubit, 0.0) for qubit in data_qubits), default=0.0
     )
     if not ebit_qubits:
         return [], data_ready
@@ -164,7 +193,10 @@ def _schedule_entanglement_generation(
         start_time = max(
             data_ready,
             max(
-                max(qubit_timers[pair[0]], qubit_timers[pair[1]])
+                max(
+                    qubit_timers.get(pair[0], 0.0),
+                    qubit_timers.get(pair[1], 0.0),
+                )
                 + entanglement_time
                 for pair in ebit_qubits
             ),
@@ -186,7 +218,10 @@ def _schedule_entanglement_generation(
     total_pairs = len(ebit_qubits)
     for index, pair in enumerate(ebit_qubits):
         slot_count = total_pairs - index
-        pair_ready = max(qubit_timers[pair[0]], qubit_timers[pair[1]])
+        pair_ready = max(
+            qubit_timers.get(pair[0], 0.0),
+            qubit_timers.get(pair[1], 0.0),
+        )
         start_time = max(
             start_time,
             pair_ready + (slot_count * entanglement_time),

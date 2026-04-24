@@ -5,6 +5,9 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import logging
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import pytest
 from matplotlib.axes import Axes
@@ -25,7 +28,10 @@ from memq_dqc.scheduler import (
     fifo_schedule,
     plot_schedule_gantt,
 )
-from memq_dqc.scheduler.schedule import _build_qubit_timelines
+from memq_dqc.scheduler.schedule import (
+    _build_qubit_timelines,
+    _count_failed_entanglement_operations,
+)
 
 _DEFAULT_EPR_DURATION = 1.0 / 3.5e-6
 
@@ -34,6 +40,13 @@ class _TwoQpuPartitioner(BasePartitioner):
     def run(self) -> None:
         self.windows = [self.circuit.mono.ops]
         self.schedule = [{QPU(id=0): {0}, QPU(id=1): {1}}]
+        self.cost = 0.0
+
+
+class _TwoQpuTwoCommPartitioner(BasePartitioner):
+    def run(self) -> None:
+        self.windows = [self.circuit.mono.ops]
+        self.schedule = [{QPU(id=1): {0, 1}, QPU(id=2): {2, 3}}]
         self.cost = 0.0
 
 
@@ -58,6 +71,40 @@ def _build_distributed_circuit(tmp_path, network_path):
     )
     partitioner.run()
     extract_distributed_circuit(partitioner)
+    assert partitioner.circuit.distributed is not None
+    return partitioner.circuit.distributed
+
+
+def _build_multi_comm_distributed_circuit(tmp_path, *, ebit_assignment: bool):
+    qasm_path = tmp_path / "fifo_multi_comm_schedule.qasm"
+    qasm_path.write_text(
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[4] q;\n"
+            "cx q[0], q[2];\n"
+            "cx q[1], q[3];\n"
+        ),
+        encoding="utf-8",
+    )
+    program = load_qasm_program(str(qasm_path))
+    network = NetworkGraph(
+        str(
+            Path(__file__).parents[1]
+            / "fixtures"
+            / "networks"
+            / "simple_8comp_4comm.json"
+        )
+    )
+    partitioner = Partitioner(
+        network,
+        program,
+        algo=_TwoQpuTwoCommPartitioner(network, program),
+    )
+    partitioner.run()
+    extract_distributed_circuit(
+        partitioner,
+        ebit_assignment=ebit_assignment,
+    )
     assert partitioner.circuit.distributed is not None
     return partitioner.circuit.distributed
 
@@ -96,6 +143,51 @@ def test_fifo_schedule_returns_operation_schedule(
     assert schedule.makespan == pytest.approx(_DEFAULT_EPR_DURATION + 513.0)
 
 
+def test_deferred_ebit_assignment_removes_comm_dependency(
+    tmp_path,
+) -> None:
+    explicit = _build_multi_comm_distributed_circuit(
+        tmp_path,
+        ebit_assignment=True,
+    )
+    deferred = _build_multi_comm_distributed_circuit(
+        tmp_path,
+        ebit_assignment=False,
+    )
+
+    assert explicit.dag.graph.has_edge(1, 4)
+    assert any(
+        qubit.register_name.startswith("c")
+        for qubit in explicit.dag.graph[1][4]["qubits"]
+    )
+    assert not deferred.dag.graph.has_edge(1, 4)
+    assert deferred.ebit_candidates_by_op_id is not None
+    assert len(deferred.ebit_candidates_by_op_id[1]) == 2
+    assert len(deferred.ebit_candidates_by_op_id[4]) == 2
+
+
+def test_deferred_ebit_assignment_changes_fifo_schedule(
+    tmp_path,
+) -> None:
+    explicit = _build_multi_comm_distributed_circuit(
+        tmp_path,
+        ebit_assignment=True,
+    )
+    deferred = _build_multi_comm_distributed_circuit(
+        tmp_path,
+        ebit_assignment=False,
+    )
+
+    explicit_schedule = fifo_schedule(explicit)
+    deferred_schedule = fifo_schedule(deferred)
+
+    assert deferred_schedule.makespan < explicit_schedule.makespan
+    assert any(
+        event.name == "epr" and event.qubits == ("c1[1]", "c2[1]")
+        for event in deferred_schedule.operations
+    )
+
+
 def test_scheduler_runs_fifo_by_default(
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -117,6 +209,24 @@ def test_scheduler_runs_fifo_by_default(
         "epr",
         "rcx",
     ]
+
+
+def test_scheduler_info_verbosity_reports_summary_metrics(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+    caplog,
+) -> None:
+    distributed_circuit = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+    )
+    scheduler = Scheduler(distributed_circuit)
+
+    with caplog.at_level(logging.INFO, logger="memq_dqc"):
+        scheduler.run(verbosity="info")
+
+    assert "makespan=" in caplog.text
+    assert "failed_entanglement_operations=0" in caplog.text
 
 
 def test_scheduler_accepts_explicit_multiplex_setting(
@@ -444,3 +554,35 @@ def test_plot_schedule_gantt_marks_unused_epr_pairs() -> None:
     assert "unused epr" in {text.get_text() for text in axes.texts}
     assert to_hex(axes.patches[0].get_facecolor()) == "#dc2626"
     plt.close("all")
+
+
+def test_count_failed_entanglement_operations() -> None:
+    schedule = OperationSchedule(
+        operations=(
+            EntanglementGeneration(
+                qubits=("c0[0]", "c1[0]"),
+                start_time=0.0,
+                duration=10.0,
+                was_used=False,
+            ),
+            EntanglementGeneration(
+                qubits=("c0[0]", "c1[0]"),
+                start_time=10.0,
+                duration=10.0,
+                was_used=True,
+            ),
+            ScheduledOperation(
+                op_id=0,
+                statement_id=0,
+                name="rcx",
+                qubits=("q0[0]", "q1[0]", "c0[0]", "c1[0]"),
+                start_time=20.0,
+                duration=6.0,
+                is_remote=True,
+            ),
+        ),
+        timelines=(),
+        makespan=26.0,
+    )
+
+    assert _count_failed_entanglement_operations(schedule) == 1
