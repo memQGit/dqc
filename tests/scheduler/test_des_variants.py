@@ -152,6 +152,53 @@ def _build_divergence_case() -> DistributedCircuit:
     )
 
 
+def _build_canonical_three_request_case() -> DistributedCircuit:
+    ops = [
+        _remote_gate(0, "rcx", "q20", "q21"),
+        _remote_gate(1, "rswap", "q0", "q1"),
+        _remote_gate(2, "rcx", "q2", "q3"),
+        _remote_gate(3, "rcx", "q4", "q5"),
+        _local_gate(4, "x", "q4"),
+        _local_gate(5, "h", "q4"),
+        _local_gate(6, "z", "q4"),
+        _local_gate(7, "x", "q4"),
+        _local_gate(8, "h", "q4"),
+        _local_gate(9, "z", "q4"),
+        _local_gate(10, "x", "q4"),
+        _local_gate(11, "h", "q4"),
+        _local_gate(12, "z", "q4"),
+        _local_gate(13, "x", "q4"),
+    ]
+
+    graph = nx.DiGraph()
+    for op in ops:
+        graph.add_node(op.op_id, op=op)
+
+    for predecessor, successor in (
+        (3, 4),
+        (4, 5),
+        (5, 6),
+        (6, 7),
+        (7, 8),
+        (8, 9),
+        (9, 10),
+        (10, 11),
+        (11, 12),
+        (12, 13),
+    ):
+        graph.add_edge(predecessor, successor)
+
+    return DistributedCircuit(
+        program=ast.Program(statements=[], version="3.0"),
+        statements=[],
+        ops=ops,
+        num_two_qubit_gates=4,
+        num_remote_gates=4,
+        num_local_swaps_added=0,
+        dag=_SyntheticDAG(graph),
+    )
+
+
 def _patch_scheduler_timing_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -349,4 +396,41 @@ def test_des_variants_diverge_on_shared_link_queue(
         6: 13.0,
         7: 14.0,
         8: 15.0,
+    }
+
+
+def test_des_variants_diverge_on_canonical_three_request_queue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_scheduler_timing_model(monkeypatch)
+    distributed_circuit = _build_canonical_three_request_case()
+
+    results = {}
+    for algorithm in (
+        "des_link_fifo",
+        "des_link_shortest_duration",
+        "des_link_critical_path",
+    ):
+        scheduler = Scheduler(
+            distributed_circuit,
+            algo=algorithm,
+            profile=SchedulerHardwareProfile(),
+            algo_kwargs={"seed": 0},
+        )
+        scheduler.run()
+        assert scheduler.schedule is not None
+        remote_start_order = [
+            event.op_id
+            for event in scheduler.schedule.operations
+            if hasattr(event, "op_id") and event.op_id in {1, 2, 3}
+        ]
+        results[algorithm] = (
+            scheduler.schedule.makespan,
+            remote_start_order,
+        )
+
+    assert results == {
+        "des_link_fifo": (23.0, [1, 2, 3]),
+        "des_link_shortest_duration": (22.0, [2, 3, 1]),
+        "des_link_critical_path": (21.0, [3, 1, 2]),
     }

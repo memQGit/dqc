@@ -58,6 +58,44 @@ def test_partitioner_accepts_network_and_qasm_paths(
     assert partitioner.windows
 
 
+def test_partitioner_accepts_qasm_and_network_paths_in_reverse_order(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    partitioner = Partitioner(
+        simple1_circuit_path,
+        three_comp_one_comm_x2_network_path,
+        algo_kwargs={"window_length": 2},
+    )
+
+    partitioner.run()
+
+    assert isinstance(partitioner.network, NetworkGraph)
+    assert isinstance(partitioner.circuit, Circuit)
+    assert partitioner.schedule
+    assert partitioner.windows
+
+
+def test_partitioner_accepts_program_and_network_objects_in_reverse_order(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        program,
+        network,
+        algo_kwargs={"window_length": 2},
+    )
+
+    partitioner.run()
+
+    assert isinstance(partitioner.network, NetworkGraph)
+    assert isinstance(partitioner.circuit, Circuit)
+    assert partitioner.schedule
+    assert partitioner.windows
+
+
 def test_partitioner_benchmark_static_schedule_is_stationary(
     simple1_circuit_path,
     three_comp_one_comm_x2_network_path,

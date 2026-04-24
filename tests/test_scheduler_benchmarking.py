@@ -37,3 +37,22 @@ def test_qv_12_line_topology_case_resolves_to_existing_assets():
     assert case.network_path is not None
     assert case.circuit_path.exists()
     assert case.network_path.exists()
+
+
+def test_synthetic_divergence_cases_produce_distinct_makespans():
+    module = _load_benchmark_module()
+
+    for case_name in (
+        "synthetic_shortest_vs_tail_contention",
+        "synthetic_critical_path_fanout_contention",
+        "synthetic_deferred_two_lane_mixed_contention",
+    ):
+        case = module.resolve_cases([case_name])[0]
+        distributed_circuit = module.build_case_distributed_circuit(case)
+        results = module.benchmark_des_algorithms(
+            distributed_circuit=distributed_circuit,
+            algorithms=module.DEFAULT_DES_ALGORITHMS,
+            seed=0,
+        )
+
+        assert len({result.makespan for result in results}) > 1

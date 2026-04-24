@@ -42,7 +42,7 @@ TODO.md
 Genesis/
 genesis/
 .agents/
-benchmarking/
+#benchmarking/
 examples/
 # CODEX
 .codex/

@@ -86,6 +86,42 @@ def test_extract_distributed_circuit_returns_program(
     assert distributed_program.statements
 
 
+def test_partitioner_distributed_program_extracts_lazily(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+
+    distributed_program = partitioner.distributed_program
+
+    assert isinstance(distributed_program, ast.Program)
+    assert partitioner.circuit.distributed is not None
+    assert distributed_program is partitioner.circuit.distributed.program
+
+
+def test_partitioner_distributed_circuit_extracts_once_and_caches(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+
+    first = partitioner.distributed_circuit
+    second = partitioner.distributed_circuit
+
+    assert first is second
+    assert partitioner.distributed_program is first.program
+
+
 def test_extract_distributed_circuit_adds_comm_registers(
     simple1_circuit_path,
     three_comp_one_comm_x2_network_path,

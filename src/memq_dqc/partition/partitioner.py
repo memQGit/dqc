@@ -18,7 +18,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from os import PathLike
-from typing import Any, Literal, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypeVar, cast
 
 from openqasm3 import ast
 
@@ -29,6 +29,9 @@ from memq_dqc.network import NetworkGraph
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from memq_dqc.circuit import DistributedCircuit
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,8 +114,8 @@ class Partitioner:
 
     def __init__(
         self,
-        network: NetworkInput,
-        program: ProgramInput,
+        network: NetworkInput | ProgramInput,
+        program: ProgramInput | NetworkInput,
         *,
         algo: str | type[_Algorithm] | _Algorithm = "cisco",
         algo_kwargs: dict[str, Any] | None = None,
@@ -120,14 +123,20 @@ class Partitioner:
         """Initialize the partitioner and select the algorithm.
 
         Args:
-            network: Network graph describing available resources, or a path
-                to a network JSON file.
-            program: Parsed OpenQASM 3 program, or a path to a QASM file.
+            network: Network graph or parsed OpenQASM 3 program, or a path
+                to either input type. When both positional inputs are file
+                paths or in-memory objects, the constructor infers which one
+                is the network and which one is the program.
+            program: Parsed OpenQASM 3 program or network graph, or a path to
+                either input type. When both positional inputs are file paths
+                or in-memory objects, the constructor infers which one is the
+                network and which one is the program.
             algo: Algorithm name, class, or preconfigured instance.
             algo_kwargs: Keyword arguments forwarded to the algorithm.
         """
-        resolved_network = _resolve_network_input(network)
-        resolved_program = _resolve_program_input(program)
+        resolved_network, resolved_program = _resolve_partitioner_inputs(
+            network, program
+        )
         self._algorithm = self._resolve_algorithm(
             resolved_network, resolved_program, algo, algo_kwargs
         )
@@ -205,6 +214,27 @@ class Partitioner:
         """Return the network graph used by the configured algorithm."""
         return self._algorithm.network
 
+    @property
+    def distributed_circuit(self) -> DistributedCircuit:
+        """Return the distributed circuit, extracting it on first access.
+
+        Raises:
+            ValueError: If partitioning has not been run yet.
+            RuntimeError: If extraction does not populate the circuit.
+        """
+        distributed = self.circuit.distributed
+        if distributed is None:
+            self._ensure_distributed_circuit()
+            distributed = self.circuit.distributed
+        if distributed is None:
+            raise RuntimeError("Distributed circuit extraction failed.")
+        return distributed
+
+    @property
+    def distributed_program(self) -> ast.Program:
+        """Return the distributed OpenQASM program for this partitioner."""
+        return self.distributed_circuit.program
+
     def _resolve_algorithm(
         self,
         network: NetworkGraph,
@@ -229,6 +259,12 @@ class Partitioner:
 
         return algo_class(network, program, **algo_kwargs)
 
+    def _ensure_distributed_circuit(self) -> None:
+        """Populate the cached distributed circuit when it is missing."""
+        from memq_dqc.builder import extract_distributed_circuit
+
+        extract_distributed_circuit(self)
+
 
 def _resolve_network_input(network: NetworkInput) -> NetworkGraph:
     """Return a loaded network graph for a supported partitioner input."""
@@ -242,6 +278,50 @@ def _resolve_program_input(program: ProgramInput) -> ast.Program:
     if isinstance(program, ast.Program):
         return program
     return load_qasm_program(str(program))
+
+
+def _resolve_partitioner_inputs(
+    first: NetworkInput | ProgramInput,
+    second: NetworkInput | ProgramInput,
+) -> tuple[NetworkGraph, ast.Program]:
+    """Return resolved network and program inputs from two constructor args."""
+    first_kind = _classify_partitioner_input(first)
+    second_kind = _classify_partitioner_input(second)
+
+    if first_kind == "network" and second_kind == "program":
+        return (
+            _resolve_network_input(cast(NetworkInput, first)),
+            _resolve_program_input(cast(ProgramInput, second)),
+        )
+    if first_kind == "program" and second_kind == "network":
+        return (
+            _resolve_network_input(cast(NetworkInput, second)),
+            _resolve_program_input(cast(ProgramInput, first)),
+        )
+
+    # Preserve the legacy positional interpretation when the inputs are
+    # ambiguous, such as extensionless paths.
+    return (
+        _resolve_network_input(cast(NetworkInput, first)),
+        _resolve_program_input(cast(ProgramInput, second)),
+    )
+
+
+def _classify_partitioner_input(
+    value: NetworkInput | ProgramInput,
+) -> Literal["network", "program"] | None:
+    """Return the inferred partitioner input kind when it is obvious."""
+    if isinstance(value, NetworkGraph):
+        return "network"
+    if isinstance(value, ast.Program):
+        return "program"
+    if isinstance(value, (str, PathLike)):
+        suffix = str(value).lower()
+        if suffix.endswith(".json"):
+            return "network"
+        if suffix.endswith((".qasm", ".qasm3")):
+            return "program"
+    return None
 
 
 def _get_algorithm_class(name: str) -> type[BasePartitioner]:
