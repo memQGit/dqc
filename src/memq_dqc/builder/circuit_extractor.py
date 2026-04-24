@@ -39,12 +39,16 @@ if TYPE_CHECKING:
 def extract_distributed_circuit(
     partitioner: Partitioner,
     *,
+    ebit_assignment: bool = True,
     verbosity: Literal["quiet", "info", "debug"] = "quiet",
 ) -> ast.Program:
     """Extract distributed circuit from partitioning assignment.
 
     Args:
         partitioner: Partitioner with partitioning results.
+        ebit_assignment: Whether the compiler assigns concrete e-bit pairs
+            into the scheduler DAG. If false, schedulers choose from viable
+            e-bit pair candidates.
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
@@ -93,6 +97,7 @@ def extract_distributed_circuit(
             comp_qubits_per_qpu=comp_qubits_per_qpu,
             comm_qubits_per_qpu=comm_qubits_per_qpu,
             network=partitioner.network,
+            ebit_assignment=ebit_assignment,
         )
         logger.debug(
             "Built distributed circuit in %.3fs.",

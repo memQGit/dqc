@@ -5,7 +5,7 @@ Most cases mirror the compiler pipeline used by
 
 1. Load a QASM circuit and network topology.
 2. Partition the circuit with the standard ``cisco`` partitioner.
-3. Extract the distributed circuit.
+3. Extract the distributed circuit with scheduler-assigned e-bits.
 4. Run each DES-based scheduler on the same distributed circuit.
 5. Print makespan comparisons to the terminal.
 
@@ -21,14 +21,16 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import networkx as nx
 from openqasm3 import ast
 
 from memq_dqc.builder import extract_distributed_circuit
 from memq_dqc.circuit import DistributedCircuit
+from memq_dqc.circuit.dag import DistributedCircuitDAG
 from memq_dqc.circuit.op import Op
-from memq_dqc.network import NetworkGraph
+from memq_dqc.network import NetworkGraph, PhysicalQubit
 from memq_dqc.partition import Partitioner
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.preprocessing.qasm.types import CircuitQubit
@@ -123,6 +125,32 @@ def _remote_gate(
     )
 
 
+def _deferred_remote_gate(
+    *,
+    op_id: int,
+    name: str,
+    data_register_a: str,
+    data_register_b: str,
+) -> Op:
+    """Return one synthetic remote operation without assigned e-bit qubits."""
+    return Op(
+        op_id=op_id,
+        statement_id=op_id,
+        name=name,
+        is_remote=True,
+        qubits=(
+            CircuitQubit(register_name=data_register_a, index=0),
+            CircuitQubit(register_name=data_register_b, index=0),
+        ),
+        node=ast.QuantumGate(
+            modifiers=[],
+            name=ast.Identifier(name),
+            arguments=[],
+            qubits=[],
+        ),
+    )
+
+
 def _local_gate(*, op_id: int, name: str, register_name: str) -> Op:
     """Return one synthetic local single-qubit operation."""
     return Op(
@@ -137,6 +165,53 @@ def _local_gate(*, op_id: int, name: str, register_name: str) -> Op:
             arguments=[],
             qubits=[],
         ),
+    )
+
+
+def _comm_pair(
+    left_qpu_id: int,
+    left_qubit_id: int,
+    right_qpu_id: int,
+    right_qubit_id: int,
+) -> tuple[PhysicalQubit, PhysicalQubit]:
+    """Return one synthetic physical communication-qubit pair."""
+    return (
+        PhysicalQubit(left_qpu_id, left_qubit_id, "communication"),
+        PhysicalQubit(right_qpu_id, right_qubit_id, "communication"),
+    )
+
+
+def _distributed_circuit_from_ops(
+    *,
+    ops: list[Op],
+    graph_edges: Sequence[tuple[int, int]] = (),
+    ebit_candidates_by_op_id: (
+        dict[
+            int,
+            tuple[
+                tuple[tuple[PhysicalQubit, PhysicalQubit], ...],
+                ...,
+            ],
+        ]
+        | None
+    ) = None,
+) -> DistributedCircuit:
+    """Return a scheduler-only distributed circuit from synthetic operations."""
+    graph = nx.DiGraph()
+    for op in ops:
+        graph.add_node(op.op_id, op=op)
+    for predecessor, successor in graph_edges:
+        graph.add_edge(predecessor, successor)
+
+    return DistributedCircuit(
+        program=ast.Program(statements=[], version="3.0"),
+        statements=[],
+        ops=ops,
+        num_two_qubit_gates=sum(1 for op in ops if op.is_remote),
+        num_remote_gates=sum(1 for op in ops if op.is_remote),
+        num_local_swaps_added=0,
+        dag=cast(DistributedCircuitDAG, _SyntheticDAG(graph=graph)),
+        ebit_candidates_by_op_id=ebit_candidates_by_op_id,
     )
 
 
@@ -188,27 +263,186 @@ def _build_link_arbitration_divergence_case() -> DistributedCircuit:
         _local_gate(op_id=8, name="h", register_name="q4"),
     ]
 
-    graph = nx.DiGraph()
-    for op in ops:
-        graph.add_node(op.op_id, op=op)
-
-    for predecessor, successor in (
-        (3, 4),
-        (4, 5),
-        (5, 6),
-        (6, 7),
-        (7, 8),
-    ):
-        graph.add_edge(predecessor, successor)
-
-    return DistributedCircuit(
-        program=ast.Program(statements=[], version="3.0"),
-        statements=[],
+    return _distributed_circuit_from_ops(
         ops=ops,
-        num_two_qubit_gates=4,
-        num_remote_gates=4,
-        num_local_swaps_added=0,
-        dag=_SyntheticDAG(graph=graph),
+        graph_edges=((3, 4), (4, 5), (5, 6), (6, 7), (7, 8)),
+    )
+
+
+def _build_shortest_vs_tail_contention_case() -> DistributedCircuit:
+    """Return a single-link case with duration and tail-priority conflict."""
+    ops = [
+        _remote_gate(
+            op_id=0,
+            name="rcx",
+            data_register_a="q20",
+            data_register_b="q21",
+        ),
+        _remote_gate(
+            op_id=1,
+            name="rswap",
+            data_register_a="q0",
+            data_register_b="q1",
+        ),
+        _remote_gate(
+            op_id=2,
+            name="rcx",
+            data_register_a="q2",
+            data_register_b="q3",
+        ),
+        _remote_gate(
+            op_id=3,
+            name="rcx",
+            data_register_a="q4",
+            data_register_b="q5",
+        ),
+        _remote_gate(
+            op_id=4,
+            name="rswap",
+            data_register_a="q6",
+            data_register_b="q7",
+        ),
+        _local_gate(op_id=5, name="x", register_name="q4"),
+        _local_gate(op_id=6, name="h", register_name="q4"),
+        _local_gate(op_id=7, name="z", register_name="q4"),
+        _local_gate(op_id=8, name="x", register_name="q4"),
+        _local_gate(op_id=9, name="h", register_name="q4"),
+        _local_gate(op_id=10, name="z", register_name="q4"),
+    ]
+    return _distributed_circuit_from_ops(
+        ops=ops,
+        graph_edges=(
+            (3, 5),
+            (5, 6),
+            (6, 7),
+            (7, 8),
+            (8, 9),
+            (9, 10),
+        ),
+    )
+
+
+def _build_critical_path_fanout_contention_case() -> DistributedCircuit:
+    """Return a single-link fanout case with uneven downstream tails."""
+    ops = [
+        _remote_gate(
+            op_id=0,
+            name="rcx",
+            data_register_a="q30",
+            data_register_b="q31",
+        ),
+        _remote_gate(
+            op_id=1,
+            name="rcx",
+            data_register_a="q0",
+            data_register_b="q1",
+        ),
+        _remote_gate(
+            op_id=2,
+            name="rcx",
+            data_register_a="q2",
+            data_register_b="q3",
+        ),
+        _remote_gate(
+            op_id=3,
+            name="rcx",
+            data_register_a="q4",
+            data_register_b="q5",
+        ),
+        _remote_gate(
+            op_id=4,
+            name="rcx",
+            data_register_a="q6",
+            data_register_b="q7",
+        ),
+        _local_gate(op_id=5, name="x", register_name="q6"),
+        _local_gate(op_id=6, name="h", register_name="q6"),
+        _local_gate(op_id=7, name="z", register_name="q6"),
+        _local_gate(op_id=8, name="x", register_name="q6"),
+        _local_gate(op_id=9, name="h", register_name="q6"),
+        _local_gate(op_id=10, name="z", register_name="q6"),
+        _local_gate(op_id=11, name="x", register_name="q6"),
+        _local_gate(op_id=12, name="h", register_name="q6"),
+    ]
+    return _distributed_circuit_from_ops(
+        ops=ops,
+        graph_edges=(
+            (4, 5),
+            (5, 6),
+            (6, 7),
+            (7, 8),
+            (8, 9),
+            (9, 10),
+            (10, 11),
+            (11, 12),
+        ),
+    )
+
+
+def _build_deferred_two_lane_mixed_contention_case() -> DistributedCircuit:
+    """Return a deferred e-bit case with two overloaded candidate lanes."""
+    lane_a = _comm_pair(0, 0, 1, 0)
+    lane_b = _comm_pair(0, 1, 1, 1)
+    lane_c = _comm_pair(0, 2, 1, 2)
+    lane_d = _comm_pair(0, 3, 1, 3)
+    rcx_candidates = ((lane_a,), (lane_c,))
+    rswap_candidates = ((lane_a, lane_b), (lane_c, lane_d))
+
+    ops = [
+        _deferred_remote_gate(
+            op_id=0,
+            name="rcx",
+            data_register_a="q0",
+            data_register_b="q1",
+        ),
+        _deferred_remote_gate(
+            op_id=1,
+            name="rcx",
+            data_register_a="q2",
+            data_register_b="q3",
+        ),
+        _deferred_remote_gate(
+            op_id=2,
+            name="rswap",
+            data_register_a="q4",
+            data_register_b="q5",
+        ),
+        _deferred_remote_gate(
+            op_id=3,
+            name="rcx",
+            data_register_a="q6",
+            data_register_b="q7",
+        ),
+        _deferred_remote_gate(
+            op_id=4,
+            name="rswap",
+            data_register_a="q8",
+            data_register_b="q9",
+        ),
+        _deferred_remote_gate(
+            op_id=5,
+            name="rcx",
+            data_register_a="q10",
+            data_register_b="q11",
+        ),
+        _local_gate(op_id=6, name="x", register_name="q10"),
+        _local_gate(op_id=7, name="h", register_name="q10"),
+        _local_gate(op_id=8, name="z", register_name="q10"),
+        _local_gate(op_id=9, name="x", register_name="q10"),
+        _local_gate(op_id=10, name="h", register_name="q10"),
+    ]
+
+    return _distributed_circuit_from_ops(
+        ops=ops,
+        graph_edges=((5, 6), (6, 7), (7, 8), (8, 9), (9, 10)),
+        ebit_candidates_by_op_id={
+            0: rcx_candidates,
+            1: rcx_candidates,
+            2: rswap_candidates,
+            3: rcx_candidates,
+            4: rswap_candidates,
+            5: rcx_candidates,
+        },
     )
 
 
@@ -231,6 +465,30 @@ BENCHMARK_CASES: tuple[BenchmarkCase, ...] = (
         description=(
             "Larger three-QPU chain-like example taken from the existing full "
             "algorithm sample."
+        ),
+    ),
+    BenchmarkCase(
+        name="synthetic_shortest_vs_tail_contention",
+        builder=_build_shortest_vs_tail_contention_case,
+        description=(
+            "Scheduler-only single-link case mixing long rswap requests, "
+            "short rcx requests, and a dependent tail."
+        ),
+    ),
+    BenchmarkCase(
+        name="synthetic_critical_path_fanout_contention",
+        builder=_build_critical_path_fanout_contention_case,
+        description=(
+            "Scheduler-only single-link case where several equal-duration "
+            "remote branches have very different downstream tails."
+        ),
+    ),
+    BenchmarkCase(
+        name="synthetic_deferred_two_lane_mixed_contention",
+        builder=_build_deferred_two_lane_mixed_contention_case,
+        description=(
+            "Scheduler-only deferred e-bit case where rcx and rswap requests "
+            "choose between two overloaded communication-lane groups."
         ),
     ),
     BenchmarkCase(
@@ -422,7 +680,11 @@ def build_compiled_distributed_circuit(
         algo=compiler_algo,
     )
     partitioner.run(verbosity="quiet")
-    extract_distributed_circuit(partitioner, verbosity="quiet")
+    extract_distributed_circuit(
+        partitioner,
+        ebit_assignment=False,
+        verbosity="quiet",
+    )
 
     distributed_circuit = partitioner.circuit.distributed
     if distributed_circuit is None:

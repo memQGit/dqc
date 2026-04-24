@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import TypeAlias
 
 from memq_dqc.circuit import DistributedCircuit, Op
+from memq_dqc.network import PhysicalQubit
 from memq_dqc.scheduler.schedule import (
     DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE,
     DEFAULT_SCHEDULER_MODALITY,
@@ -21,8 +22,11 @@ from memq_dqc.scheduler.schedule import (
     SchedulerModality,
     SchedulerTimingModel,
     _build_qubit_timelines,
+    _ebit_assignment_labels,
     _operation_duration,
     _physical_qubit_label,
+    _remote_ebit_assignment_candidates,
+    _remote_operation_qubit_labels,
 )
 
 _START_EPR_REQUEST = "START_EPR_REQUEST"
@@ -143,6 +147,7 @@ class BaseDESLinkScheduler(BaseScheduler):
         self._op_qubits: dict[int, tuple[str, ...]] = {}
         self._event_queue: list[_QueueEvent] = []
         self._link_states: dict[tuple[str, str], _LinkState] = {}
+        self._reserved_link_counts: dict[tuple[str, str], int] = {}
         self._remote_requests: dict[int, _RemoteRequest] = {}
         self._scheduled_records: list[tuple[float, int, ScheduleEvent]] = []
         self._event_sequence = 0
@@ -199,6 +204,7 @@ class BaseDESLinkScheduler(BaseScheduler):
         )
         self._event_queue = []
         self._link_states = {}
+        self._reserved_link_counts = {}
         self._remote_requests = {}
         self._scheduled_records = []
         self._event_sequence = 0
@@ -270,19 +276,15 @@ class BaseDESLinkScheduler(BaseScheduler):
 
     def _schedule_remote_request(self, op: Op) -> None:
         """Create one remote request and queue its initial link events."""
-        ebit_pairs = op.ebit_pairs
-        if ebit_pairs is None:
-            raise ValueError(
-                "Remote operation is missing required EPR pair metadata."
-            )
+        ebit_pairs = self._select_remote_ebit_assignment(op)
+        op_labels = _remote_operation_qubit_labels(op, ebit_pairs)
+        for qubit in op_labels:
+            if qubit not in self._qubit_timers:
+                self._qubit_timers[qubit] = 0.0
+                self._qubit_order.append(qubit)
 
-        op_labels = self._op_qubits[op.op_id]
         link_requests: dict[tuple[str, str], _RemoteLinkRequest] = {}
-        for ebit_pair in ebit_pairs:
-            link_qubits = (
-                _physical_qubit_label(ebit_pair[0]),
-                _physical_qubit_label(ebit_pair[1]),
-            )
+        for link_qubits in _ebit_assignment_labels(ebit_pairs):
             link_key = _canonical_link_key(link_qubits)
             if link_key in link_requests:
                 raise ValueError(
@@ -292,6 +294,9 @@ class BaseDESLinkScheduler(BaseScheduler):
             link_requests[link_key] = _RemoteLinkRequest(
                 link_qubits=link_qubits,
                 link_key=link_key,
+            )
+            self._reserved_link_counts[link_key] = (
+                self._reserved_link_counts.get(link_key, 0) + 1
             )
 
         self._remote_requests[op.op_id] = _RemoteRequest(
@@ -313,6 +318,55 @@ class BaseDESLinkScheduler(BaseScheduler):
                 link_key=link_key,
             )
 
+    def _select_remote_ebit_assignment(
+        self,
+        op: Op,
+    ) -> tuple[tuple[PhysicalQubit, PhysicalQubit], ...]:
+        """Choose a remote e-bit assignment for this DES scheduler."""
+        best_score: tuple[int, float, int] | None = None
+        best_assignment: tuple[tuple[PhysicalQubit, PhysicalQubit], ...] | None
+        best_assignment = None
+        for index, assignment in enumerate(
+            _remote_ebit_assignment_candidates(self.distributed_circuit, op)
+        ):
+            op_labels = _remote_operation_qubit_labels(op, assignment)
+            ready_time = max(
+                (self._qubit_timers.get(qubit, 0.0) for qubit in op_labels),
+                default=0.0,
+            )
+            link_load = sum(
+                self._link_load(_canonical_link_key(pair))
+                for pair in _ebit_assignment_labels(assignment)
+            )
+            score = (link_load, ready_time, index)
+            if best_score is None or score < best_score:
+                best_score = score
+                best_assignment = assignment
+
+        if best_assignment is None:
+            raise ValueError(
+                f"Remote operation {op.op_id} has no viable e-bit assignments."
+            )
+        return best_assignment
+
+    def _link_load(self, link_key: tuple[str, str]) -> int:
+        """Return a small contention score for one communication link."""
+        link_state = self._link_states.get(link_key)
+        active_count = (
+            1
+            if link_state is not None
+            and link_state.active_request_id is not None
+            else 0
+        )
+        pending_count = (
+            len(link_state.pending_requests) if link_state is not None else 0
+        )
+        return (
+            active_count
+            + pending_count
+            + self._reserved_link_counts.get(link_key, 0)
+        )
+
     def _activate_remote_request(
         self,
         op_id: int,
@@ -323,6 +377,11 @@ class BaseDESLinkScheduler(BaseScheduler):
         request = self._remote_requests[op_id]
         link_request = request.link_requests[link_key]
         link_request.process_start_time = time
+        reserved_count = self._reserved_link_counts.get(link_key, 0)
+        if reserved_count <= 1:
+            self._reserved_link_counts.pop(link_key, None)
+        else:
+            self._reserved_link_counts[link_key] = reserved_count - 1
         link_state = self._link_states.setdefault(link_key, _LinkState())
         link_state.active_request_id = op_id
         cycle_time, _ = self._resolve_link_parameters(link_key)

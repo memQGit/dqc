@@ -371,10 +371,12 @@ class Scheduler:
                 return
 
             logger.info(
-                "Scheduling completed in %.3fs: operations=%d makespan=%.3f.",
+                "Scheduling completed in %.3fs: operations=%d "
+                "makespan=%.3f failed_entanglement_operations=%d.",
                 timer.elapsed_seconds(),
                 len(schedule.operations),
                 schedule.makespan,
+                _count_failed_entanglement_operations(schedule),
             )
             logger.debug(
                 "Scheduled qubit timelines: %s",
@@ -472,6 +474,17 @@ def _get_algorithm_class(name: str) -> type[BaseScheduler]:
     raise ValueError(f"Unknown scheduling algorithm: {name}")
 
 
+def _count_failed_entanglement_operations(
+    schedule: OperationSchedule,
+) -> int:
+    """Return the number of scheduled entanglement events that were unused."""
+    return sum(
+        1
+        for event in schedule.operations
+        if isinstance(event, EntanglementGeneration) and not event.was_used
+    )
+
+
 def _physical_qubit_label(
     qubit: CircuitQubit | PhysicalQubit,
 ) -> str:
@@ -544,14 +557,76 @@ def _operation_duration(op: Op, timing_model: SchedulerTimingModel) -> float:
     return timing_model.local_two_qubit_gate_time
 
 
+def _remote_ebit_assignment_candidates(
+    distributed_circuit: DistributedCircuit,
+    op: Op,
+) -> tuple[tuple[tuple[PhysicalQubit, PhysicalQubit], ...], ...]:
+    """Return scheduler-selectable e-bit assignments for a remote op."""
+    if not op.is_remote:
+        return ()
+
+    candidates_by_op_id = distributed_circuit.ebit_candidates_by_op_id
+    if candidates_by_op_id is not None:
+        candidates = candidates_by_op_id.get(op.op_id)
+        if candidates is None:
+            raise ValueError(
+                "Deferred e-bit assignment is missing candidates for remote "
+                f"operation {op.op_id}."
+            )
+        if not candidates:
+            raise ValueError(
+                "Deferred e-bit assignment has no viable candidates for "
+                f"remote operation {op.op_id}."
+            )
+        return candidates
+
+    ebit_pairs = op.ebit_pairs
+    if ebit_pairs is None:
+        raise ValueError(
+            "Remote operation is missing required EPR pair metadata."
+        )
+    return (ebit_pairs,)
+
+
+def _remote_operation_qubit_labels(
+    op: Op,
+    assignment: tuple[tuple[PhysicalQubit, PhysicalQubit], ...],
+) -> tuple[str, ...]:
+    """Return scheduled qubit labels for a remote op and e-bit assignment."""
+    data_qubits = tuple(
+        _physical_qubit_label(qubit) for qubit in op.qubits[:2]
+    )
+    ebit_qubits = tuple(
+        _physical_qubit_label(qubit) for pair in assignment for qubit in pair
+    )
+    return (*data_qubits, *ebit_qubits)
+
+
+def _ebit_assignment_labels(
+    assignment: tuple[tuple[PhysicalQubit, PhysicalQubit], ...],
+) -> tuple[tuple[str, str], ...]:
+    """Return physical-qubit label pairs for one e-bit assignment."""
+    return tuple(
+        (
+            _physical_qubit_label(pair[0]),
+            _physical_qubit_label(pair[1]),
+        )
+        for pair in assignment
+    )
+
+
 def _build_qubit_timelines(
     operations: list[ScheduleEvent],
     qubit_order: tuple[str, ...],
 ) -> tuple[ScheduledQubitTimeline, ...]:
     """Build per-qubit timeline views from scheduled operations."""
+    ordered_qubits = list(qubit_order)
     operations_by_qubit = {qubit: [] for qubit in qubit_order}
     for scheduled_op in operations:
         for qubit in scheduled_op.qubits:
+            if qubit not in operations_by_qubit:
+                operations_by_qubit[qubit] = []
+                ordered_qubits.append(qubit)
             operations_by_qubit[qubit].append(scheduled_op)
 
     return tuple(
@@ -559,5 +634,5 @@ def _build_qubit_timelines(
             qubit=qubit,
             operations=tuple(operations_by_qubit[qubit]),
         )
-        for qubit in qubit_order
+        for qubit in ordered_qubits
     )
