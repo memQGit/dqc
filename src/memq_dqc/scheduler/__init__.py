@@ -16,7 +16,6 @@ from .des_link_shortest_duration import (
     DESLinkShortestDurationScheduler,
     des_link_shortest_duration_schedule,
 )
-from .epr_min import EPRMinimizationScheduler
 from .fifo import FIFOScheduler, fifo_schedule
 from .ilp_scheduler import ILPScheduler
 from .schedule import (
@@ -42,7 +41,6 @@ __all__ = [
     "DESLinkCriticalPathScheduler",
     "DESLinkFIFOScheduler",
     "DESLinkShortestDurationScheduler",
-    "EPRMinimizationScheduler",
     "EntanglementGeneration",
     "FIFOScheduler",
     "ILPScheduler",

@@ -467,10 +467,6 @@ def _get_algorithm_class(name: str) -> type[BaseScheduler]:
         )
 
         return DESLinkCriticalPathScheduler
-    if name == "epr_min":
-        from memq_dqc.scheduler.epr_min import EPRMinimizationScheduler
-
-        return EPRMinimizationScheduler
     raise ValueError(f"Unknown scheduling algorithm: {name}")
 
 
