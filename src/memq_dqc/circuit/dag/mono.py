@@ -52,7 +52,7 @@ class CircuitDAG:
         # Track the last operation touching each qubit to form directed edges
         last_op_on_qubit: dict[CircuitQubit, int] = {}
         for op in self._ops:
-            for qubit in op.qubits:
+            for qubit in self._dependency_qubits(op):
                 # Previous op exists on this qubit, so current op depends on it.
                 if qubit in last_op_on_qubit:
                     prev_op_id = last_op_on_qubit[qubit]
@@ -65,6 +65,10 @@ class CircuitDAG:
                 last_op_on_qubit[qubit] = op.op_id
 
         return graph
+
+    def _dependency_qubits(self, op: Op) -> tuple[CircuitQubit, ...]:
+        """Return qubits that contribute DAG dependencies for an operation."""
+        return op.qubits
 
     def _extract_layers(self) -> list[Layer]:
         """Extract layers of operations from the DAG.

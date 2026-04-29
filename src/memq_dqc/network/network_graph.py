@@ -373,7 +373,6 @@ class NetworkGraph:
             if target_qpu_id in path_to_neighbor[:-1]:
                 continue
             candidates.append(path_to_neighbor + [target_qpu_id])
-
         if not candidates:
             raise ValueError(
                 "No routed remote-gate path found for directional movement: "
