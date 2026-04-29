@@ -212,6 +212,7 @@ def _schedule_entanglement_generation(
 
     else:
         pass
+        # TODO
         # Non-multiplexed entanglement: generate same-qpu e-bits sequentially
         # we will implement this with DES
     start_time = data_ready

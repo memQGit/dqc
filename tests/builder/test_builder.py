@@ -122,6 +122,45 @@ def test_partitioner_distributed_circuit_extracts_once_and_caches(
     assert partitioner.distributed_program is first.program
 
 
+def test_partitioner_run_with_ebit_assignment_extracts_distributed_circuit(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+
+    partitioner.run(ebit_assignment=False)
+
+    distributed = partitioner.circuit.distributed
+    assert distributed is not None
+    assert partitioner.distributed_circuit is distributed
+    assert distributed.ebit_candidates_by_op_id is not None
+
+
+def test_partitioner_lazy_extraction_honors_run_ebit_assignment(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+
+    partitioner.run(ebit_assignment=False)
+    first = partitioner.distributed_circuit
+
+    partitioner.run()
+    second = partitioner.distributed_circuit
+
+    assert first is not second
+    assert first.ebit_candidates_by_op_id is not None
+    assert second.ebit_candidates_by_op_id is None
+
+
 def test_extract_distributed_circuit_adds_comm_registers(
     simple1_circuit_path,
     three_comp_one_comm_x2_network_path,
@@ -230,7 +269,7 @@ def test_extract_distributed_circuit_rejects_non_network_schedule_qpu_ids(
         program,
         algo=_MismatchedQpuIdPartitioner(network, program),
     )
-    # TODO: the error actually is premature .. should update test or check this
+    # TODO: should update test or check this
     with pytest.raises(
         ValueError,
     ):

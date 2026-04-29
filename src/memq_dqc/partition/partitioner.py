@@ -140,20 +140,31 @@ class Partitioner:
         self._algorithm = self._resolve_algorithm(
             resolved_network, resolved_program, algo, algo_kwargs
         )
+        self._distributed_ebit_assignment = True
 
     def run(
         self,
         *,
+        ebit_assignment: bool | None = None,
         verbosity: Literal["quiet", "info", "debug"] = "quiet",
     ) -> None:
         """Run the configured partitioning algorithm.
 
         Args:
+            ebit_assignment: Whether to also extract the distributed circuit
+                during this call, and if so whether the compiler assigns
+                concrete e-bit pairs into the scheduler DAG. When omitted,
+                this method only runs partitioning and lazy extraction
+                defaults to explicit e-bit assignment.
             verbosity: Logging verbosity for this workflow call.
 
         Updates:
             cost, schedule, and windows with the latest partitioning results.
         """
+        self.circuit.distributed = None
+        self._distributed_ebit_assignment = (
+            True if ebit_assignment is None else ebit_assignment
+        )
         with workflow_logging(verbosity):
             timer = StepTimer()
             logger.info(
@@ -188,6 +199,8 @@ class Partitioner:
                 final_window_idx,
                 final_mapping,
             )
+            if ebit_assignment is not None:
+                self._ensure_distributed_circuit(verbosity=verbosity)
 
     @property
     def cost(self) -> float | None:
@@ -259,11 +272,19 @@ class Partitioner:
 
         return algo_class(network, program, **algo_kwargs)
 
-    def _ensure_distributed_circuit(self) -> None:
+    def _ensure_distributed_circuit(
+        self,
+        *,
+        verbosity: Literal["quiet", "info", "debug"] = "quiet",
+    ) -> None:
         """Populate the cached distributed circuit when it is missing."""
         from memq_dqc.builder import extract_distributed_circuit
 
-        extract_distributed_circuit(self)
+        extract_distributed_circuit(
+            self,
+            ebit_assignment=self._distributed_ebit_assignment,
+            verbosity=verbosity,
+        )
 
 
 def _resolve_network_input(network: NetworkInput) -> NetworkGraph:
