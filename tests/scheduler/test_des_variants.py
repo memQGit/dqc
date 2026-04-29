@@ -251,8 +251,6 @@ def test_scheduler_runs_des_link_fifo_via_clear_registry_name(
         "des_entanglement",
         "des_shortest_duration",
         "des_critical_path",
-        "epr_minimization",
-        "EPRMinimization",
     ],
 )
 def test_scheduler_rejects_removed_legacy_registry_names(

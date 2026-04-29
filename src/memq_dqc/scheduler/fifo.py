@@ -119,7 +119,7 @@ def fifo_schedule(
         entanglement_profile: Entanglement-generation profile used for
             entanglement timing. Defaults to ``"ion.time_bin"``.
         multiplex_entangle: Reserved for future entanglement multiplexing
-            behavior.
+            behavior.(# TODO)
 
     Returns:
         An operation-level schedule with per-qubit timelines.

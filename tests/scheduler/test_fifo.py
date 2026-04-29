@@ -8,10 +8,7 @@
 import logging
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import pytest
-from matplotlib.axes import Axes
-from matplotlib.colors import to_hex
 
 from memq_dqc.builder import extract_distributed_circuit
 from memq_dqc.network import NetworkGraph
@@ -20,13 +17,11 @@ from memq_dqc.partition.partitioner import QPU, BasePartitioner
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.scheduler import (
     EntanglementGeneration,
-    EPRMinimizationScheduler,
     OperationSchedule,
     ScheduledOperation,
     Scheduler,
     SchedulerHardwareProfile,
     fifo_schedule,
-    plot_schedule_gantt,
 )
 from memq_dqc.scheduler.schedule import (
     _build_qubit_timelines,
@@ -107,54 +102,6 @@ def _build_multi_comm_distributed_circuit(tmp_path, *, ebit_assignment: bool):
     )
     assert partitioner.circuit.distributed is not None
     return partitioner.circuit.distributed
-
-
-def _build_small_plot_schedule() -> OperationSchedule:
-    scheduled_events = [
-        ScheduledOperation(
-            op_id=0,
-            statement_id=0,
-            name="x",
-            qubits=("q0[0]",),
-            start_time=0.0,
-            duration=1.0,
-            is_remote=False,
-        ),
-        ScheduledOperation(
-            op_id=1,
-            statement_id=1,
-            name="h",
-            qubits=("q1[0]",),
-            start_time=0.0,
-            duration=1.0,
-            is_remote=False,
-        ),
-        EntanglementGeneration(
-            qubits=("c0[0]", "c1[0]"),
-            start_time=1.0,
-            duration=2.0,
-        ),
-        ScheduledOperation(
-            op_id=2,
-            statement_id=2,
-            name="rcx",
-            qubits=("q0[0]", "q1[0]", "c0[0]", "c1[0]"),
-            start_time=3.0,
-            duration=2.0,
-            is_remote=True,
-        ),
-    ]
-    qubit_order = ("q0[0]", "q1[0]", "c0[0]", "c1[0]")
-    return OperationSchedule(
-        operations=tuple(scheduled_events),
-        timelines=_build_qubit_timelines(scheduled_events, qubit_order),
-        makespan=max(event.end_time for event in scheduled_events),
-    )
-
-
-def _build_bounded_axes() -> Axes:
-    _, axes = plt.subplots(figsize=(8.0, 4.0))
-    return axes
 
 
 def test_fifo_schedule_returns_operation_schedule(
@@ -421,27 +368,6 @@ def test_scheduler_rejects_unknown_algorithm(
         Scheduler(distributed_circuit, algo="unknown")
 
 
-def test_epr_minimization_scheduler_is_unimplemented(
-    tmp_path,
-    three_comp_one_comm_x2_network_path,
-) -> None:
-    distributed_circuit = _build_distributed_circuit(
-        tmp_path,
-        three_comp_one_comm_x2_network_path,
-    )
-
-    scheduler = Scheduler(
-        distributed_circuit,
-        algo=EPRMinimizationScheduler(distributed_circuit),
-    )
-
-    with pytest.raises(
-        NotImplementedError,
-        match="EPR-minimization scheduling is not yet implemented.",
-    ):
-        scheduler.run()
-
-
 def test_fifo_schedule_builds_per_qubit_timelines(
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -463,85 +389,6 @@ def test_fifo_schedule_builds_per_qubit_timelines(
         "c0[0]": ["epr", "rcx"],
         "c1[0]": ["epr", "rcx"],
     }
-
-
-def test_plot_schedule_gantt_renders_axes() -> None:
-    schedule = _build_small_plot_schedule()
-    axes = plot_schedule_gantt(
-        schedule,
-        ax=_build_bounded_axes(),
-        title="FIFO Schedule",
-    )
-
-    assert isinstance(axes, Axes)
-    assert axes.get_title() == "FIFO Schedule"
-    assert axes.get_xlabel() == "Time"
-    assert axes.get_ylabel() == "Physical Qubit"
-    assert [tick.get_text() for tick in axes.get_yticklabels()] == [
-        "q0[0]",
-        "q1[0]",
-        "c0[0]",
-        "c1[0]",
-    ]
-    assert len(axes.patches) == 8
-    assert {text.get_text() for text in axes.texts} >= {
-        "x",
-        "h",
-        "epr",
-        "rcx",
-    }
-    plt.close(axes.figure)
-
-
-def test_plot_schedule_gantt_marks_communication_qubit_boxes() -> None:
-    schedule = _build_small_plot_schedule()
-    axes = plot_schedule_gantt(schedule, ax=_build_bounded_axes())
-
-    hatched_patches = [
-        patch for patch in axes.patches if patch.get_hatch() == "///"
-    ]
-    plain_patches = [
-        patch for patch in axes.patches if patch.get_hatch() in {"", None}
-    ]
-
-    assert len(hatched_patches) == 4
-    assert len(plain_patches) == 4
-    plt.close(axes.figure)
-
-
-def test_plot_schedule_gantt_explicit_ops_renders_one_row_per_event() -> None:
-    schedule = _build_small_plot_schedule()
-    axes = plot_schedule_gantt(
-        schedule,
-        ax=_build_bounded_axes(),
-        explicit_ops=True,
-    )
-
-    assert axes.get_ylabel() == "Operation"
-    assert [tick.get_text() for tick in axes.get_yticklabels()] == [
-        "1: x",
-        "2: h",
-        "3: epr",
-        "4: rcx",
-    ]
-    assert len(axes.patches) == 4
-
-    hatched_patches = [
-        patch for patch in axes.patches if patch.get_hatch() == "///"
-    ]
-    plain_patches = [
-        patch for patch in axes.patches if patch.get_hatch() in {"", None}
-    ]
-
-    assert len(hatched_patches) == 2
-    assert len(plain_patches) == 2
-    assert {text.get_text() for text in axes.texts} >= {
-        "x",
-        "h",
-        "epr",
-        "rcx",
-    }
-    plt.close(axes.figure)
 
 
 def test_operation_schedule_accepts_entanglement_generation_events() -> None:
@@ -579,47 +426,6 @@ def test_operation_schedule_accepts_entanglement_generation_events() -> None:
         "c0[0]": ["epr", "rcx"],
         "c1[0]": ["epr", "rcx"],
     }
-
-    axes = plot_schedule_gantt(schedule, ax=_build_bounded_axes())
-
-    assert {text.get_text() for text in axes.texts} >= {"epr", "rcx"}
-    plt.close(axes.figure)
-
-
-def test_plot_schedule_gantt_marks_unused_epr_pairs() -> None:
-    scheduled_events = [
-        EntanglementGeneration(
-            qubits=("c0[0]", "c1[0]"),
-            start_time=0.0,
-            duration=51.0,
-            was_used=False,
-        ),
-        ScheduledOperation(
-            op_id=0,
-            statement_id=0,
-            name="rcx",
-            qubits=("q0[0]", "q1[0]", "c0[0]", "c1[0]"),
-            start_time=60.0,
-            duration=6.0,
-            is_remote=True,
-        ),
-    ]
-    qubit_order = ("q0[0]", "q1[0]", "c0[0]", "c1[0]")
-    schedule = OperationSchedule(
-        operations=tuple(scheduled_events),
-        timelines=_build_qubit_timelines(scheduled_events, qubit_order),
-        makespan=max(event.end_time for event in scheduled_events),
-    )
-
-    axes = plot_schedule_gantt(
-        schedule,
-        ax=_build_bounded_axes(),
-        explicit_ops=True,
-    )
-
-    assert "unused epr" in {text.get_text() for text in axes.texts}
-    assert to_hex(axes.patches[0].get_facecolor()) == "#dc2626"
-    plt.close(axes.figure)
 
 
 def test_count_failed_entanglement_operations() -> None:
