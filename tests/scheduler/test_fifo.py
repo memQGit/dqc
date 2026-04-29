@@ -109,6 +109,54 @@ def _build_multi_comm_distributed_circuit(tmp_path, *, ebit_assignment: bool):
     return partitioner.circuit.distributed
 
 
+def _build_small_plot_schedule() -> OperationSchedule:
+    scheduled_events = [
+        ScheduledOperation(
+            op_id=0,
+            statement_id=0,
+            name="x",
+            qubits=("q0[0]",),
+            start_time=0.0,
+            duration=1.0,
+            is_remote=False,
+        ),
+        ScheduledOperation(
+            op_id=1,
+            statement_id=1,
+            name="h",
+            qubits=("q1[0]",),
+            start_time=0.0,
+            duration=1.0,
+            is_remote=False,
+        ),
+        EntanglementGeneration(
+            qubits=("c0[0]", "c1[0]"),
+            start_time=1.0,
+            duration=2.0,
+        ),
+        ScheduledOperation(
+            op_id=2,
+            statement_id=2,
+            name="rcx",
+            qubits=("q0[0]", "q1[0]", "c0[0]", "c1[0]"),
+            start_time=3.0,
+            duration=2.0,
+            is_remote=True,
+        ),
+    ]
+    qubit_order = ("q0[0]", "q1[0]", "c0[0]", "c1[0]")
+    return OperationSchedule(
+        operations=tuple(scheduled_events),
+        timelines=_build_qubit_timelines(scheduled_events, qubit_order),
+        makespan=max(event.end_time for event in scheduled_events),
+    )
+
+
+def _build_bounded_axes() -> Axes:
+    _, axes = plt.subplots(figsize=(8.0, 4.0))
+    return axes
+
+
 def test_fifo_schedule_returns_operation_schedule(
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -220,13 +268,43 @@ def test_scheduler_info_verbosity_reports_summary_metrics(
         tmp_path,
         three_comp_one_comm_x2_network_path,
     )
-    scheduler = Scheduler(distributed_circuit)
+    scheduler = Scheduler(
+        distributed_circuit,
+        algo="des_link_fifo",
+        algo_kwargs={"seed": 0},
+    )
 
     with caplog.at_level(logging.INFO, logger="memq_dqc"):
         scheduler.run(verbosity="info")
 
     assert "makespan=" in caplog.text
     assert "failed_entanglement_operations=0" in caplog.text
+
+
+def test_scheduler_debug_verbosity_reports_des_queue_snapshots(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+    caplog,
+) -> None:
+    distributed_circuit = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+    )
+    scheduler = Scheduler(
+        distributed_circuit,
+        algo="des_link_fifo",
+        algo_kwargs={"seed": 0},
+    )
+
+    with caplog.at_level(logging.DEBUG, logger="memq_dqc"):
+        scheduler.run(verbosity="debug")
+
+    assert "DES state snapshot: seeded initial ready operations" in caplog.text
+    assert "Queue (" in caplog.text
+    assert "Current event: t=" in caplog.text
+    assert "type=START_EPR_REQUEST" in caplog.text
+    assert "Link states:" in caplog.text
+    assert "Remote requests:" in caplog.text
 
 
 def test_scheduler_accepts_explicit_multiplex_setting(
@@ -387,17 +465,13 @@ def test_fifo_schedule_builds_per_qubit_timelines(
     }
 
 
-def test_plot_schedule_gantt_renders_axes(
-    tmp_path,
-    three_comp_one_comm_x2_network_path,
-) -> None:
-    distributed_circuit = _build_distributed_circuit(
-        tmp_path,
-        three_comp_one_comm_x2_network_path,
+def test_plot_schedule_gantt_renders_axes() -> None:
+    schedule = _build_small_plot_schedule()
+    axes = plot_schedule_gantt(
+        schedule,
+        ax=_build_bounded_axes(),
+        title="FIFO Schedule",
     )
-    schedule = fifo_schedule(distributed_circuit)
-
-    axes = plot_schedule_gantt(schedule, title="FIFO Schedule")
 
     assert isinstance(axes, Axes)
     assert axes.get_title() == "FIFO Schedule"
@@ -416,20 +490,12 @@ def test_plot_schedule_gantt_renders_axes(
         "epr",
         "rcx",
     }
-    plt.close("all")
+    plt.close(axes.figure)
 
 
-def test_plot_schedule_gantt_marks_communication_qubit_boxes(
-    tmp_path,
-    three_comp_one_comm_x2_network_path,
-) -> None:
-    distributed_circuit = _build_distributed_circuit(
-        tmp_path,
-        three_comp_one_comm_x2_network_path,
-    )
-    schedule = fifo_schedule(distributed_circuit)
-
-    axes = plot_schedule_gantt(schedule)
+def test_plot_schedule_gantt_marks_communication_qubit_boxes() -> None:
+    schedule = _build_small_plot_schedule()
+    axes = plot_schedule_gantt(schedule, ax=_build_bounded_axes())
 
     hatched_patches = [
         patch for patch in axes.patches if patch.get_hatch() == "///"
@@ -440,20 +506,16 @@ def test_plot_schedule_gantt_marks_communication_qubit_boxes(
 
     assert len(hatched_patches) == 4
     assert len(plain_patches) == 4
-    plt.close("all")
+    plt.close(axes.figure)
 
 
-def test_plot_schedule_gantt_explicit_ops_renders_one_row_per_event(
-    tmp_path,
-    three_comp_one_comm_x2_network_path,
-) -> None:
-    distributed_circuit = _build_distributed_circuit(
-        tmp_path,
-        three_comp_one_comm_x2_network_path,
+def test_plot_schedule_gantt_explicit_ops_renders_one_row_per_event() -> None:
+    schedule = _build_small_plot_schedule()
+    axes = plot_schedule_gantt(
+        schedule,
+        ax=_build_bounded_axes(),
+        explicit_ops=True,
     )
-    schedule = fifo_schedule(distributed_circuit)
-
-    axes = plot_schedule_gantt(schedule, explicit_ops=True)
 
     assert axes.get_ylabel() == "Operation"
     assert [tick.get_text() for tick in axes.get_yticklabels()] == [
@@ -479,7 +541,7 @@ def test_plot_schedule_gantt_explicit_ops_renders_one_row_per_event(
         "epr",
         "rcx",
     }
-    plt.close("all")
+    plt.close(axes.figure)
 
 
 def test_operation_schedule_accepts_entanglement_generation_events() -> None:
@@ -518,10 +580,10 @@ def test_operation_schedule_accepts_entanglement_generation_events() -> None:
         "c1[0]": ["epr", "rcx"],
     }
 
-    axes = plot_schedule_gantt(schedule)
+    axes = plot_schedule_gantt(schedule, ax=_build_bounded_axes())
 
     assert {text.get_text() for text in axes.texts} >= {"epr", "rcx"}
-    plt.close("all")
+    plt.close(axes.figure)
 
 
 def test_plot_schedule_gantt_marks_unused_epr_pairs() -> None:
@@ -549,11 +611,15 @@ def test_plot_schedule_gantt_marks_unused_epr_pairs() -> None:
         makespan=max(event.end_time for event in scheduled_events),
     )
 
-    axes = plot_schedule_gantt(schedule, explicit_ops=True)
+    axes = plot_schedule_gantt(
+        schedule,
+        ax=_build_bounded_axes(),
+        explicit_ops=True,
+    )
 
     assert "unused epr" in {text.get_text() for text in axes.texts}
     assert to_hex(axes.patches[0].get_facecolor()) == "#dc2626"
-    plt.close("all")
+    plt.close(axes.figure)
 
 
 def test_count_failed_entanglement_operations() -> None:

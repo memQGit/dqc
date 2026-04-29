@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import heapq
+import logging
 import random
 from dataclasses import dataclass, field
 from typing import TypeAlias
@@ -28,6 +29,8 @@ from memq_dqc.scheduler.schedule import (
     _remote_ebit_assignment_candidates,
     _remote_operation_qubit_labels,
 )
+
+logger = logging.getLogger(__name__)
 
 _START_EPR_REQUEST = "START_EPR_REQUEST"
 _EPR_ATTEMPT = "EPR_ATTEMPT"
@@ -158,13 +161,24 @@ class BaseDESLinkScheduler(BaseScheduler):
         """Build an operation schedule using a discrete-event simulation."""
         self._validate_parameters()
         self._reset_run_state()
+        self._log_debug_snapshot("initialized")
 
         for op_id in sorted(self._op_by_id):
             if self._remaining_predecessors[op_id] == 0:
                 self._schedule_ready_operation(self._op_by_id[op_id])
+        self._log_debug_snapshot("seeded initial ready operations")
 
         while self._event_queue:
-            self._handle_event(heapq.heappop(self._event_queue))
+            event = heapq.heappop(self._event_queue)
+            self._log_debug_snapshot(
+                "dispatching event",
+                current_event=event,
+            )
+            self._handle_event(event)
+            self._log_debug_snapshot(
+                "completed event",
+                current_event=event,
+            )
 
         self._finalize_schedule()
 
@@ -219,18 +233,20 @@ class BaseDESLinkScheduler(BaseScheduler):
         link_key: tuple[str, str] | None = None,
     ) -> None:
         """Push one event onto the DES priority queue."""
-        heapq.heappush(
-            self._event_queue,
-            _QueueEvent(
-                time=time,
-                priority=_EVENT_PRIORITY[event_type],
-                sequence=self._event_sequence,
-                event_type=event_type,
-                op_id=op_id,
-                link_key=link_key,
-            ),
+        queued_event = _QueueEvent(
+            time=time,
+            priority=_EVENT_PRIORITY[event_type],
+            sequence=self._event_sequence,
+            event_type=event_type,
+            op_id=op_id,
+            link_key=link_key,
         )
+        heapq.heappush(self._event_queue, queued_event)
         self._event_sequence += 1
+        logger.debug(
+            "Enqueued DES event: %s",
+            self._format_queue_event(queued_event),
+        )
 
     def _record_scheduled_event(self, event: ScheduleEvent) -> None:
         """Record one visible schedule event with stable output ordering."""
@@ -243,6 +259,13 @@ class BaseDESLinkScheduler(BaseScheduler):
         """Release successors once one operation has finished."""
         for successor_id in self._successors_by_op[op_id]:
             self._remaining_predecessors[successor_id] -= 1
+            logger.debug(
+                "Resolved predecessor for op=%d -> successor=%d; "
+                "remaining_predecessors=%d.",
+                op_id,
+                successor_id,
+                self._remaining_predecessors[successor_id],
+            )
             if self._remaining_predecessors[successor_id] == 0:
                 self._schedule_ready_operation(self._op_by_id[successor_id])
 
@@ -259,6 +282,13 @@ class BaseDESLinkScheduler(BaseScheduler):
         start_time = max(
             (self._qubit_timers[qubit] for qubit in op_labels),
             default=0.0,
+        )
+        logger.debug(
+            "Scheduling local op=%d name=%s qubits=%s at t=%.3f.",
+            op.op_id,
+            op.name,
+            op_labels,
+            start_time,
         )
         scheduled_op = ScheduledOperation(
             op_id=op.op_id,
@@ -317,6 +347,16 @@ class BaseDESLinkScheduler(BaseScheduler):
                 op.op_id,
                 link_key=link_key,
             )
+        logger.debug(
+            "Scheduling remote request op=%d name=%s data_qubits=%s "
+            "op_qubits=%s links=%s start_time=%.3f.",
+            op.op_id,
+            op.name,
+            self._remote_requests[op.op_id].data_qubits,
+            op_labels,
+            tuple(sorted(link_requests)),
+            start_time,
+        )
 
     def _select_remote_ebit_assignment(
         self,
@@ -687,6 +727,134 @@ class BaseDESLinkScheduler(BaseScheduler):
     def _remaining_path_cost(self, op_id: int) -> float:
         """Return the downstream critical-path estimate for one request."""
         return self._remaining_path_costs[op_id]
+
+    def _log_debug_snapshot(
+        self,
+        label: str,
+        *,
+        current_event: _QueueEvent | None = None,
+    ) -> None:
+        """Emit one debug-level snapshot of the DES scheduler state."""
+        if not logger.isEnabledFor(logging.DEBUG):
+            return
+
+        lines = [f"DES state snapshot: {label}"]
+        if current_event is not None:
+            lines.append(
+                f"Current event: {self._format_queue_event(current_event)}"
+            )
+        lines.append(
+            "Queue "
+            f"({len(self._event_queue)} events): "
+            f"{self._format_event_queue_contents()}"
+        )
+        lines.append(f"Link states: {self._format_link_states()}")
+        lines.append(f"Remote requests: {self._format_remote_requests()}")
+        lines.append(
+            "Outstanding predecessors: "
+            f"{self._format_remaining_predecessors()}"
+        )
+        logger.debug("\n".join(lines))
+
+    def _format_event_queue_contents(self) -> str:
+        """Return a stable text view of the pending event queue."""
+        if not self._event_queue:
+            return "<empty>"
+
+        ordered_events = sorted(self._event_queue)
+        return "\n".join(
+            f"  [{index}] {self._format_queue_event(event)}"
+            for index, event in enumerate(ordered_events)
+        )
+
+    def _format_queue_event(self, event: _QueueEvent) -> str:
+        """Return one readable queue entry."""
+        return (
+            f"t={event.time:.3f} type={event.event_type} op={event.op_id} "
+            f"prio={event.priority} seq={event.sequence} "
+            f"link={self._format_link_key(event.link_key)}"
+        )
+
+    def _format_link_states(self) -> str:
+        """Return a readable summary of tracked communication links."""
+        link_keys = sorted(
+            set(self._link_states) | set(self._reserved_link_counts)
+        )
+        if not link_keys:
+            return "<none>"
+
+        lines: list[str] = []
+        for link_key in link_keys:
+            link_state = self._link_states.get(link_key, _LinkState())
+            pending_ops = [
+                pending_request.op_id
+                for pending_request in link_state.pending_requests
+            ]
+            lines.append(
+                "  "
+                f"{self._format_link_key(link_key)} "
+                f"active={link_state.active_request_id} "
+                f"pending={pending_ops} "
+                f"reserved={self._reserved_link_counts.get(link_key, 0)}"
+            )
+        return "\n".join(lines)
+
+    def _format_remote_requests(self) -> str:
+        """Return a readable summary of remote request progress."""
+        if not self._remote_requests:
+            return "<none>"
+
+        lines: list[str] = []
+        for op_id in sorted(self._remote_requests):
+            request = self._remote_requests[op_id]
+            link_summaries: list[str] = []
+            for link_key in sorted(request.link_requests):
+                link_request = request.link_requests[link_key]
+                start_time = self._format_optional_time(
+                    link_request.process_start_time
+                )
+                ready_time = self._format_optional_time(
+                    link_request.ready_time
+                )
+                link_summaries.append(
+                    f"{self._format_link_key(link_key)}"
+                    f"(start={start_time}, ready={ready_time})"
+                )
+            lines.append(
+                "  "
+                f"op={op_id} name={request.op.name} "
+                f"start_enqueued={request.start_enqueued} "
+                f"links=[{', '.join(link_summaries)}]"
+            )
+        return "\n".join(lines)
+
+    def _format_remaining_predecessors(self) -> str:
+        """Return operations that still wait on dependencies."""
+        blocked_ops = {
+            op_id: count
+            for op_id, count in sorted(self._remaining_predecessors.items())
+            if count > 0
+        }
+        if not blocked_ops:
+            return "<none>"
+        return ", ".join(
+            f"op={op_id}:{count}" for op_id, count in blocked_ops.items()
+        )
+
+    def _format_link_key(
+        self,
+        link_key: tuple[str, str] | None,
+    ) -> str:
+        """Return one readable link label."""
+        if link_key is None:
+            return "-"
+        return f"{link_key[0]} <-> {link_key[1]}"
+
+    def _format_optional_time(self, value: float | None) -> str:
+        """Return one optional time value for debug output."""
+        if value is None:
+            return "-"
+        return f"{value:.3f}"
 
 
 def _canonical_link_key(link_qubits: tuple[str, str]) -> tuple[str, str]:
