@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypeAlias
 
 from openqasm3 import ast
 
@@ -19,6 +19,7 @@ from memq_dqc.circuit.dag.distributed import (
     build_distributed_statements,
     count_remote_gates,
 )
+from memq_dqc.circuit.dag.remap import _circuit_qubit_to_physical_qubit
 from memq_dqc.circuit.op import Op
 from memq_dqc.preprocessing.qasm import extract_cleaned_statements
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
@@ -31,8 +32,13 @@ from memq_dqc.preprocessing.qasm.types import (
 
 if TYPE_CHECKING:
     from memq_dqc.builder.extract_utils import SwapOp
-    from memq_dqc.network import NetworkGraph
+    from memq_dqc.network import NetworkGraph, PhysicalQubit
     from memq_dqc.partition.partitioner import QPU
+
+_REMOTE_OP_NAMES = frozenset({"rcx", "rcp", "rcry", "rcz", "rswap"})
+EbitPair: TypeAlias = tuple["PhysicalQubit", "PhysicalQubit"]
+EbitAssignment: TypeAlias = tuple[EbitPair, ...]
+EbitCandidatesByOpId: TypeAlias = dict[int, tuple[EbitAssignment, ...]]
 
 
 def extract_program_statements(
@@ -87,6 +93,7 @@ def extract_ops(statements: list[CleanedStatement]) -> list[Op]:
                 ),
             )
             name = statement.name
+            is_remote = False
 
         # Quantum Gate Operation
         elif isinstance(statement, CleanedQuantumGate):
@@ -95,6 +102,7 @@ def extract_ops(statements: list[CleanedStatement]) -> list[Op]:
                 for qubit in statement.qubits
             )
             name = statement.name
+            is_remote = _is_remote_op_name(name)
         else:
             raise ValueError("Unsupported operation statement type.")
 
@@ -103,11 +111,17 @@ def extract_ops(statements: list[CleanedStatement]) -> list[Op]:
                 op_id=op_id,
                 statement_id=statement_id,
                 name=name,
+                is_remote=is_remote,
                 qubits=qubits,
                 node=statement.node,
             )
         )
     return ops
+
+
+def _is_remote_op_name(name: str) -> bool:
+    """Return whether an operation name denotes a remote distributed op."""
+    return name in _REMOTE_OP_NAMES
 
 
 def count_two_qubit_ops(ops: list[Op]) -> int:
@@ -153,6 +167,8 @@ class DistributedCircuit:
         num_remote_gates: Number of operations marked as remote gates.
         num_local_swaps_added: Number of local swaps inserted during routing.
         dag: DAG derived from the distributed operations.
+        ebit_candidates_by_op_id: Optional scheduler-facing e-bit candidates
+            for remote operations when e-bit assignment is deferred.
     """
 
     program: ast.Program
@@ -162,6 +178,7 @@ class DistributedCircuit:
     num_remote_gates: int
     num_local_swaps_added: int
     dag: DistributedCircuitDAG
+    ebit_candidates_by_op_id: EbitCandidatesByOpId | None = None
 
 
 class Circuit:
@@ -204,6 +221,7 @@ class Circuit:
         network: NetworkGraph,
         comp_qubits_per_qpu: list[int] | None = None,
         comm_qubits_per_qpu: list[int] | None = None,
+        ebit_assignment: bool = True,
     ) -> DistributedCircuit:
         """Populate the distributed representation for this circuit.
 
@@ -216,6 +234,9 @@ class Circuit:
             comp_qubits_per_qpu: Optional computation-qubit capacities by QPU.
             comm_qubits_per_qpu: Optional communication-qubit capacities by
                 QPU.
+            ebit_assignment: Whether the compiler assigns concrete e-bit
+                pairs into the scheduler DAG. If false, schedulers choose from
+                viable e-bit pair candidates.
 
         Returns:
             The populated distributed circuit representation.
@@ -231,6 +252,11 @@ class Circuit:
             comm_qubits_per_qpu=comm_qubits_per_qpu,
         )
         ops = extract_ops(statements)
+        ebit_candidates_by_op_id = (
+            None
+            if ebit_assignment
+            else _build_ebit_candidates_by_op_id(ops, network)
+        )
         distributed_program = ast.Program(
             version=self.mono.program.version,
             statements=[statement.node for statement in statements],
@@ -242,7 +268,11 @@ class Circuit:
             num_two_qubit_gates=count_two_qubit_ops(ops),
             num_remote_gates=count_remote_gates(ops),
             num_local_swaps_added=num_local_swaps_added,
-            dag=DistributedCircuitDAG(ops),
+            dag=DistributedCircuitDAG(
+                ops,
+                ignore_remote_ebit_dependencies=not ebit_assignment,
+            ),
+            ebit_candidates_by_op_id=ebit_candidates_by_op_id,
         )
         self.distributed = distributed
         return distributed
@@ -258,3 +288,51 @@ def build_circuit(program_or_path: str | ast.Program) -> Circuit:
         The constructed Circuit.
     """
     return Circuit(program_or_path)
+
+
+def _build_ebit_candidates_by_op_id(
+    ops: list[Op],
+    network: NetworkGraph,
+) -> EbitCandidatesByOpId:
+    """Build viable e-bit assignment candidates for remote operations."""
+    candidates_by_op_id: EbitCandidatesByOpId = {}
+    for op in ops:
+        if not op.is_remote:
+            continue
+        candidates_by_op_id[op.op_id] = _remote_ebit_candidates(op, network)
+    return candidates_by_op_id
+
+
+def _remote_ebit_candidates(
+    op: Op,
+    network: NetworkGraph,
+) -> tuple[EbitAssignment, ...]:
+    """Return viable e-bit assignments for one remote operation."""
+    if len(op.qubits) < 2:
+        raise ValueError(
+            "Remote operation must contain at least two data operands."
+        )
+
+    network_qubit_a = _circuit_qubit_to_physical_qubit(op.qubits[0])
+    network_qubit_b = _circuit_qubit_to_physical_qubit(op.qubits[1])
+    pair_options = network.get_comm_pair_options(
+        network_qubit_a,
+        network_qubit_b,
+    )
+    pairs = tuple(comm_pair for _, comm_pair, _ in pair_options)
+    if op.name != "rswap":
+        return tuple((pair,) for pair in pairs)
+
+    assignments: list[EbitAssignment] = []
+    for first_index, first_pair in enumerate(pairs):
+        used_qubits = set(first_pair)
+        for second_pair in pairs[first_index + 1 :]:
+            if second_pair[0] in used_qubits or second_pair[1] in used_qubits:
+                continue
+            assignments.append((first_pair, second_pair))
+
+    if not assignments:
+        raise ValueError(
+            "Remote swap requires at least two disjoint e-bit pair candidates."
+        )
+    return tuple(assignments)

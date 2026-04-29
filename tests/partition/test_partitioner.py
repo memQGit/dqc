@@ -14,6 +14,7 @@ import pytest
 from memq_dqc.circuit import Circuit
 from memq_dqc.network import NetworkGraph
 from memq_dqc.partition import Partitioner
+from memq_dqc.partition.partitioner import QPU, BasePartitioner
 from memq_dqc.partition.utils import partition_cost
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.utils import get_windows
@@ -37,6 +38,62 @@ def test_partitioner_cisco_default(
     assert windows
     assert len(schedule) == len(get_windows(Circuit(program), window_length=2))
     assert len(windows) == len(schedule)
+
+
+def test_partitioner_accepts_network_and_qasm_paths(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    partitioner = Partitioner(
+        three_comp_one_comm_x2_network_path,
+        simple1_circuit_path,
+        algo_kwargs={"window_length": 2},
+    )
+
+    partitioner.run()
+
+    assert isinstance(partitioner.network, NetworkGraph)
+    assert isinstance(partitioner.circuit, Circuit)
+    assert partitioner.schedule
+    assert partitioner.windows
+
+
+def test_partitioner_accepts_qasm_and_network_paths_in_reverse_order(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    partitioner = Partitioner(
+        simple1_circuit_path,
+        three_comp_one_comm_x2_network_path,
+        algo_kwargs={"window_length": 2},
+    )
+
+    partitioner.run()
+
+    assert isinstance(partitioner.network, NetworkGraph)
+    assert isinstance(partitioner.circuit, Circuit)
+    assert partitioner.schedule
+    assert partitioner.windows
+
+
+def test_partitioner_accepts_program_and_network_objects_in_reverse_order(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        program,
+        network,
+        algo_kwargs={"window_length": 2},
+    )
+
+    partitioner.run()
+
+    assert isinstance(partitioner.network, NetworkGraph)
+    assert isinstance(partitioner.circuit, Circuit)
+    assert partitioner.schedule
+    assert partitioner.windows
 
 
 def test_partitioner_benchmark_static_schedule_is_stationary(
@@ -277,6 +334,34 @@ def test_partitioner_benchmark_random_is_seeded_and_uses_effective_sizes(
     assert by_qpu_a == by_qpu_b
     assert sorted(len(qubits) for qubits in by_qpu_a.values()) == [2, 4]
     assert set().union(*by_qpu_a.values()) == set(range(6))
+
+
+def test_partitioner_cost_uses_total_schedule_ebits(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    class _ReportedCostPartitioner(BasePartitioner):
+        def run(self) -> None:
+            self.windows = [self.circuit.mono.ops]
+            self.schedule = [{QPU(id=0): {0}, QPU(id=1): {1}}]
+            self.cost = 0.0
+
+    qasm_path = tmp_path / "single_remote.qasm"
+    qasm_path.write_text(
+        "OPENQASM 3.0;\nqubit[2] q;\ncx q[0], q[1];\n",
+        encoding="utf-8",
+    )
+    program = load_qasm_program(str(qasm_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo=_ReportedCostPartitioner(network, program),
+    )
+
+    partitioner.run()
+
+    assert partitioner.cost == 1.0
 
 
 def test_partitioner_large_circuit(

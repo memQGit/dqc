@@ -17,7 +17,8 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Literal, TypeVar
+from os import PathLike
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypeVar, cast
 
 from openqasm3 import ast
 
@@ -25,8 +26,12 @@ from memq_dqc._logging import StepTimer, workflow_logging
 from memq_dqc.circuit import Circuit
 from memq_dqc.circuit.op import Op
 from memq_dqc.network import NetworkGraph
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from memq_dqc.circuit import DistributedCircuit
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +43,8 @@ class QPU:
 
 PartitionSchedule = list[dict[QPU, set[int]]]
 PartitionWindows = list[list[Op]]
+NetworkInput: TypeAlias = NetworkGraph | str | PathLike[str]
+ProgramInput: TypeAlias = ast.Program | str | PathLike[str]
 
 _Algorithm = TypeVar("_Algorithm", bound="BasePartitioner")
 
@@ -55,9 +62,9 @@ class BasePartitioner(ABC):
         """
         self.network = network
         self.circuit = Circuit(program)
-        # TODO: check correctness (should be total e-bits; not based on partition graph)
+        self._reported_cost: float | None = None
+        self._exact_cost: float | None = None
         self.schedule: PartitionSchedule | None = None
-        self.cost: float | None = None
         self.windows: PartitionWindows | None = None
 
     @abstractmethod
@@ -69,14 +76,46 @@ class BasePartitioner(ABC):
         """
         raise NotImplementedError
 
+    @property
+    def cost(self) -> float | None:
+        """Return the latest entanglement cost, if available.
+
+        When a schedule and windowing are available, cost is derived from the
+        total routed e-bit usage implied by remote gates and inter-window
+        qubit movement.
+        """
+        if self._exact_cost is not None:
+            return self._exact_cost
+
+        schedule = self.schedule
+        windows = self.windows
+        if (
+            schedule is None
+            or windows is None
+            or len(schedule) != len(windows)
+        ):
+            return self._reported_cost
+
+        return _total_schedule_ebit_cost(schedule, windows, self.network)
+
+    @cost.setter
+    def cost(self, value: float | None) -> None:
+        """Store an algorithm-reported cost estimate."""
+        self._reported_cost = value
+        self._exact_cost = None
+
+    def _set_exact_cost(self, value: float | None) -> None:
+        """Store an exact entanglement cost override."""
+        self._exact_cost = value
+
 
 class Partitioner:
     """Orchestrate a partitioning algorithm implementation."""
 
     def __init__(
         self,
-        network: NetworkGraph,
-        program: ast.Program,
+        network: NetworkInput | ProgramInput,
+        program: ProgramInput | NetworkInput,
         *,
         algo: str | type[_Algorithm] | _Algorithm = "cisco",
         algo_kwargs: dict[str, Any] | None = None,
@@ -84,28 +123,48 @@ class Partitioner:
         """Initialize the partitioner and select the algorithm.
 
         Args:
-            network: Network graph describing available resources.
-            program: Parsed OpenQASM 3 program.
+            network: Network graph or parsed OpenQASM 3 program, or a path
+                to either input type. When both positional inputs are file
+                paths or in-memory objects, the constructor infers which one
+                is the network and which one is the program.
+            program: Parsed OpenQASM 3 program or network graph, or a path to
+                either input type. When both positional inputs are file paths
+                or in-memory objects, the constructor infers which one is the
+                network and which one is the program.
             algo: Algorithm name, class, or preconfigured instance.
             algo_kwargs: Keyword arguments forwarded to the algorithm.
         """
-        self._algorithm = self._resolve_algorithm(
-            network, program, algo, algo_kwargs
+        resolved_network, resolved_program = _resolve_partitioner_inputs(
+            network, program
         )
+        self._algorithm = self._resolve_algorithm(
+            resolved_network, resolved_program, algo, algo_kwargs
+        )
+        self._distributed_ebit_assignment = True
 
     def run(
         self,
         *,
+        ebit_assignment: bool | None = None,
         verbosity: Literal["quiet", "info", "debug"] = "quiet",
     ) -> None:
         """Run the configured partitioning algorithm.
 
         Args:
+            ebit_assignment: Whether to also extract the distributed circuit
+                during this call, and if so whether the compiler assigns
+                concrete e-bit pairs into the scheduler DAG. When omitted,
+                this method only runs partitioning and lazy extraction
+                defaults to explicit e-bit assignment.
             verbosity: Logging verbosity for this workflow call.
 
         Updates:
             cost, schedule, and windows with the latest partitioning results.
         """
+        self.circuit.distributed = None
+        self._distributed_ebit_assignment = (
+            True if ebit_assignment is None else ebit_assignment
+        )
         with workflow_logging(verbosity):
             timer = StepTimer()
             logger.info(
@@ -140,6 +199,8 @@ class Partitioner:
                 final_window_idx,
                 final_mapping,
             )
+            if ebit_assignment is not None:
+                self._ensure_distributed_circuit(verbosity=verbosity)
 
     @property
     def cost(self) -> float | None:
@@ -166,6 +227,27 @@ class Partitioner:
         """Return the network graph used by the configured algorithm."""
         return self._algorithm.network
 
+    @property
+    def distributed_circuit(self) -> DistributedCircuit:
+        """Return the distributed circuit, extracting it on first access.
+
+        Raises:
+            ValueError: If partitioning has not been run yet.
+            RuntimeError: If extraction does not populate the circuit.
+        """
+        distributed = self.circuit.distributed
+        if distributed is None:
+            self._ensure_distributed_circuit()
+            distributed = self.circuit.distributed
+        if distributed is None:
+            raise RuntimeError("Distributed circuit extraction failed.")
+        return distributed
+
+    @property
+    def distributed_program(self) -> ast.Program:
+        """Return the distributed OpenQASM program for this partitioner."""
+        return self.distributed_circuit.program
+
     def _resolve_algorithm(
         self,
         network: NetworkGraph,
@@ -189,6 +271,78 @@ class Partitioner:
             algo_class = algo
 
         return algo_class(network, program, **algo_kwargs)
+
+    def _ensure_distributed_circuit(
+        self,
+        *,
+        verbosity: Literal["quiet", "info", "debug"] = "quiet",
+    ) -> None:
+        """Populate the cached distributed circuit when it is missing."""
+        from memq_dqc.builder import extract_distributed_circuit
+
+        extract_distributed_circuit(
+            self,
+            ebit_assignment=self._distributed_ebit_assignment,
+            verbosity=verbosity,
+        )
+
+
+def _resolve_network_input(network: NetworkInput) -> NetworkGraph:
+    """Return a loaded network graph for a supported partitioner input."""
+    if isinstance(network, NetworkGraph):
+        return network
+    return NetworkGraph(str(network))
+
+
+def _resolve_program_input(program: ProgramInput) -> ast.Program:
+    """Return a parsed OpenQASM program for a supported partitioner input."""
+    if isinstance(program, ast.Program):
+        return program
+    return load_qasm_program(str(program))
+
+
+def _resolve_partitioner_inputs(
+    first: NetworkInput | ProgramInput,
+    second: NetworkInput | ProgramInput,
+) -> tuple[NetworkGraph, ast.Program]:
+    """Return resolved network and program inputs from two constructor args."""
+    first_kind = _classify_partitioner_input(first)
+    second_kind = _classify_partitioner_input(second)
+
+    if first_kind == "network" and second_kind == "program":
+        return (
+            _resolve_network_input(cast(NetworkInput, first)),
+            _resolve_program_input(cast(ProgramInput, second)),
+        )
+    if first_kind == "program" and second_kind == "network":
+        return (
+            _resolve_network_input(cast(NetworkInput, second)),
+            _resolve_program_input(cast(ProgramInput, first)),
+        )
+
+    # Preserve the legacy positional interpretation when the inputs are
+    # ambiguous, such as extensionless paths.
+    return (
+        _resolve_network_input(cast(NetworkInput, first)),
+        _resolve_program_input(cast(ProgramInput, second)),
+    )
+
+
+def _classify_partitioner_input(
+    value: NetworkInput | ProgramInput,
+) -> Literal["network", "program"] | None:
+    """Return the inferred partitioner input kind when it is obvious."""
+    if isinstance(value, NetworkGraph):
+        return "network"
+    if isinstance(value, ast.Program):
+        return "program"
+    if isinstance(value, (str, PathLike)):
+        suffix = str(value).lower()
+        if suffix.endswith(".json"):
+            return "network"
+        if suffix.endswith((".qasm", ".qasm3")):
+            return "program"
+    return None
 
 
 def _get_algorithm_class(name: str) -> type[BasePartitioner]:
@@ -230,3 +384,51 @@ def _circuit_qubit_physical_map(
         for slot_idx, logical_qubit in enumerate(sorted(logical_qubits)):
             mapping[logical_qubit] = (qpu.id, slot_idx)
     return dict(sorted(mapping.items(), key=lambda item: item[0]))
+
+
+def _total_schedule_ebit_cost(
+    schedule: PartitionSchedule,
+    windows: PartitionWindows,
+    network: NetworkGraph,
+) -> float:
+    """Return total routed e-bit usage implied by a schedule."""
+    total_cost = 0.0
+    previous_assignment: dict[int, int] | None = None
+    remote_gate_ebit_cost = network.remote_gate_ebit_cost
+    remote_swap_ebit_cost = network.remote_swap_ebit_cost
+
+    for assignment, ops in zip(schedule, windows, strict=True):
+        current_assignment: dict[int, int] = {}
+        for qpu, logical_qubits in assignment.items():
+            qpu_id = qpu.id
+            for logical_qubit in logical_qubits:
+                current_assignment[logical_qubit] = qpu_id
+
+        if previous_assignment is not None:
+            for logical_qubit, current_qpu_id in current_assignment.items():
+                previous_qpu_id = previous_assignment.get(logical_qubit)
+                if (
+                    previous_qpu_id is not None
+                    and previous_qpu_id != current_qpu_id
+                ):
+                    total_cost += float(
+                        remote_swap_ebit_cost(
+                            previous_qpu_id,
+                            current_qpu_id,
+                        )
+                    )
+
+        for op in ops:
+            if not op.is_two_qubit:
+                continue
+            left_qubit, right_qubit = op.qubit_indices
+            left_qpu_id = current_assignment[left_qubit]
+            right_qpu_id = current_assignment[right_qubit]
+            if left_qpu_id != right_qpu_id:
+                total_cost += float(
+                    remote_gate_ebit_cost(left_qpu_id, right_qpu_id)
+                )
+
+        previous_assignment = current_assignment
+
+    return total_cost

@@ -39,12 +39,16 @@ if TYPE_CHECKING:
 def extract_distributed_circuit(
     partitioner: Partitioner,
     *,
+    ebit_assignment: bool = True,
     verbosity: Literal["quiet", "info", "debug"] = "quiet",
 ) -> ast.Program:
     """Extract distributed circuit from partitioning assignment.
 
     Args:
         partitioner: Partitioner with partitioning results.
+        ebit_assignment: Whether the compiler assigns concrete e-bit pairs
+            into the scheduler DAG. If false, schedulers choose from viable
+            e-bit pair candidates.
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
@@ -93,6 +97,7 @@ def extract_distributed_circuit(
             comp_qubits_per_qpu=comp_qubits_per_qpu,
             comm_qubits_per_qpu=comm_qubits_per_qpu,
             network=partitioner.network,
+            ebit_assignment=ebit_assignment,
         )
         logger.debug(
             "Built distributed circuit in %.3fs.",
@@ -131,7 +136,7 @@ def extract_distributed_circuit(
         # TODO: make this exact and confirm cost calculations
         assert actual_statement_count >= expected_statement_count
         exact_cost = _exact_entanglement_cost(distributed)
-        partitioner._algorithm.cost = exact_cost
+        partitioner._algorithm._set_exact_cost(exact_cost)
         logger.info(
             "Distributed circuit extraction completed in %.3fs: "
             "remote_gates=%d swaps=%d statements=%d exact_cost=%.3f.",

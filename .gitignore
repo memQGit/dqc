@@ -29,17 +29,25 @@ coverage.xml
 # Local testing / playground scripts
 scripts/
 results/
-demo/
+nvidia_demo/
 # Local caching
 .cache/
 
 # Local notes
+scheduler_breakdown.md
+src/memq_dqc/scheduler/scheduler_plan.md
 notes.txt
 CLEANUP.txt
-
+TODO.md
+Genesis/
+genesis/
+.agents/
+#benchmarking/
+examples/
 # CODEX
 .codex/
 AGENTS.md
+local_only/
 
 # Jupyter checkpoints
 .ipynb_checkpoints/

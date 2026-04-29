@@ -28,12 +28,16 @@ if TYPE_CHECKING:
 def extract_distributed_circuit(
     partitioner: Partitioner,
     *,
+    ebit_assignment: bool = True,
     verbosity: Literal["quiet", "info", "debug"] = "quiet",
 ) -> ast.Program:
     """Extract a distributed OpenQASM program from a completed partitioner.
 
     Args:
         partitioner: Partitioner with a completed partitioning run.
+        ebit_assignment: Whether the compiler assigns concrete e-bit pairs
+            into the scheduler DAG. If false, schedulers choose from viable
+            e-bit pair candidates.
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
@@ -45,6 +49,7 @@ def extract_distributed_circuit(
 
     return _extract_distributed_circuit(
         partitioner,
+        ebit_assignment=ebit_assignment,
         verbosity=verbosity,
     )
 

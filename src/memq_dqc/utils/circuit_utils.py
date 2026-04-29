@@ -108,6 +108,7 @@ def build_window_interaction_graph(
         part_j = partition_map.get(j)
         # TODO: figure out why even if this is nearly infinity we still dont get static
 
+        # TODO: this should be dynamic based on connectivity
         if part_i == part_j:
             weight *= 2.0
         graph.add_edge(i, j, weight=weight)

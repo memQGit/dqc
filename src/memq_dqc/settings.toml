@@ -1,0 +1,30 @@
+[global]
+time_unit = "us"
+
+[modality.trapped_ion.ba] # Ba+ ion
+1q_gate_time = 10
+2q_gate_time = 500
+
+[modality.trapped_ion.sr] # Sr+ ion
+1q_gate_time = 13
+2q_gate_time = 200
+
+[modality.neutral_atom] # Yb neutral atom
+1q_gate_time = 1
+2q_gate_time = 0.8
+
+[entanglement_gen.ion.time_bin] # Saha et al.' (Experimental value)
+entanglement_rate = 3.5e-6 # pairs per microsecond
+epr_lifetime = 50 # microseconds
+
+[entanglement_gen.ion.polarization] # O'Reilly et al. (Experimental value)
+entanglement_rate = 2.5e-3 # pairs per microsecond
+epr_lifetime = 50 # microseconds
+
+[entanglement_gen.neutral_atom.polarization] # Young et al. (Experimental value)
+entanglement_rate = 3.2e-2 # pairs per microsecond
+epr_lifetime = 50 # microseconds
+
+[verification]
+shots = 10000000 # TODO: determine appropriate number or heuristics for this value
+fidelity_threshold = 0.95 # TODO: determine appropriate value
