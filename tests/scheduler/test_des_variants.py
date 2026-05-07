@@ -209,7 +209,8 @@ def _patch_scheduler_timing_model(
             hardware_profile=hardware_profile,
             local_one_qubit_gate_time=1.0,
             local_two_qubit_gate_time=5.0,
-            entanglement_generation_rate=1.0,
+            entanglement_generation_rate=100.0,
+            des_entanglement_time_step=1.0,
             epr_lifetime=50.0,
         )
 

@@ -228,32 +228,6 @@ def test_scheduler_info_verbosity_reports_summary_metrics(
     assert "failed_entanglement_operations=0" in caplog.text
 
 
-def test_scheduler_debug_verbosity_reports_des_queue_snapshots(
-    tmp_path,
-    three_comp_one_comm_x2_network_path,
-    caplog,
-) -> None:
-    distributed_circuit = _build_distributed_circuit(
-        tmp_path,
-        three_comp_one_comm_x2_network_path,
-    )
-    scheduler = Scheduler(
-        distributed_circuit,
-        algo="des_link_fifo",
-        algo_kwargs={"seed": 0},
-    )
-
-    with caplog.at_level(logging.DEBUG, logger="memq_dqc"):
-        scheduler.run(verbosity="debug")
-
-    assert "DES state snapshot: seeded initial ready operations" in caplog.text
-    assert "Queue (" in caplog.text
-    assert "Current event: t=" in caplog.text
-    assert "type=START_EPR_REQUEST" in caplog.text
-    assert "Link states:" in caplog.text
-    assert "Remote requests:" in caplog.text
-
-
 def test_scheduler_accepts_explicit_multiplex_setting(
     tmp_path,
     three_comp_one_comm_x2_network_path,

@@ -89,12 +89,26 @@ def test_plot_distributed_circuit_renders_measurement_subscript() -> None:
     assert 'baseline-shift="sub"' in document.svg
 
 
+def test_plot_distributed_circuit_rejects_removed_legacy_kwargs(
+    bell_circuit_path,
+) -> None:
+    circuit = Circuit(str(bell_circuit_path))
+
+    with pytest.raises(TypeError, match="unexpected keyword argument 'show'"):
+        plot_distributed_circuit(circuit, show=True)
+
+
 def test_plot_partition_flow_draws_paths() -> None:
     document = plot_partition_flow(_sample_schedule())
 
     assert isinstance(document, SvgDocument)
     assert "<path" in document.svg
     assert "QPU 0" in document.svg
+
+
+def test_plot_partition_flow_rejects_removed_legacy_kwargs() -> None:
+    with pytest.raises(TypeError, match="unexpected keyword argument 'show'"):
+        plot_partition_flow(_sample_schedule(), show=True)
 
 
 def test_plot_operation_gantt_renders_operation_bars(
@@ -206,6 +220,15 @@ def test_plot_operation_gantt_stacks_parallel_ops_in_same_interval(
     assert "t1" not in document.svg
 
 
+def test_plot_operation_gantt_rejects_removed_legacy_kwargs(
+    bell_circuit_path,
+) -> None:
+    circuit = Circuit(str(bell_circuit_path))
+
+    with pytest.raises(TypeError, match="unexpected keyword argument 'show'"):
+        plot_operation_gantt(circuit, show=True)
+
+
 def test_plot_window_activity_returns_svg(
     simple1_circuit_path,
     three_comp_one_comm_x2_network_path,
@@ -255,6 +278,15 @@ def test_plot_window_activity_validates_schedule_and_windows(
             partitioner.schedule[:-1],
             partitioner.windows,
         )
+
+
+def test_plot_window_activity_rejects_removed_legacy_kwargs(
+    bell_circuit_path,
+) -> None:
+    circuit = Circuit(str(bell_circuit_path))
+
+    with pytest.raises(TypeError, match="unexpected keyword argument 'show'"):
+        plot_window_activity(circuit, _sample_schedule(), [[]], show=True)
 
 
 def test_svg_document_writes_interactive_html(tmp_path) -> None:

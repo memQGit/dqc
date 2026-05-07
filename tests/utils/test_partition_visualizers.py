@@ -38,9 +38,19 @@ def test_partition_heatmap_top_k() -> None:
     assert document.svg.count("<rect") >= 8
 
 
+def test_partition_heatmap_rejects_removed_legacy_kwargs() -> None:
+    with pytest.raises(TypeError, match="unexpected keyword argument 'show'"):
+        plot_partition_heatmap(_sample_partition(), show=True)
+
+
 def test_migration_timeline_entanglement_length_mismatch() -> None:
     with pytest.raises(ValueError, match="window_entanglement_cost"):
         plot_migration_timeline(
             _sample_partition(),
             window_entanglement_cost=[1.0],
         )
+
+
+def test_migration_timeline_rejects_removed_legacy_kwargs() -> None:
+    with pytest.raises(TypeError, match="unexpected keyword argument 'show'"):
+        plot_migration_timeline(_sample_partition(), show=True)

@@ -10,11 +10,14 @@
 from .benchmark_random import BenchmarkRandomPartitioner
 from .benchmark_static import BenchmarkStaticPartitioner
 from .cisco import CiscoPartitioner
+from .gate_group import GateGroupingPartitioner
 from .partitioner import Partitioner
+
 
 __all__ = [
     "BenchmarkRandomPartitioner",
     "BenchmarkStaticPartitioner",
     "CiscoPartitioner",
+    "GateGroupingPartitioner",
     "Partitioner",
 ]

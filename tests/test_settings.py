@@ -20,6 +20,7 @@ def test_load_settings_parses_packaged_toml() -> None:
     settings = load_settings()
 
     assert settings.global_settings.time_unit == "us"
+    assert settings.des_simulation.entanglement_time_step == pytest.approx(1.0)
     assert settings.verification.shots == 10_000_000
     assert settings.verification.fidelity_threshold == pytest.approx(0.95)
 
@@ -64,6 +65,9 @@ def test_load_settings_file_rejects_missing_required_keys(
 1q_gate_time = 10
 2q_gate_time = 500
 
+[scheduler.des]
+entanglement_time_step = 1.0
+
 [entanglement_gen.ion.time_bin]
 entanglement_rate = 3.5e-6
 epr_lifetime = 50
@@ -72,6 +76,37 @@ epr_lifetime = 50
     )
 
     with pytest.raises(ValueError, match="Missing required settings table"):
+        load_settings_file(settings_path)
+
+
+def test_load_settings_file_rejects_nonpositive_des_time_step(
+    tmp_path: Path,
+) -> None:
+    settings_path = tmp_path / "bad_des_settings.toml"
+    settings_path.write_text(
+        """
+[global]
+time_unit = "us"
+
+[scheduler.des]
+entanglement_time_step = 0.0
+
+[modality.trapped_ion.ba]
+1q_gate_time = 10
+2q_gate_time = 500
+
+[entanglement_gen.ion.time_bin]
+entanglement_rate = 3.5e-6
+epr_lifetime = 50
+
+[verification]
+shots = 100
+fidelity_threshold = 0.95
+""".strip(),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="entanglement_time_step"):
         load_settings_file(settings_path)
 
 

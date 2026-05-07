@@ -71,17 +71,30 @@ class VerificationSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class DESSimulationSettings:
+    """Timing assumptions for DES scheduler simulation.
+
+    Attributes:
+        entanglement_time_step: Duration of one entanglement-attempt cycle.
+    """
+
+    entanglement_time_step: float
+
+
+@dataclass(frozen=True, slots=True)
 class Settings:
     """Validated settings loaded from TOML.
 
     Attributes:
         global_settings: Optional global configuration values.
+        des_simulation: DES scheduler simulation timing settings.
         modality_profiles: Modality timing profiles indexed by selector path.
         entanglement_profiles: Entanglement profiles indexed by selector path.
         verification: Verification defaults.
     """
 
     global_settings: GlobalSettings
+    des_simulation: DESSimulationSettings
     modality_profiles: dict[tuple[str, ...], ModalityProfile]
     entanglement_profiles: dict[tuple[str, ...], EntanglementGenerationProfile]
     verification: VerificationSettings
@@ -170,6 +183,7 @@ def load_settings_file(path: str | Path) -> Settings:
 
     return Settings(
         global_settings=_parse_global_settings(raw_settings),
+        des_simulation=_parse_des_simulation_settings(raw_settings),
         modality_profiles=_parse_modality_profiles(raw_settings),
         entanglement_profiles=_parse_entanglement_profiles(raw_settings),
         verification=_parse_verification_settings(raw_settings),
@@ -183,6 +197,21 @@ def _parse_global_settings(raw_settings: dict[str, Any]) -> GlobalSettings:
     if time_unit is not None and not isinstance(time_unit, str):
         raise ValueError("settings.global.time_unit must be a string.")
     return GlobalSettings(time_unit=time_unit)
+
+
+def _parse_des_simulation_settings(
+    raw_settings: dict[str, Any],
+) -> DESSimulationSettings:
+    """Parse DES scheduler simulation settings from TOML data."""
+    scheduler = _require_table(raw_settings, "scheduler")
+    des_settings = _require_table(scheduler, "des")
+    return DESSimulationSettings(
+        entanglement_time_step=_require_positive_number(
+            des_settings,
+            "entanglement_time_step",
+            context="settings.scheduler.des",
+        )
+    )
 
 
 def _parse_modality_profiles(

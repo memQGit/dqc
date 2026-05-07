@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cache
@@ -31,7 +32,6 @@ DEFAULT_SCHEDULER_MODALITY: SchedulerModality = "trapped_ion.ba"
 DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE: SchedulerEntanglementProfile = (
     "ion.time_bin"
 )
-_DES_RATE_TIME_STEP = 1.0
 _DEFAULT_EPR_LIFETIME = 50.0
 
 
@@ -207,8 +207,9 @@ class SchedulerTimingModel:
         hardware_profile: Selected scheduler hardware profile.
         local_one_qubit_gate_time: Duration of a local single-qubit gate.
         local_two_qubit_gate_time: Duration of a local two-qubit gate.
-        entanglement_generation_rate: Entanglement-generation probability per
-            microsecond.
+        entanglement_generation_rate: Entanglement-generation rate.
+        des_entanglement_time_step: Duration of one DES entanglement-attempt
+            cycle.
         epr_lifetime: Maximum lifetime of a generated EPR pair.
         measurement_time: Duration of a measurement operation.
     """
@@ -217,6 +218,7 @@ class SchedulerTimingModel:
     local_one_qubit_gate_time: float
     local_two_qubit_gate_time: float
     entanglement_generation_rate: float
+    des_entanglement_time_step: float
     epr_lifetime: float = _DEFAULT_EPR_LIFETIME
     measurement_time: float = _MEASUREMENT_TIME
 
@@ -237,12 +239,15 @@ class SchedulerTimingModel:
     @property
     def des_t_cycle(self) -> float:
         """Return the DES entanglement-attempt cycle length."""
-        return _DES_RATE_TIME_STEP
+        return self.des_entanglement_time_step
 
     @property
     def des_success_probability(self) -> float:
         """Return the DES per-cycle entanglement success probability."""
-        return self.entanglement_generation_rate
+        return -math.expm1(
+            -self.entanglement_generation_rate
+            * self.des_entanglement_time_step
+        )
 
     @property
     def gate_teleport_time(self) -> float:
@@ -524,16 +529,14 @@ def _load_scheduler_timing_model(
     entanglement_profile = settings.entanglement_profile(
         hardware_profile.entanglement_profile
     )
-    if entanglement_profile.entanglement_rate > 1.0:
-        raise ValueError(
-            "Scheduler entanglement rates must be at most 1 pair per "
-            "microsecond."
-        )
     return SchedulerTimingModel(
         hardware_profile=hardware_profile,
         local_one_qubit_gate_time=modality_profile.one_qubit_gate_time,
         local_two_qubit_gate_time=modality_profile.two_qubit_gate_time,
         entanglement_generation_rate=entanglement_profile.entanglement_rate,
+        des_entanglement_time_step=(
+            settings.des_simulation.entanglement_time_step
+        ),
         epr_lifetime=entanglement_profile.epr_lifetime,
     )
 

@@ -59,6 +59,8 @@ class CiscoPartitioner(BasePartitioner):
         Updates:
             cost, schedule, and windows with the latest partitioning results.
         """
+        program = self.circuit.mono.program
+        print("type of program:", type(program))
         overall_timer = StepTimer()
         num_qubits = count_total_qubits(self.circuit.mono.program)
         partition_sizes = _effective_partition_sizes(
@@ -66,6 +68,7 @@ class CiscoPartitioner(BasePartitioner):
             num_qubits,
         )
         circuit = self.circuit
+        print("type of circuit:", type(circuit))
         num_two_qubit_ops = circuit.mono.num_two_qubit_gates
         window_length_mode = "provided"
         # Determining optimal window size
@@ -75,6 +78,7 @@ class CiscoPartitioner(BasePartitioner):
                 self.window_length = 1
             else:
                 gate_density = num_two_qubit_ops / max(1, num_qubits)
+                # TODO: parameterize this function
                 density_scale = max(0.5, min(math.sqrt(gate_density), 2.0))
                 base_window = math.sqrt(num_two_qubit_ops) * density_scale
                 min_window = 1 if num_two_qubit_ops < 10 else 10
