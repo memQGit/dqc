@@ -26,7 +26,6 @@ from typing import cast
 import networkx as nx
 from openqasm3 import ast
 
-from memq_dqc.builder import extract_distributed_circuit
 from memq_dqc.circuit import DistributedCircuit
 from memq_dqc.circuit.dag import DistributedCircuitDAG
 from memq_dqc.circuit.op import Op
@@ -35,6 +34,7 @@ from memq_dqc.partition import Partitioner
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.preprocessing.qasm.types import CircuitQubit
 from memq_dqc.scheduler import Scheduler, SchedulerHardwareProfile
+from memq_dqc.settings import load_settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_COMPILER_ALGO = "cisco"
@@ -679,12 +679,7 @@ def build_compiled_distributed_circuit(
         qasm_program,
         algo=compiler_algo,
     )
-    partitioner.run(verbosity="quiet")
-    extract_distributed_circuit(
-        partitioner,
-        ebit_assignment=False,
-        verbosity="quiet",
-    )
+    partitioner.run(verbosity="quiet", ebit_assignment=False)
 
     distributed_circuit = partitioner.circuit.distributed
     if distributed_circuit is None:
@@ -776,23 +771,26 @@ def log_benchmark_results(results: Sequence[SchedulerBenchmarkResult]) -> None:
         logger.info("No scheduler results were produced.")
         return
 
+    time_unit = load_settings().global_settings.time_unit or "time units"
     logger.info("")
     logger.info("DES Scheduler Makespan Comparison")
     logger.info("--------------------------------")
     for result in results:
         logger.info(
-            "%-28s makespan=%10.3f operations=%4d",
+            "%-28s makespan=%10.3f %s operations=%4d",
             result.algorithm,
             result.makespan,
+            time_unit,
             result.operation_count,
         )
 
     best_result = min(results, key=lambda result: result.makespan)
     logger.info("")
     logger.info(
-        "Best makespan: %s (%.3f)",
+        "Best makespan: %s (%.3f %s)",
         best_result.algorithm,
         best_result.makespan,
+        time_unit,
     )
     if len({result.makespan for result in results}) == 1:
         logger.info(

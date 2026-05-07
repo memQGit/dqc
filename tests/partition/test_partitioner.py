@@ -96,6 +96,16 @@ def test_partitioner_accepts_program_and_network_objects_in_reverse_order(
     assert partitioner.windows
 
 
+def test_partitioner_rejects_ambiguous_path_inputs(tmp_path) -> None:
+    network_path = tmp_path / "network_input"
+    network_path.write_text("{}", encoding="utf-8")
+    circuit_path = tmp_path / "program_input"
+    circuit_path.write_text("OPENQASM 3.0;\nqubit[1] q;\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Could not infer"):
+        Partitioner(network_path, circuit_path)
+
+
 def test_partitioner_benchmark_static_schedule_is_stationary(
     simple1_circuit_path,
     three_comp_one_comm_x2_network_path,

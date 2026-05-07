@@ -5,6 +5,8 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import math
+
 import pytest
 from openqasm3 import ast
 
@@ -137,6 +139,7 @@ def _patch_scheduler_timing_model(
     rate: float,
     local_one_qubit_gate_time: float = 10.0,
     local_two_qubit_gate_time: float = 500.0,
+    des_entanglement_time_step: float = 1.0,
     epr_lifetime: float = 50.0,
 ) -> None:
     def _load_timing_model(
@@ -147,6 +150,7 @@ def _patch_scheduler_timing_model(
             local_one_qubit_gate_time=local_one_qubit_gate_time,
             local_two_qubit_gate_time=local_two_qubit_gate_time,
             entanglement_generation_rate=rate,
+            des_entanglement_time_step=des_entanglement_time_step,
             epr_lifetime=epr_lifetime,
         )
 
@@ -162,7 +166,7 @@ def test_des_link_fifo_schedule_single_cycle_success(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
-    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
+    _patch_scheduler_timing_model(monkeypatch, rate=100.0)
     distributed_circuit = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -205,9 +209,9 @@ def test_des_link_fifo_schedule_retries_until_seeded_success(
     schedule = des_link_fifo_schedule(distributed_circuit, seed=0)
 
     epr_event, remote_op = schedule.operations
-    assert epr_event.duration == 3.0
-    assert remote_op.start_time == 3.0
-    assert schedule.makespan == 516.0
+    assert epr_event.duration == 4.0
+    assert remote_op.start_time == 4.0
+    assert schedule.makespan == 517.0
 
 
 def test_des_link_fifo_schedule_waits_for_data_qubits_before_request(
@@ -215,7 +219,7 @@ def test_des_link_fifo_schedule_waits_for_data_qubits_before_request(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
-    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
+    _patch_scheduler_timing_model(monkeypatch, rate=100.0)
     distributed_circuit = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -251,7 +255,7 @@ def test_des_link_fifo_schedule_runs_parallel_requests_on_disjoint_links(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
-    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
+    _patch_scheduler_timing_model(monkeypatch, rate=100.0)
     template = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -304,7 +308,7 @@ def test_scheduler_runs_des_link_fifo_via_registry(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
-    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
+    _patch_scheduler_timing_model(monkeypatch, rate=100.0)
     distributed_circuit = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -351,7 +355,7 @@ def test_des_link_fifo_scheduler_uses_profile_rate_defaults(
     )
 
     assert scheduler.t_cycle == pytest.approx(1.0)
-    assert scheduler.p_success == pytest.approx(3.2e-2)
+    assert scheduler.p_success == pytest.approx(1.0 - math.exp(-3.2e-2))
 
 
 def test_des_link_fifo_schedule_rejects_invalid_parameters(
@@ -395,7 +399,7 @@ def test_des_link_fifo_schedule_supports_rswap_with_two_pairs(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
-    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
+    _patch_scheduler_timing_model(monkeypatch, rate=100.0)
     template = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -483,7 +487,7 @@ def test_des_link_fifo_schedule_regenerates_expired_pairs(
 ) -> None:
     _patch_scheduler_timing_model(
         monkeypatch,
-        rate=1.0,
+        rate=100.0,
         epr_lifetime=50.0,
     )
     template = _build_distributed_circuit(

@@ -189,6 +189,57 @@ def test_extract_distributed_circuit_adds_comm_registers(
     assert declaration_sizes["c1"] == 1
 
 
+def test_extract_distributed_circuit_deferred_ebits_omits_comm_registers(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+
+    distributed_program = extract_distributed_circuit(
+        partitioner,
+        ebit_assignment=False,
+    )
+    declarations = [
+        statement
+        for statement in distributed_program.statements
+        if isinstance(statement, ast.QubitDeclaration)
+    ]
+    declaration_names = {statement.qubit.name for statement in declarations}
+
+    assert "c0" not in declaration_names
+    assert "c1" not in declaration_names
+
+
+def test_extract_distributed_circuit_deferred_ebits_omits_comm_operands(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run(ebit_assignment=False)
+
+    remote_ops = [
+        op for op in partitioner.distributed_circuit.ops if op.is_remote
+    ]
+
+    assert remote_ops
+    assert all(len(op.qubits) == 2 for op in remote_ops)
+    assert all(
+        qubit.register_name.startswith("q")
+        for op in remote_ops
+        for qubit in op.qubits
+    )
+    assert partitioner.distributed_circuit.ebit_candidates_by_op_id is not None
+
+
 def test_extract_distributed_circuit_uses_full_comp_register_capacity(
     simple1_circuit_path,
     simple1_network_path,

@@ -17,7 +17,6 @@ from .extract_utils import (
     synthesize_state_teleportation_swaps,
     window_final_op_id_map,
 )
-from .formatting import rename_comm_qubits
 
 if TYPE_CHECKING:
     import openqasm3.ast as ast
@@ -60,5 +59,4 @@ __all__ = [
     "circuit_qubit_physical_map",
     "synthesize_state_teleportation_swaps",
     "window_final_op_id_map",
-    "rename_comm_qubits",
 ]

@@ -354,6 +354,54 @@ def test_distributed_dag_remote_gate_uses_final_swapped_qubits(
     ]
 
 
+def test_distributed_dag_iterates_topologically_with_remote_ops(
+    tmp_path: Path,
+) -> None:
+    class _RemoteGateNetwork:
+        def __init__(self) -> None:
+            self.qubit_type_map = {
+                PhysicalQubit(0, 0, "computation"): "computation",
+                PhysicalQubit(1, 0, "computation"): "computation",
+            }
+
+        def get_comm_pair_options(self, qubit_a, qubit_b):
+            comm_pair = (
+                PhysicalQubit(0, 0, "communication"),
+                PhysicalQubit(1, 0, "communication"),
+            )
+            return [
+                (
+                    0,
+                    comm_pair,
+                    ([qubit_a, comm_pair[0]], [qubit_b, comm_pair[1]]),
+                )
+            ]
+
+    qasm_path = tmp_path / "remote_after_local.qasm"
+    qasm_path.write_text(
+        "OPENQASM 3.0;\nqubit[2] q;\nh q[0];\ncx q[0], q[1];\n",
+        encoding="utf-8",
+    )
+    circuit = _build_memq_circuit(qasm_path)
+    remote_statement_ids = {circuit.mono.ops[1].statement_id}
+    distributed = _build_distributed(
+        circuit,
+        remote_statement_ids=remote_statement_ids,
+        swaps_schedule=[],
+        windows=[circuit.mono.ops],
+        schedule=[{QPU(id=0): {0}, QPU(id=1): {1}}],
+        comp_qubits_per_qpu=[1, 1],
+        comm_qubits_per_qpu=[1, 1],
+        network=_RemoteGateNetwork(),
+    )
+
+    ops = list(distributed.dag)
+
+    assert [op.name for op in ops] == ["h", "rcx"]
+    assert [op.is_remote for op in ops] == [False, True]
+    assert ops == list(distributed.dag.iter_topological())
+
+
 def test_distributed_dag_remote_gate_local_swaps_follow_path_order(
     tmp_path: Path,
 ) -> None:

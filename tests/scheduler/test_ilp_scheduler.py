@@ -113,6 +113,7 @@ def _patch_scheduler_timing_model(
             local_one_qubit_gate_time=local_one_qubit_gate_time,
             local_two_qubit_gate_time=local_two_qubit_gate_time,
             entanglement_generation_rate=rate,
+            des_entanglement_time_step=1.0,
             epr_lifetime=epr_lifetime,
         )
 

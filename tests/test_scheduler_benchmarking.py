@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import logging
 import sys
 from pathlib import Path
 
@@ -56,3 +57,20 @@ def test_synthetic_divergence_cases_produce_distinct_makespans():
         )
 
         assert len({result.makespan for result in results}) > 1
+
+
+def test_log_benchmark_results_prints_makespan_units(caplog):
+    module = _load_benchmark_module()
+    results = [
+        module.SchedulerBenchmarkResult(
+            algorithm="des_link_fifo",
+            makespan=12.5,
+            operation_count=3,
+        )
+    ]
+
+    with caplog.at_level(logging.INFO):
+        module.log_benchmark_results(results)
+
+    assert "makespan=    12.500 us" in caplog.text
+    assert "Best makespan: des_link_fifo (12.500 us)" in caplog.text

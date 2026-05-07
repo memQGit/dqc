@@ -202,6 +202,7 @@ class Circuit:
             program = load_qasm_program(program_or_path)
 
         statements = extract_program_statements(program)
+        # TODO: think about how to make this easier to access (currently circuit.mono.program)
         ops = extract_ops(statements)
         self.mono = MonoCircuit(
             program=program,
@@ -250,6 +251,7 @@ class Circuit:
             network=network,
             comp_qubits_per_qpu=comp_qubits_per_qpu,
             comm_qubits_per_qpu=comm_qubits_per_qpu,
+            ebit_assignment=ebit_assignment,
         )
         ops = extract_ops(statements)
         ebit_candidates_by_op_id = (

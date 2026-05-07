@@ -26,11 +26,7 @@ def plot_partition_heatmap(
     sample_stride: int | None = None,
     sort_by_final_qpu: bool = False,
     x_tick_stride: int | None = 5,
-    x_tick_rotation: float = 0.0,
     y_tick_fontsize: int = 8,
-    ax: object | None = None,
-    cmap: str = "tab20",
-    show: bool = False,
 ) -> SvgDocument:
     """Render a qubit-vs-window partition heatmap as SVG.
 
@@ -42,17 +38,11 @@ def plot_partition_heatmap(
         sample_stride: If provided, keep every Nth qubit after filtering.
         sort_by_final_qpu: Whether to group rows by the final window QPU.
         x_tick_stride: Window tick spacing. If None, show every window.
-        x_tick_rotation: Ignored legacy parameter retained for compatibility.
         y_tick_fontsize: Font size for y-axis labels.
-        ax: Ignored legacy parameter retained for compatibility.
-        cmap: Ignored legacy parameter retained for compatibility.
-        show: Ignored legacy parameter retained for compatibility.
 
     Returns:
         An SVG document containing the heatmap.
     """
-    del ax, cmap, show, x_tick_rotation
-
     assignments, num_qpus = _assignments_and_qpu_count(partition)
     qubits = _collect_qubits(assignments)
     qubit_order = _order_qubits(
@@ -161,8 +151,6 @@ def plot_migration_timeline(
     *,
     title: str | None = None,
     window_entanglement_cost: list[float] | None = None,
-    ax: object | None = None,
-    show: bool = False,
 ) -> SvgDocument:
     """Render moved-qubits-per-window as an SVG line chart.
 
@@ -170,14 +158,10 @@ def plot_migration_timeline(
         partition: Timeline of partitions (window -> QPU -> qubit set).
         title: Optional chart title.
         window_entanglement_cost: Optional series to plot on a secondary axis.
-        ax: Ignored legacy parameter retained for compatibility.
-        show: Ignored legacy parameter retained for compatibility.
 
     Returns:
         An SVG document containing the migration timeline.
     """
-    del ax, show
-
     assignments, _ = _assignments_and_qpu_count(partition)
     movement = _movement_counts(assignments)
     window_indices = list(range(1, len(assignments)))

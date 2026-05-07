@@ -27,6 +27,7 @@ from memq_dqc.circuit.dag.remap import (
     _remap_statement_qubits,
     _replace_qubit_declarations,
     _replace_statement_node,
+    _to_ast_qubit_ref,
 )
 from memq_dqc.circuit.dag.routing import (
     _build_remote_gate_statements,
@@ -50,6 +51,8 @@ from memq_dqc.utils.common import window_op_map
 if TYPE_CHECKING:
     from memq_dqc.network import NetworkGraph
     from memq_dqc.partition.partitioner import QPU
+
+_REMOTE_GATE_NAMES = frozenset({"rcx", "rcp", "rcry", "rcz", "rswap"})
 
 
 class DistributedCircuitDAG(CircuitDAG):
@@ -144,6 +147,7 @@ def build_distributed_statements(
     network: NetworkGraph,
     comp_qubits_per_qpu: list[int] | None = None,
     comm_qubits_per_qpu: list[int] | None = None,
+    ebit_assignment: bool = True,
 ) -> tuple[list[CleanedStatement], int]:
     """Build distributed program statements with remote operations.
 
@@ -161,6 +165,8 @@ def build_distributed_statements(
         comp_qubits_per_qpu: Optional computation-qubit capacities by QPU.
         comm_qubits_per_qpu: Optional communication-qubit counts by QPU.
         network: Network graph used to derive communication pairs.
+        ebit_assignment: Whether remote operations should include concrete
+            communication-qubit operands and declarations.
 
     Returns:
         The updated cleaned statements and the number of inserted local swaps.
@@ -342,13 +348,51 @@ def build_distributed_statements(
             filename="builder/distgates.inc",
         )
         distributed_statements.insert(0, cast(CleanedStatement, dist_include))
+    if not ebit_assignment:
+        distributed_statements = _strip_remote_ebit_operands(
+            distributed_statements
+        )
     distributed_statements = _replace_qubit_declarations(
         distributed_statements,
         schedule,
         comp_qubits_per_qpu,
-        comm_qubits_per_qpu,
+        comm_qubits_per_qpu if ebit_assignment else None,
     )
     return distributed_statements, local_swaps_added
+
+
+def _strip_remote_ebit_operands(
+    statements: list[CleanedStatement],
+) -> list[CleanedStatement]:
+    """Remove concrete e-bit operands from remote gate statements.
+
+    Deferred e-bit assignment keeps only the data operands in the emitted
+    distributed program. Scheduler-facing communication options are stored
+    separately on ``DistributedCircuit.ebit_candidates_by_op_id``.
+    """
+    stripped_statements: list[CleanedStatement] = []
+    for statement in statements:
+        if not (
+            isinstance(statement, CleanedQuantumGate)
+            and statement.name in _REMOTE_GATE_NAMES
+        ):
+            stripped_statements.append(statement)
+            continue
+
+        data_qubits = statement.qubits[:2]
+        node = cast(ast.QuantumGate, clone_statement_node(statement.node))
+        node.qubits = [_to_ast_qubit_ref(qubit) for qubit in data_qubits]
+        stripped_statements.append(
+            CleanedQuantumGate(
+                statement_type=statement.statement_type,
+                node=node,
+                is_op=statement.is_op,
+                name=statement.name,
+                qubits=data_qubits,
+            )
+        )
+
+    return stripped_statements
 
 
 def count_remote_gates(
@@ -362,6 +406,4 @@ def count_remote_gates(
     Returns:
         The number of operations tagged as remote gates.
     """
-    return sum(
-        1 for op in ops if op.name.startswith("r") and op.name != "rswap"
-    )
+    return sum(1 for op in ops if op.name in _REMOTE_GATE_NAMES - {"rswap"})

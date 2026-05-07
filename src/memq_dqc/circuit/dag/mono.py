@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import networkx as nx
 
 from memq_dqc.circuit.layer import Layer
@@ -35,6 +37,20 @@ class CircuitDAG:
         self.graph: nx.DiGraph = self._build_dag()
         self.layers: list[Layer] = self._extract_layers()
         self.depth = len(self.layers)
+
+    def __iter__(self) -> Iterator[Op]:
+        """Return operations in dependency-respecting topological order."""
+        return self.iter_topological()
+
+    def iter_topological(self) -> Iterator[Op]:
+        """Return operations in dependency-respecting topological order.
+
+        Yields:
+            Operations ordered so each operation appears after all of its DAG
+            predecessors.
+        """
+        for node_id in nx.topological_sort(self.graph):
+            yield self.graph.nodes[node_id]["op"]
 
     # Private Methods
     def _build_dag(self) -> nx.DiGraph:

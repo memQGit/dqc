@@ -84,8 +84,10 @@ def extract_distributed_circuit(
         remote_statement_ids = {op.statement_id for op, _ in remote_gates}
         comp_qubits_per_qpu = partitioner.network.comp_qubits_per_qpu()
         comm_qubits_per_qpu = partitioner.network.comm_qubits_per_qpu()
-        num_comm_registers = sum(
-            1 for count in comm_qubits_per_qpu if count > 0
+        num_comm_registers = (
+            sum(1 for count in comm_qubits_per_qpu if count > 0)
+            if ebit_assignment
+            else 0
         )
 
         build_timer = StepTimer()

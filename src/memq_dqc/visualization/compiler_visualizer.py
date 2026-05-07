@@ -111,8 +111,6 @@ def plot_distributed_circuit(
     max_windows: int | None = None,
     max_ops_per_window: int | None = None,
     title: str | None = None,
-    ax: object | None = None,
-    show: bool = False,
 ) -> SvgDocument:
     """Render a distributed circuit view as SVG.
 
@@ -132,8 +130,6 @@ def plot_distributed_circuit(
         max_windows: Optional cap on the number of windows to render.
         max_ops_per_window: Optional cap on visible operations per window.
         title: Optional chart title.
-        ax: Ignored legacy parameter retained for compatibility.
-        show: Ignored legacy parameter retained for compatibility.
 
     Returns:
         An SVG document containing the circuit visualization.
@@ -142,8 +138,6 @@ def plot_distributed_circuit(
         ValueError: If schedule and windows do not align or the selected
             window slice is empty.
     """
-    del ax, show
-
     if (schedule is None) != (windows is None):
         raise ValueError("schedule and windows must be provided together.")
 
@@ -381,8 +375,6 @@ def plot_partition_flow(
     *,
     show_node_counts: bool | None = None,
     title: str | None = None,
-    ax: object | None = None,
-    show: bool = False,
 ) -> SvgDocument:
     """Render an alluvial-style partition flow view as SVG.
 
@@ -391,14 +383,10 @@ def plot_partition_flow(
         show_node_counts: Whether occupancy labels should be drawn inside the
             QPU boxes. If omitted, labels appear only for shorter schedules.
         title: Optional chart title.
-        ax: Ignored legacy parameter retained for compatibility.
-        show: Ignored legacy parameter retained for compatibility.
 
     Returns:
         An SVG document containing the partition-flow visualization.
     """
-    del ax, show
-
     assignments = _assignment_maps(schedule)
     qpu_ids = _sorted_qpu_ids(schedule)
     if show_node_counts is None:
@@ -502,8 +490,6 @@ def plot_operation_gantt(
     max_windows: int | None = None,
     max_ops_per_window: int | None = None,
     title: str | None = None,
-    ax: object | None = None,
-    show: bool = False,
 ) -> SvgDocument:
     """Render an operation-level Gantt chart as SVG.
 
@@ -520,8 +506,6 @@ def plot_operation_gantt(
         max_windows: Optional cap on the number of windows to render.
         max_ops_per_window: Optional cap on visible operations per window.
         title: Optional chart title.
-        ax: Ignored legacy parameter retained for compatibility.
-        show: Ignored legacy parameter retained for compatibility.
 
     Returns:
         An SVG document containing the Gantt visualization.
@@ -530,8 +514,6 @@ def plot_operation_gantt(
         ValueError: If schedule and windows do not align or the selected
             window slice is empty.
     """
-    del ax, show
-
     if not hasattr(circuit, "mono"):
         raise ValueError(
             "plot_operation_gantt expects a Circuit plus aligned "
@@ -697,8 +679,6 @@ def plot_window_activity(
     windows: PartitionWindows,
     *,
     title: str | None = None,
-    ax: object | None = None,
-    show: bool = False,
 ) -> SvgDocument:
     """Render per-window gate composition and movement pressure as SVG.
 
@@ -707,14 +687,10 @@ def plot_window_activity(
         schedule: Partition schedule aligned with ``windows``.
         windows: Operation windows from the partitioner.
         title: Optional chart title.
-        ax: Ignored legacy parameter retained for compatibility.
-        show: Ignored legacy parameter retained for compatibility.
 
     Returns:
         An SVG document containing the window-activity summary.
     """
-    del ax, show
-
     if len(schedule) != len(windows):
         raise ValueError("schedule and windows must have the same length.")
     if not schedule:

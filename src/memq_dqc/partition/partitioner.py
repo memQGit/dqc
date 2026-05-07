@@ -320,11 +320,10 @@ def _resolve_partitioner_inputs(
             _resolve_program_input(cast(ProgramInput, first)),
         )
 
-    # Preserve the legacy positional interpretation when the inputs are
-    # ambiguous, such as extensionless paths.
-    return (
-        _resolve_network_input(cast(NetworkInput, first)),
-        _resolve_program_input(cast(ProgramInput, second)),
+    raise ValueError(
+        "Could not infer which partitioner input is the network and which "
+        "is the program. Pass a NetworkGraph and an OpenQASM program, or "
+        "use .json and .qasm/.qasm3 paths."
     )
 
 
@@ -351,6 +350,12 @@ def _get_algorithm_class(name: str) -> type[BasePartitioner]:
         from memq_dqc.partition.cisco.cisco import CiscoPartitioner
 
         return CiscoPartitioner
+    if name == "gate_grouping":
+        from memq_dqc.partition.gate_group.gate_group import (
+            GateGroupingPartitioner,
+        )
+
+        return GateGroupingPartitioner
     if name in {"benchmark_static", "BenchmarkStatic"}:
         from memq_dqc.partition.benchmark_static import (
             BenchmarkStaticPartitioner,

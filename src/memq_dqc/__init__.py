@@ -12,6 +12,7 @@ metadata.
 """
 
 from .settings import (
+    DESSimulationSettings,
     EntanglementGenerationProfile,
     GlobalSettings,
     ModalityProfile,
@@ -34,6 +35,7 @@ def hello() -> str:
 
 
 __all__ = [
+    "DESSimulationSettings",
     "EntanglementGenerationProfile",
     "GlobalSettings",
     "ModalityProfile",
