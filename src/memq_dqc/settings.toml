@@ -2,7 +2,7 @@
 time_unit = "us"
 
 [scheduler.des]
-entanglement_time_step = 30.0 # microseconds
+entanglement_time_step = 1.0 # microseconds
 
 [modality.trapped_ion.ba] # Ba+ ion
 1q_gate_time = 10

@@ -494,6 +494,35 @@ class BaseDESLinkScheduler(BaseScheduler):
         del link_state.pending_requests[best_index]
         return best_request.op_id
 
+    def _collect_same_time_link_start_requests(
+        self,
+        event: _QueueEvent,
+    ) -> tuple[int, ...]:
+        """Remove and return same-time start requests for one link."""
+        if event.link_key is None:
+            raise RuntimeError("START_EPR_REQUEST requires a link key.")
+
+        matching_events = [
+            queued_event
+            for queued_event in self._event_queue
+            if queued_event.event_type == _START_EPR_REQUEST
+            and queued_event.time == event.time
+            and queued_event.link_key == event.link_key
+        ]
+        if matching_events:
+            matching_event_ids = {
+                id(queued_event) for queued_event in matching_events
+            }
+            self._event_queue = [
+                queued_event
+                for queued_event in self._event_queue
+                if id(queued_event) not in matching_event_ids
+            ]
+            heapq.heapify(self._event_queue)
+
+        ordered_events = (event, *sorted(matching_events))
+        return tuple(queued_event.op_id for queued_event in ordered_events)
+
     def _handle_event(self, event: _QueueEvent) -> None:
         """Dispatch one DES event."""
         if event.event_type == _OP_COMPLETE:
@@ -521,14 +550,25 @@ class BaseDESLinkScheduler(BaseScheduler):
         if event.link_key is None:
             raise RuntimeError("START_EPR_REQUEST requires a link key.")
         link_state = self._link_states.setdefault(event.link_key, _LinkState())
+        op_ids = self._collect_same_time_link_start_requests(event)
+        for op_id in op_ids:
+            if link_state.active_request_id == op_id:
+                continue
+            self._enqueue_pending_request(link_state, op_id)
 
-        if (
-            link_state.active_request_id is not None
-            and link_state.active_request_id != event.op_id
-        ):
-            self._enqueue_pending_request(link_state, event.op_id)
+        if link_state.active_request_id is not None:
             return
-        self._activate_remote_request(event.op_id, event.link_key, event.time)
+
+        next_request_id = self._pop_next_pending_request(
+            link_state,
+            link_key=event.link_key,
+            time=event.time,
+        )
+        if next_request_id is None:
+            return
+        self._activate_remote_request(
+            next_request_id, event.link_key, event.time
+        )
 
     def _handle_epr_attempt(self, event: _QueueEvent) -> None:
         """Sample one entanglement attempt and queue the next step."""

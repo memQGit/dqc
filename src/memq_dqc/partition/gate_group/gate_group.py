@@ -1,38 +1,33 @@
-###
-#  GATE GROUPING ###
-# simple conditions: https://arxiv.org/pdf/2503.19082
-# 1) all two-qubit gates share a common control qubit
-# 2) two-qubit gates are adjacent on the control
-# 3) Single-qubit gates on the common control are diagonal or anti-diagonal.
-from typing import List
+"""Experimental gate-grouping partitioning implementation."""
 
+import openqasm3.ast as ast
+
+from memq_dqc.network import NetworkGraph
 from memq_dqc.partition.partitioner import BasePartitioner
 from memq_dqc.preprocessing.qasm.cleaning import extract_cleaned_statements
 from memq_dqc.preprocessing.qasm.types import (
     CleanedQuantumGate,
 )
-from memq_dqc.network import NetworkGraph
-
-
-import openqasm3.ast as ast
 
 
 class GateGroupingPartitioner(BasePartitioner):
-    """
-    Gate-grouping-based partitioner (eventaully may be merged with other designs)
-    """
+    """Gate-grouping-based partitioner."""
 
     def __init__(
         self,
         network: NetworkGraph,
         program: ast.Program,
-    ):
+    ) -> None:
+        """Initialize the gate-grouping partitioner.
+
+        Args:
+            network: Network graph describing available resources.
+            program: Parsed OpenQASM 3 program.
+        """
         super().__init__(network, program)
 
     def run(self) -> None:
-        """
-        Insert doctring here
-        """
+        """Print two-qubit gate statements identified in the circuit."""
         program = self.circuit.mono.program
         # get the cleaned program statements
         cleaned_statements = extract_cleaned_statements(program)

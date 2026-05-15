@@ -368,6 +368,10 @@ def _get_algorithm_class(name: str) -> type[BasePartitioner]:
         )
 
         return BenchmarkRandomPartitioner
+    if name == "hypergraph":
+        from memq_dqc.partition.hypergraph import HypergraphPartitioner
+
+        return HypergraphPartitioner
     if name == "genetic":
         raise NotImplementedError("Genetic algorithm not yet implemented.")
     raise ValueError(f"Unknown partitioning algorithm: {name}")
