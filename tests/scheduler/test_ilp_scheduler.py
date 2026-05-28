@@ -164,19 +164,27 @@ def test_ilp_scheduler_builds_expected_remote_schedule(
         "x",
         "h",
         "epr",
+        "catent",
         "rcx",
+        "catdisent",
     ]
 
-    x_op, h_op, epr_op, remote_op = schedule.operations
+    x_op, h_op, epr_op, catent_op, remote_op, catdisent_op = (
+        schedule.operations
+    )
     assert x_op.start_time == 0.0
     assert x_op.duration == 1.0
     assert h_op.start_time == 0.0
     assert h_op.duration == 1.0
     assert epr_op.start_time == 0.0
     assert epr_op.duration == 4.0
-    assert remote_op.start_time == 4.0
-    assert remote_op.duration == 9.0
-    assert schedule.makespan == 13.0
+    assert catent_op.start_time == 4.0
+    assert catent_op.duration == 9.0
+    assert remote_op.start_time == 13.0
+    assert remote_op.duration == 5.0
+    assert catdisent_op.start_time == 18.0
+    assert catdisent_op.duration == 5.0
+    assert schedule.makespan == 23.0
     _assert_qubit_capacity(schedule)
 
 
@@ -236,7 +244,7 @@ def test_ilp_scheduler_respects_rswap_epr_timing(
     assert [event.start_time for event in scheduler.schedule.operations] == (
         expected_starts
     )
-    assert scheduler.schedule.operations[-1].duration == 10.0
+    assert scheduler.schedule.operations[-1].duration == 5.0
     _assert_qubit_capacity(scheduler.schedule)
 
 

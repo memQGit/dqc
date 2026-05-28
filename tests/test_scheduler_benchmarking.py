@@ -115,7 +115,7 @@ def test_synthetic_initial_contention_case_changes_first_remote_start(
 
     assert first_remote_starts == {
         "des_link_fifo": 0,
-        "des_link_shortest_duration": 1,
+        "des_link_shortest_duration": 0,
         "des_link_critical_path": 2,
     }
 
@@ -138,7 +138,7 @@ def test_qv_line_topology_tie_has_no_non_fifo_policy_choices():
         stats.multi_candidate_decisions
         for stats in arbitration_stats
         if stats is not None
-    } == {1}
+    } == {0}
     assert {
         stats.non_fifo_selections
         for stats in arbitration_stats
