@@ -5,8 +5,8 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Cisco partitioning implementation."""
+"""Interaction partitioning implementation."""
 
-from .cisco import CiscoPartitioner
+from .interaction import InteractionPartitioner
 
-__all__ = ["CiscoPartitioner"]
+__all__ = ["InteractionPartitioner"]

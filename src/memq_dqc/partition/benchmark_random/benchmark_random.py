@@ -17,7 +17,7 @@ from openqasm3 import ast
 
 from memq_dqc._logging import StepTimer
 from memq_dqc.network import NetworkGraph
-from memq_dqc.partition.cisco.cisco import (
+from memq_dqc.partition.interaction.interaction import (
     _build_schedule,
     _effective_partition_sizes,
 )

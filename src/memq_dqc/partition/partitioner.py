@@ -49,7 +49,7 @@ ProgramInput: TypeAlias = ast.Program | str | PathLike[str]
 _Algorithm = TypeVar("_Algorithm", bound="BasePartitioner")
 
 
-# TODO: add seed for randomness (eg cisco has some random components)
+# TODO: add seed for randomness (eg Interaction has some random components)
 class BasePartitioner(ABC):
     """Base class for partitioning algorithm implementations."""
 
@@ -117,7 +117,7 @@ class Partitioner:
         network: NetworkInput | ProgramInput,
         program: ProgramInput | NetworkInput,
         *,
-        algo: str | type[_Algorithm] | _Algorithm = "cisco",
+        algo: str | type[_Algorithm] | _Algorithm = "interaction",
         algo_kwargs: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the partitioner and select the algorithm.
@@ -346,10 +346,12 @@ def _classify_partitioner_input(
 
 def _get_algorithm_class(name: str) -> type[BasePartitioner]:
     """Resolve an algorithm class from a registry name."""
-    if name == "cisco":
-        from memq_dqc.partition.cisco.cisco import CiscoPartitioner
+    if name == "interaction":
+        from memq_dqc.partition.interaction.interaction import (
+            InteractionPartitioner,
+        )
 
-        return CiscoPartitioner
+        return InteractionPartitioner
     if name == "gate_grouping":
         from memq_dqc.partition.gate_group.gate_group import (
             GateGroupingPartitioner,

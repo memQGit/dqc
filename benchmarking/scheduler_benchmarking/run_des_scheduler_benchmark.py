@@ -4,7 +4,7 @@ Most cases mirror the compiler pipeline used by
 ``scripts/samples/full_algo_sample.py``:
 
 1. Load a QASM circuit and network topology.
-2. Partition the circuit with the standard ``cisco`` partitioner.
+2. Partition the circuit with the standard ``Interaction`` partitioner.
 3. Extract the distributed circuit with scheduler-assigned e-bits.
 4. Run each DES-based scheduler on the same distributed circuit.
 5. Print makespan comparisons to the terminal.
@@ -48,7 +48,7 @@ from memq_dqc.scheduler.des_link_scheduler import (
 from memq_dqc.settings import load_settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_COMPILER_ALGO = "cisco"
+DEFAULT_COMPILER_ALGO = "interaction"
 DEFAULT_DES_ALGORITHMS: tuple[str, ...] = (
     "des_link_fifo",
     "des_link_shortest_duration",
