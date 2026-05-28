@@ -136,6 +136,8 @@ class HypergraphPartitioner(BasePartitioner):
             len(qpu_ids),
         )
 
+        logger.debug("Hypergraph partition assignment: %s", assignment)
+
 
 def build_gate_packets(
     ops: list[Op],
@@ -171,6 +173,13 @@ def build_gate_packets(
         else:
             idx += 1
 
+    for index, packet in enumerate(packets):
+        logger.debug(
+            "Gate packet %d: operations=%d qubits=%s.",
+            index,
+            len(packet),
+            set().union(*packet),
+        )
     return packets
 
 
@@ -331,6 +340,7 @@ def _search_for_group_gate(
                 op,
                 control,
                 group_ops,
+                ignored_ops,
                 pending_one_qubit_ops,
                 group_two_qubit_count,
                 max_size,
@@ -360,11 +370,11 @@ def _try_commute_later_gate(
     terminating_op: Op,
     control: int,
     group_ops: list[Op],
+    ignored_ops: list[Op],
     pending_one_qubit_ops: list[Op],
     group_two_qubit_count: int,
     max_size: int | None,
 ) -> tuple[list[Op], list[Op]]:
-    ignored_ops: list[Op] = []
     one_qubit_ops_between: list[Op] = []
     for next_op in ops[start_index + offset + 1 :]:
         if len(next_op.qubits) == 1:

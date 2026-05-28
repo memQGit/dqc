@@ -402,6 +402,7 @@ def test_extract_distributed_circuit_info_logs_summary(
     assert "Starting distributed circuit extraction." in messages
     assert any(
         "Distributed circuit extraction completed in" in msg
+        and "avg_group_size=" in msg
         for msg in messages
     )
 
