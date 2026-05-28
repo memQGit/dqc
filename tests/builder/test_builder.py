@@ -5,17 +5,22 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import io
 import logging
+from types import SimpleNamespace
 from typing import Any, cast
 
+import openqasm3
 import pytest
 from openqasm3 import ast
 
 from memq_dqc.builder import extract_distributed_circuit, identify_remote_gates
+from memq_dqc.builder.circuit_extractor import _exact_entanglement_cost
 from memq_dqc.network import NetworkGraph
 from memq_dqc.partition import Partitioner
 from memq_dqc.partition.partitioner import QPU, BasePartitioner
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
+from memq_dqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
 from memq_dqc.utils import get_windows
 
 
@@ -39,6 +44,21 @@ def _declaration_size(statement: ast.QubitDeclaration) -> int:
     if isinstance(statement.size, ast.IntegerLiteral):
         return statement.size.value
     raise TypeError("Qubit declaration size must be an integer literal.")
+
+
+def _cleaned_gate(name: str, qubits: list[CircuitQubit]) -> CleanedQuantumGate:
+    return CleanedQuantumGate(
+        statement_type=ast.QuantumGate,
+        node=ast.QuantumGate(
+            modifiers=[],
+            name=ast.Identifier(name),
+            arguments=[],
+            qubits=[],
+        ),
+        is_op=True,
+        name=name,
+        qubits=qubits,
+    )
 
 
 def test_extract_distributed_circuit_requires_run(
@@ -354,6 +374,104 @@ def test_extract_distributed_circuit_sets_exact_entanglement_cost(
     extract_distributed_circuit(partitioner)
 
     assert partitioner.cost == 1.0
+
+
+def test_exact_entanglement_cost_counts_catent_pairs() -> None:
+    q0 = CircuitQubit("q0", 0)
+    q1 = CircuitQubit("q1", 0)
+    c0 = CircuitQubit("c0", 0)
+    c1 = CircuitQubit("c1", 0)
+    c0_pair_2 = CircuitQubit("c0", 1)
+    c1_pair_2 = CircuitQubit("c1", 1)
+    distributed = SimpleNamespace(
+        statements=[
+            _cleaned_gate("catent", [q0, q1, c0, c1]),
+            _cleaned_gate("rcx", [q0, q1, c0, c1]),
+            _cleaned_gate("catdisent", [q0, q1, c0, c1]),
+            _cleaned_gate(
+                "catent",
+                [q0, q1, c0, c1, c0_pair_2, c1_pair_2],
+            ),
+            _cleaned_gate(
+                "rswap",
+                [q0, q1, c0, c1, c0_pair_2, c1_pair_2],
+            ),
+            _cleaned_gate(
+                "catdisent",
+                [q0, q1, c0, c1, c0_pair_2, c1_pair_2],
+            ),
+        ],
+    )
+
+    assert _exact_entanglement_cost(cast(Any, distributed)) == 3.0
+
+
+def test_exact_entanglement_cost_counts_deferred_rswap_catent() -> None:
+    q0 = CircuitQubit("q0", 0)
+    q1 = CircuitQubit("q1", 0)
+    distributed = SimpleNamespace(
+        statements=[
+            _cleaned_gate("catent", [q0, q1]),
+            _cleaned_gate("rswap", [q0, q1]),
+            _cleaned_gate("catdisent", [q0, q1]),
+        ],
+    )
+
+    assert _exact_entanglement_cost(cast(Any, distributed)) == 2.0
+
+
+def test_exact_entanglement_cost_rejects_unmatched_catent() -> None:
+    q0 = CircuitQubit("q0", 0)
+    q1 = CircuitQubit("q1", 0)
+    c0 = CircuitQubit("c0", 0)
+    c1 = CircuitQubit("c1", 0)
+    distributed = SimpleNamespace(
+        statements=[
+            _cleaned_gate("catent", [q0, q1, c0, c1]),
+            _cleaned_gate("rcx", [q0, q1, c0, c1]),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="no matching catdisent"):
+        _exact_entanglement_cost(cast(Any, distributed))
+
+
+def test_exact_entanglement_cost_rejects_mismatched_catdisent() -> None:
+    q0 = CircuitQubit("q0", 0)
+    q1 = CircuitQubit("q1", 0)
+    c0 = CircuitQubit("c0", 0)
+    c1 = CircuitQubit("c1", 0)
+    c2 = CircuitQubit("c1", 1)
+    distributed = SimpleNamespace(
+        statements=[
+            _cleaned_gate("catent", [q0, q1, c0, c1]),
+            _cleaned_gate("rcx", [q0, q1, c0, c1]),
+            _cleaned_gate("catdisent", [q0, q1, c0, c2]),
+        ],
+    )
+
+    with pytest.raises(ValueError, match="do not match"):
+        _exact_entanglement_cost(cast(Any, distributed))
+
+
+def test_extract_distributed_circuit_dumps_catent_statements(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+
+    distributed_program = extract_distributed_circuit(partitioner)
+    output = io.StringIO()
+    openqasm3.dump(distributed_program, output)
+
+    dumped_qasm = output.getvalue()
+    assert "catent q0[2], q1[0], c0[0], c1[0];" in dumped_qasm
+    assert "catdisent q0[2], q1[0], c0[0], c1[0];" in dumped_qasm
 
 
 def test_extract_distributed_circuit_quiet_emits_no_logs(

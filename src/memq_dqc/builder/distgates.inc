@@ -32,3 +32,19 @@ gate rswap q0, q1, c0a, c1a, c0b, c1b {
     id q0;
     id q1;
 }
+
+// cat entanglement gate (placeholder)
+gate catent data_a, data_b, comm_a, comm_b {
+    id data_a;
+    id data_b;
+    id comm_a;
+    id comm_b;
+}
+
+// cat disentanglement gate (placeholder)
+gate catdisent data_a, data_b, comm_a, comm_b {
+    id data_a;
+    id data_b;
+    id comm_a;
+    id comm_b;
+}
