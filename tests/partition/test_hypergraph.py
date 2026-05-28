@@ -8,10 +8,33 @@
 from collections import Counter
 from pathlib import Path
 
+from openqasm3 import ast
+
+from memq_dqc.circuit.op import Op
 from memq_dqc.network import NetworkGraph
 from memq_dqc.partition import Partitioner
 from memq_dqc.partition.hypergraph import hypergraph as hypergraph_module
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
+from memq_dqc.preprocessing.qasm.types import CircuitQubit
+
+
+def _op(op_id: int, name: str, *qubit_indices: int) -> Op:
+    return Op(
+        op_id=op_id,
+        statement_id=op_id,
+        name=name,
+        is_remote=False,
+        qubits=tuple(
+            CircuitQubit(register_name="q", index=index)
+            for index in qubit_indices
+        ),
+        node=ast.QuantumGate(
+            modifiers=[],
+            name=ast.Identifier(name),
+            arguments=[],
+            qubits=[],
+        ),
+    )
 
 
 def test_packets_to_hypergraph_counts_group_qubit_sets() -> None:
@@ -27,6 +50,21 @@ def test_packets_to_hypergraph_counts_group_qubit_sets() -> None:
             ("3", "4"): 1,
         }
     )
+
+
+def test_build_gate_packets_consumes_ignored_ops_before_commuted_gate() -> (
+    None
+):
+    ops = [
+        _op(0, "cx", 0, 1),
+        _op(1, "h", 5),
+        _op(2, "cx", 2, 3),
+        _op(3, "cx", 0, 4),
+    ]
+
+    packets = hypergraph_module.build_gate_packets(ops)
+
+    assert packets == [[{0, 1}, {0, 4}]]
 
 
 def test_partition_result_to_assignment_uses_network_qpu_ids() -> None:

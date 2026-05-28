@@ -20,6 +20,7 @@ from openqasm3 import ast
 
 from memq_dqc._logging import StepTimer, workflow_logging
 from memq_dqc.builder.extract_utils import (
+    identify_gate_groups,
     identify_remote_gates,
     synthesize_state_teleportation_swaps,
 )
@@ -81,6 +82,13 @@ def extract_distributed_circuit(
             remote_analysis_timer.elapsed_seconds(),
         )
 
+        _, group_indices, _ = identify_gate_groups(
+            circuit, partitioner, verbose=True
+        )
+        total_grouped_gates = sum(end - start for start, end in group_indices)
+        average_group_size = (
+            total_grouped_gates / len(group_indices) if group_indices else 0
+        )
         remote_statement_ids = {op.statement_id for op, _ in remote_gates}
         comp_qubits_per_qpu = partitioner.network.comp_qubits_per_qpu()
         comm_qubits_per_qpu = partitioner.network.comm_qubits_per_qpu()
@@ -141,12 +149,14 @@ def extract_distributed_circuit(
         partitioner._algorithm._set_exact_cost(exact_cost)
         logger.info(
             "Distributed circuit extraction completed in %.3fs: "
-            "remote_gates=%d swaps=%d statements=%d exact_cost=%.3f.",
+            "remote_gates=%d swaps=%d statements=%d exact_cost=%.3f "
+            "avg_group_size=%.3f.",
             overall_timer.elapsed_seconds(),
             len(remote_gates),
             num_swaps,
             actual_statement_count,
             exact_cost,
+            average_group_size,
         )
         return distributed.program
 
