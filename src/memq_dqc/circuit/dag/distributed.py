@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from memq_dqc.partition.partitioner import QPU
 
 _REMOTE_GATE_NAMES = frozenset({"rcx", "rcp", "rcry", "rcz", "rswap"})
+_DEFERRED_EBIT_GATE_NAMES = _REMOTE_GATE_NAMES | {"catent", "catdisent"}
 
 
 class DistributedCircuitDAG(CircuitDAG):
@@ -364,17 +365,17 @@ def build_distributed_statements(
 def _strip_remote_ebit_operands(
     statements: list[CleanedStatement],
 ) -> list[CleanedStatement]:
-    """Remove concrete e-bit operands from remote gate statements.
+    """Remove concrete e-bit operands from EPR-backed gate statements.
 
-    Deferred e-bit assignment keeps only the data operands in the emitted
-    distributed program. Scheduler-facing communication options are stored
-    separately on ``DistributedCircuit.ebit_candidates_by_op_id``.
+    Deferred e-bit assignment keeps only data operands on emitted remote,
+    catent, and catdisent operations. Scheduler-facing communication options
+    are stored separately on ``DistributedCircuit.ebit_candidates_by_op_id``.
     """
     stripped_statements: list[CleanedStatement] = []
     for statement in statements:
         if not (
             isinstance(statement, CleanedQuantumGate)
-            and statement.name in _REMOTE_GATE_NAMES
+            and statement.name in _DEFERRED_EBIT_GATE_NAMES
         ):
             stripped_statements.append(statement)
             continue

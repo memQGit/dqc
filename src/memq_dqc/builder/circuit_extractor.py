@@ -14,6 +14,7 @@ teleportation)
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Literal
 
 from openqasm3 import ast
@@ -184,22 +185,100 @@ def _validated_partitioner_outputs(
 
 
 def _exact_entanglement_cost(distributed: DistributedCircuit) -> float:
-    """Return exact entanglement cost from emitted distributed statements.
+    """Return exact e-bit cost from emitted cat-entanglement pairs.
 
-    Cost model:
-        - Remote two-qubit gates (``rcx``, ``rcp``, ``rcry``, ``rcz``) cost
-          1 e-bit pair.
-        - ``rswap`` costs 2 e-bit pairs.
+    A matched ``catent``/``catdisent`` pair is the source of truth for e-bit
+    usage. When concrete communication operands are present, the number of
+    e-bits is the number of communication-qubit pairs in ``catent``. When
+    e-bit assignment is deferred and communication operands have been stripped,
+    the wrapped operation determines the required pair count.
+
+    Raises:
+        ValueError: If a cat-entanglement pair is malformed or unmatched.
     """
-    # TODO: this needs to be made comprehensive
-    remote_gate_names = {"rcx", "rcp", "rcry", "rcz"}
-    remote_gate_count = 0
-    remote_swap_count = 0
-    for statement in distributed.statements:
+    exact_cost = 0.0
+    pending_catent: tuple[int, CleanedQuantumGate, float] | None = None
+    for index, statement in enumerate(distributed.statements):
         if not isinstance(statement, CleanedQuantumGate):
             continue
-        if statement.name in remote_gate_names:
-            remote_gate_count += 1
-        elif statement.name == "rswap":
-            remote_swap_count += 1
-    return float(remote_gate_count + (2 * remote_swap_count))
+        if statement.name == "catent":
+            if pending_catent is not None:
+                pending_index, _, _ = pending_catent
+                raise ValueError(
+                    "Encountered nested catent before matching catdisent "
+                    f"for catent at statement {pending_index}."
+                )
+            pending_catent = (
+                index,
+                statement,
+                _catent_ebit_count(statement, distributed.statements, index),
+            )
+        elif statement.name == "catdisent":
+            if pending_catent is None:
+                raise ValueError(
+                    "Encountered catdisent without preceding catent at "
+                    f"statement {index}."
+                )
+            _, catent_statement, catent_cost = pending_catent
+            if statement.qubits != catent_statement.qubits:
+                raise ValueError(
+                    "catdisent qubits do not match preceding catent qubits "
+                    f"at statement {index}."
+                )
+            exact_cost += catent_cost
+            pending_catent = None
+
+    if pending_catent is not None:
+        pending_index, _, _ = pending_catent
+        raise ValueError(
+            f"catent at statement {pending_index} has no matching catdisent."
+        )
+    return exact_cost
+
+
+def _catent_ebit_count(
+    catent: CleanedQuantumGate,
+    statements: Sequence[object],
+    catent_index: int,
+) -> float:
+    """Return e-bit count represented by one ``catent`` statement."""
+    if len(catent.qubits) < 2:
+        raise ValueError(
+            "catent must contain at least two data operands. "
+            f"Received {catent.qubits!r}."
+        )
+
+    comm_operand_count = len(catent.qubits) - 2
+    if comm_operand_count > 0:
+        if comm_operand_count % 2 != 0:
+            raise ValueError(
+                "catent communication operands must be paired. "
+                f"Received {catent.qubits!r}."
+            )
+        if any(
+            not qubit.register_name.startswith("c")
+            for qubit in catent.qubits[2:]
+        ):
+            raise ValueError(
+                "catent communication operands must use communication "
+                f"registers. Received {catent.qubits!r}."
+            )
+        return float(comm_operand_count // 2)
+
+    wrapped_statement = _next_quantum_gate_statement(
+        statements,
+        start_index=catent_index + 1,
+    )
+    return 2.0 if wrapped_statement.name == "rswap" else 1.0
+
+
+def _next_quantum_gate_statement(
+    statements: Sequence[object],
+    *,
+    start_index: int,
+) -> CleanedQuantumGate:
+    """Return the next quantum gate statement after ``start_index``."""
+    for statement in statements[start_index:]:
+        if isinstance(statement, CleanedQuantumGate):
+            return statement
+    raise ValueError("catent has no following quantum gate to wrap.")

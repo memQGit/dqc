@@ -296,18 +296,36 @@ def _build_ebit_candidates_by_op_id(
     ops: list[Op],
     network: NetworkGraph,
 ) -> EbitCandidatesByOpId:
-    """Build viable e-bit assignment candidates for remote operations."""
+    """Build viable e-bit assignment candidates for EPR-backed operations."""
     candidates_by_op_id: EbitCandidatesByOpId = {}
-    for op in ops:
-        if not op.is_remote:
+    for index, op in enumerate(ops):
+        if not (op.is_remote or op.name == "catent"):
             continue
-        candidates_by_op_id[op.op_id] = _remote_ebit_candidates(op, network)
+        candidates_by_op_id[op.op_id] = _remote_ebit_candidates(
+            op,
+            network,
+            expected_pairs=_expected_ebit_pair_count(ops, index),
+        )
     return candidates_by_op_id
+
+
+def _expected_ebit_pair_count(ops: list[Op], op_index: int) -> int:
+    """Return the number of EPR pairs consumed by an EPR-backed operation."""
+    op = ops[op_index]
+    if op.name == "rswap":
+        return 2
+    if op.name == "catent" and op_index + 1 < len(ops):
+        next_op = ops[op_index + 1]
+        if next_op.name == "rswap":
+            return 2
+    return 1
 
 
 def _remote_ebit_candidates(
     op: Op,
     network: NetworkGraph,
+    *,
+    expected_pairs: int | None = None,
 ) -> tuple[EbitAssignment, ...]:
     """Return viable e-bit assignments for one remote operation."""
     if len(op.qubits) < 2:
@@ -322,7 +340,13 @@ def _remote_ebit_candidates(
         network_qubit_b,
     )
     pairs = tuple(comm_pair for _, comm_pair, _ in pair_options)
-    if op.name != "rswap":
+    if expected_pairs is not None:
+        expected_pair_count = expected_pairs
+    elif op.name == "rswap":
+        expected_pair_count = 2
+    else:
+        expected_pair_count = 1
+    if expected_pair_count == 1:
         return tuple((pair,) for pair in pairs)
 
     assignments: list[EbitAssignment] = []

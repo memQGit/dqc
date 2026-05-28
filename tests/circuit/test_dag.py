@@ -5,9 +5,11 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import io
 from pathlib import Path
 from typing import Any
 
+import openqasm3
 import pytest
 from qiskit import qasm3
 from qiskit.converters import circuit_to_dag
@@ -39,6 +41,7 @@ def _build_distributed(
     network: Any,
     comp_qubits_per_qpu: list[int] | None = None,
     comm_qubits_per_qpu: list[int] | None = None,
+    ebit_assignment: bool = True,
 ) -> DistributedCircuit:
     return circuit.build_distributed(
         remote_statement_ids=remote_statement_ids,
@@ -48,6 +51,7 @@ def _build_distributed(
         network=network,
         comp_qubits_per_qpu=comp_qubits_per_qpu,
         comm_qubits_per_qpu=comm_qubits_per_qpu,
+        ebit_assignment=ebit_assignment,
     )
 
 
@@ -397,8 +401,8 @@ def test_distributed_dag_iterates_topologically_with_remote_ops(
 
     ops = list(distributed.dag)
 
-    assert [op.name for op in ops] == ["h", "rcx"]
-    assert [op.is_remote for op in ops] == [False, True]
+    assert [op.name for op in ops] == ["h", "catent", "rcx", "catdisent"]
+    assert [op.is_remote for op in ops] == [False, False, True, False]
     assert ops == list(distributed.dag.iter_topological())
 
 
@@ -458,27 +462,48 @@ def test_distributed_dag_remote_gate_local_swaps_follow_path_order(
     assert [statement.name for statement in remote_gate_sequence] == [
         "swap",
         "swap",
+        "catent",
         "rcx",
+        "catdisent",
         "swap",
         "swap",
     ]
+    # swap
     assert remote_gate_sequence[0].qubits == [
         CircuitQubit("q1", 0),
         CircuitQubit("q1", 1),
     ]
+    # swap
     assert remote_gate_sequence[1].qubits == [
         CircuitQubit("q1", 1),
         CircuitQubit("q1", 2),
     ]
-    assert remote_gate_sequence[2].qubits[:2] == [
+    # catent
+    assert remote_gate_sequence[2].qubits == [
+        CircuitQubit("q0", 0),
+        CircuitQubit("q1", 2),
+        CircuitQubit("c0", 0),
+        CircuitQubit("c1", 0),
+    ]
+    # rcx
+    assert remote_gate_sequence[3].qubits[:2] == [
         CircuitQubit("q0", 0),
         CircuitQubit("q1", 2),
     ]
-    assert remote_gate_sequence[3].qubits == [
+    # catdisent
+    assert remote_gate_sequence[4].qubits == [
+        CircuitQubit("q0", 0),
+        CircuitQubit("q1", 2),
+        CircuitQubit("c0", 0),
+        CircuitQubit("c1", 0),
+    ]
+    # swap
+    assert remote_gate_sequence[5].qubits == [
         CircuitQubit("q1", 1),
         CircuitQubit("q1", 2),
     ]
-    assert remote_gate_sequence[4].qubits == [
+    # swap
+    assert remote_gate_sequence[6].qubits == [
         CircuitQubit("q1", 0),
         CircuitQubit("q1", 1),
     ]
@@ -807,6 +832,18 @@ def test_distributed_dag_remote_swap_uses_two_disjoint_comm_pairs(
         if isinstance(statement, CleanedQuantumGate)
         and statement.name == "rswap"
     ]
+    quantum_gate_names = [
+        statement.name
+        for statement in distributed.statements
+        if isinstance(statement, CleanedQuantumGate)
+    ]
+    assert quantum_gate_names == [
+        "h",
+        "catent",
+        "rswap",
+        "catdisent",
+        "x",
+    ]
     assert len(rswaps) == 1
     assert rswaps[0].qubits == [
         CircuitQubit("q0", 0),
@@ -816,6 +853,28 @@ def test_distributed_dag_remote_swap_uses_two_disjoint_comm_pairs(
         CircuitQubit("c0", 1),
         CircuitQubit("c1", 1),
     ]
+    output = io.StringIO()
+    openqasm3.dump(distributed.program, output)
+    dumped_qasm = output.getvalue()
+    assert "catent q0[0], q1[0], c0[0], c1[0], c0[1], c1[1];" in dumped_qasm
+    assert "catdisent q0[0], q1[0], c0[0], c1[0], c0[1], c1[1];" in dumped_qasm
+
+    deferred = _build_distributed(
+        circuit,
+        remote_statement_ids=set(),
+        swaps_schedule=swaps_schedule,
+        windows=windows,
+        schedule=schedule,
+        comp_qubits_per_qpu=[1, 1],
+        comm_qubits_per_qpu=[2, 2],
+        network=_RswapNetwork(),
+        ebit_assignment=False,
+    )
+    catent_op = next(op for op in deferred.ops if op.name == "catent")
+    assert deferred.ebit_candidates_by_op_id is not None
+    catent_candidates = deferred.ebit_candidates_by_op_id[catent_op.op_id]
+    assert catent_candidates
+    assert all(len(candidate) == 2 for candidate in catent_candidates)
 
 
 def test_distributed_dag_routes_nonadjacent_partition_swap(
@@ -914,7 +973,21 @@ def test_distributed_dag_routes_nonadjacent_partition_swap(
         if isinstance(statement, CleanedQuantumGate)
         and statement.name == "rswap"
     ]
+    catents = [
+        statement
+        for statement in distributed.statements
+        if isinstance(statement, CleanedQuantumGate)
+        and statement.name == "catent"
+    ]
+    catdisents = [
+        statement
+        for statement in distributed.statements
+        if isinstance(statement, CleanedQuantumGate)
+        and statement.name == "catdisent"
+    ]
     assert len(rswaps) == 3
+    assert len(catents) == 3
+    assert len(catdisents) == 3
     assert [
         (s.qubits[0].register_name, s.qubits[1].register_name) for s in rswaps
     ] == [
