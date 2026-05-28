@@ -15,11 +15,14 @@ from memq_dqc.scheduler.schedule import (
     SchedulerHardwareProfile,
     SchedulerModality,
     _build_qubit_timelines,
+    _catent_ebit_labels,
     _ebit_assignment_labels,
+    _is_catent_operation,
     _operation_duration,
     _physical_qubit_label,
     _remote_ebit_assignment_candidates,
     _remote_operation_qubit_labels,
+    _remote_ops_with_catent_predecessor,
 )
 
 
@@ -31,13 +34,47 @@ class FIFOScheduler(BaseScheduler):
         qubit_timers: dict[str, float] = {}
         qubit_order: list[str] = []
         scheduled_operations: list[ScheduleEvent] = []
+        remote_ops_with_catent = _remote_ops_with_catent_predecessor(
+            self.distributed_circuit
+        )
         # need to add: check of available e-bit
         for layer in self.distributed_circuit.dag.layers:
             for op in layer:
                 # we would like to forward look to see if local operations
                 # can be done simultaneously with remote operations
                 entanglement_events: list[EntanglementGeneration] = []
-                if op.is_remote:
+                if _is_catent_operation(op):
+                    if len(op.qubits) > 2:
+                        qubits = tuple(
+                            _physical_qubit_label(qubit) for qubit in op.qubits
+                        )
+                        (
+                            entanglement_events,
+                            start_time,
+                        ) = _schedule_entanglement_generation(
+                            data_qubits=(qubits[0], qubits[1]),
+                            ebit_qubits=_catent_ebit_labels(op),
+                            qubit_timers=qubit_timers,
+                            entanglement_time=(
+                                self.timing_model.entanglement_time
+                            ),
+                            multiplex_entangle=self.multiplex_entangle,
+                        )
+                    else:
+                        (
+                            qubits,
+                            entanglement_events,
+                            start_time,
+                        ) = _select_remote_ebit_assignment(
+                            distributed_circuit=self.distributed_circuit,
+                            op=op,
+                            qubit_timers=qubit_timers,
+                            entanglement_time=(
+                                self.timing_model.entanglement_time
+                            ),
+                            multiplex_entangle=self.multiplex_entangle,
+                        )
+                elif op.is_remote and op.op_id not in remote_ops_with_catent:
                     (
                         qubits,
                         entanglement_events,

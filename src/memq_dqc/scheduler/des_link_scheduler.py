@@ -23,11 +23,14 @@ from memq_dqc.scheduler.schedule import (
     SchedulerModality,
     SchedulerTimingModel,
     _build_qubit_timelines,
+    _catent_ebit_labels,
     _ebit_assignment_labels,
+    _is_catent_operation,
     _operation_duration,
     _physical_qubit_label,
     _remote_ebit_assignment_candidates,
     _remote_operation_qubit_labels,
+    _remote_ops_with_catent_predecessor,
 )
 
 logger = logging.getLogger(__name__)
@@ -152,6 +155,7 @@ class BaseDESLinkScheduler(BaseScheduler):
         self._link_states: dict[tuple[str, str], _LinkState] = {}
         self._reserved_link_counts: dict[tuple[str, str], int] = {}
         self._remote_requests: dict[int, _RemoteRequest] = {}
+        self._remote_ops_with_catent: set[int] = set()
         self._scheduled_records: list[tuple[float, int, ScheduleEvent]] = []
         self._event_sequence = 0
         self._record_sequence = 0
@@ -208,6 +212,9 @@ class BaseDESLinkScheduler(BaseScheduler):
             op_by_id=self._op_by_id,
             successors_by_op=self._successors_by_op,
             timing_model=self.timing_model,
+        )
+        self._remote_ops_with_catent = _remote_ops_with_catent_predecessor(
+            self.distributed_circuit
         )
         (
             self._qubit_timers,
@@ -271,7 +278,15 @@ class BaseDESLinkScheduler(BaseScheduler):
 
     def _schedule_ready_operation(self, op: Op) -> None:
         """Schedule one ready local op or issue a remote request."""
-        if op.is_remote:
+        if _is_catent_operation(op):
+            if len(op.qubits) > 2:
+                self._schedule_entangled_operation_request(
+                    op,
+                    _catent_ebit_labels(op),
+                )
+            else:
+                self._schedule_remote_request(op)
+        elif op.is_remote and op.op_id not in self._remote_ops_with_catent:
             self._schedule_remote_request(op)
         else:
             self._schedule_local_operation(op)
@@ -284,7 +299,7 @@ class BaseDESLinkScheduler(BaseScheduler):
             default=0.0,
         )
         logger.debug(
-            "Scheduling local op=%d name=%s qubits=%s at t=%.3f.",
+            "Scheduling operation op=%d name=%s qubits=%s at t=%.3f.",
             op.op_id,
             op.name,
             op_labels,
@@ -297,7 +312,7 @@ class BaseDESLinkScheduler(BaseScheduler):
             qubits=op_labels,
             start_time=start_time,
             duration=_operation_duration(op, self.timing_model),
-            is_remote=False,
+            is_remote=op.is_remote,
         )
         self._record_scheduled_event(scheduled_op)
         for qubit in op_labels:
@@ -308,13 +323,29 @@ class BaseDESLinkScheduler(BaseScheduler):
         """Create one remote request and queue its initial link events."""
         ebit_pairs = self._select_remote_ebit_assignment(op)
         op_labels = _remote_operation_qubit_labels(op, ebit_pairs)
+        self._schedule_entangled_operation_request(
+            op,
+            _ebit_assignment_labels(ebit_pairs),
+            op_labels=op_labels,
+        )
+
+    def _schedule_entangled_operation_request(
+        self,
+        op: Op,
+        ebit_labels: tuple[tuple[str, str], ...],
+        *,
+        op_labels: tuple[str, ...] | None = None,
+    ) -> None:
+        """Create one EPR-backed operation request and queue link events."""
+        if op_labels is None:
+            op_labels = self._op_qubits[op.op_id]
         for qubit in op_labels:
             if qubit not in self._qubit_timers:
                 self._qubit_timers[qubit] = 0.0
                 self._qubit_order.append(qubit)
 
         link_requests: dict[tuple[str, str], _RemoteLinkRequest] = {}
-        for link_qubits in _ebit_assignment_labels(ebit_pairs):
+        for link_qubits in ebit_labels:
             link_key = _canonical_link_key(link_qubits)
             if link_key in link_requests:
                 raise ValueError(
@@ -348,7 +379,7 @@ class BaseDESLinkScheduler(BaseScheduler):
                 link_key=link_key,
             )
         logger.debug(
-            "Scheduling remote request op=%d name=%s data_qubits=%s "
+            "Scheduling EPR-backed request op=%d name=%s data_qubits=%s "
             "op_qubits=%s links=%s start_time=%.3f.",
             op.op_id,
             op.name,
@@ -679,7 +710,7 @@ class BaseDESLinkScheduler(BaseScheduler):
             qubits=request.op_qubits,
             start_time=event.time,
             duration=_operation_duration(request.op, self.timing_model),
-            is_remote=True,
+            is_remote=request.op.is_remote,
         )
         self._record_scheduled_event(scheduled_op)
         for qubit in request.op_qubits:
