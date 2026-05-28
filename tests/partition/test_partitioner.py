@@ -20,7 +20,7 @@ from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.utils import get_windows
 
 
-def test_partitioner_cisco_default(
+def test_partitioner_interaction_default(
     simple1_circuit_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
