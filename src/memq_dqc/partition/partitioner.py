@@ -141,11 +141,15 @@ class Partitioner:
             resolved_network, resolved_program, algo, algo_kwargs
         )
         self._distributed_ebit_assignment = True
+        self._distributed_group_gates = True
+        self._distributed_max_group_size: int | None = None
 
     def run(
         self,
         *,
         ebit_assignment: bool | None = None,
+        group_gates: bool = True,
+        max_group_size: int | None = None,
         verbosity: Literal["quiet", "info", "debug"] = "quiet",
     ) -> None:
         """Run the configured partitioning algorithm.
@@ -156,15 +160,23 @@ class Partitioner:
                 concrete e-bit pairs into the scheduler DAG. When omitted,
                 this method only runs partitioning and lazy extraction
                 defaults to explicit e-bit assignment.
+            group_gates: Whether distributed extraction should keep compatible
+                remote gate groups inside a shared cat-entanglement region.
+            max_group_size: Optional maximum number of two-qubit gates per
+                emitted gate group.
             verbosity: Logging verbosity for this workflow call.
 
         Updates:
             cost, schedule, and windows with the latest partitioning results.
         """
+        if max_group_size is not None and max_group_size < 1:
+            raise ValueError("max_group_size must be positive when provided.")
         self.circuit.distributed = None
         self._distributed_ebit_assignment = (
             True if ebit_assignment is None else ebit_assignment
         )
+        self._distributed_group_gates = group_gates
+        self._distributed_max_group_size = max_group_size
         with workflow_logging(verbosity):
             timer = StepTimer()
             logger.info(
@@ -283,6 +295,8 @@ class Partitioner:
         extract_distributed_circuit(
             self,
             ebit_assignment=self._distributed_ebit_assignment,
+            group_gates=self._distributed_group_gates,
+            max_group_size=self._distributed_max_group_size,
             verbosity=verbosity,
         )
 

@@ -37,6 +37,20 @@ class _CustomQpuIdPartitioner(BasePartitioner):
         self.cost = 0.0
 
 
+class _TwoQubitRemotePartitioner(BasePartitioner):
+    def run(self) -> None:
+        self.windows = [self.circuit.mono.ops]
+        self.schedule = [{QPU(id=0): {0}, QPU(id=1): {1}}]
+        self.cost = 0.0
+
+
+class _ThreeQubitSharedControlPartitioner(BasePartitioner):
+    def run(self) -> None:
+        self.windows = [self.circuit.mono.ops]
+        self.schedule = [{QPU(id=0): {1, 2}, QPU(id=1): {0}}]
+        self.cost = 0.0
+
+
 def _declaration_size(statement: ast.QubitDeclaration) -> int:
     """Return the declared qubit register size."""
     if statement.size is None:
@@ -59,6 +73,54 @@ def _cleaned_gate(name: str, qubits: list[CircuitQubit]) -> CleanedQuantumGate:
         name=name,
         qubits=qubits,
     )
+
+
+def _groupable_remote_program(tmp_path) -> ast.Program:
+    qasm_path = tmp_path / "groupable_remote.qasm"
+    qasm_path.write_text(
+        "\n".join(
+            [
+                "OPENQASM 3.0;",
+                'include "stdgates.inc";',
+                "qubit[2] q;",
+                "cx q[0], q[1];",
+                "rz(0.125) q[1];",
+                "cx q[0], q[1];",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return load_qasm_program(str(qasm_path))
+
+
+def _shared_control_remote_program(tmp_path) -> ast.Program:
+    qasm_path = tmp_path / "shared_control_remote.qasm"
+    qasm_path.write_text(
+        "\n".join(
+            [
+                "OPENQASM 3.0;",
+                'include "stdgates.inc";',
+                "qubit[3] q;",
+                "cx q[0], q[1];",
+                "rz(0.125) q[1];",
+                "cx q[0], q[2];",
+                "rz(0.25) q[0];",
+                "cx q[0], q[1];",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return load_qasm_program(str(qasm_path))
+
+
+def _quantum_gate_names(partitioner: Partitioner) -> list[str]:
+    return [
+        statement.name
+        for statement in partitioner.distributed_circuit.statements
+        if isinstance(statement, CleanedQuantumGate)
+    ]
 
 
 def test_extract_distributed_circuit_requires_run(
@@ -179,6 +241,106 @@ def test_partitioner_lazy_extraction_honors_run_ebit_assignment(
     assert first is not second
     assert first.ebit_candidates_by_op_id is not None
     assert second.ebit_candidates_by_op_id is None
+
+
+def test_partitioner_emits_grouped_remote_gates_by_default(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = _groupable_remote_program(tmp_path)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo=_TwoQubitRemotePartitioner(network, program),
+    )
+    partitioner.run()
+
+    assert _quantum_gate_names(partitioner) == [
+        "catent",
+        "rcx",
+        "rz",
+        "rcx",
+        "catdisent",
+    ]
+    assert partitioner.cost == 1.0
+
+
+def test_partitioner_run_group_gates_false_disables_emitted_grouping(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = _groupable_remote_program(tmp_path)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo=_TwoQubitRemotePartitioner(network, program),
+    )
+    partitioner.run(group_gates=False)
+
+    assert _quantum_gate_names(partitioner) == [
+        "catent",
+        "rcx",
+        "catdisent",
+        "rz",
+        "catent",
+        "rcx",
+        "catdisent",
+    ]
+    assert partitioner.cost == 2.0
+
+
+def test_partitioner_groups_shared_control_remote_gates_with_distinct_targets(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = _shared_control_remote_program(tmp_path)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo=_ThreeQubitSharedControlPartitioner(network, program),
+    )
+    partitioner.run()
+
+    assert _quantum_gate_names(partitioner) == [
+        "catent",
+        "rcx",
+        "rz",
+        "rcx",
+        "rz",
+        "rcx",
+        "catdisent",
+    ]
+    assert partitioner.cost == 1.0
+
+
+def test_partitioner_max_group_size_limits_emitted_grouping(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = _shared_control_remote_program(tmp_path)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo=_ThreeQubitSharedControlPartitioner(network, program),
+    )
+    partitioner.run(max_group_size=2)
+
+    assert _quantum_gate_names(partitioner) == [
+        "catent",
+        "rcx",
+        "rz",
+        "rcx",
+        "catdisent",
+        "rz",
+        "catent",
+        "rcx",
+        "catdisent",
+    ]
+    assert partitioner.cost == 2.0
 
 
 def test_extract_distributed_circuit_adds_comm_registers(

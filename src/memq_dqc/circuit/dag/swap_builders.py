@@ -28,6 +28,8 @@ from memq_dqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
 if TYPE_CHECKING:
     from memq_dqc.network import NetworkGraph
 
+PlacementSwap = tuple[tuple[int, int], tuple[int, int]]
+
 
 def _candidate_comp_slots_for_qpu(
     qpu_id: int,
@@ -104,7 +106,7 @@ def _build_rswap_statements_for_swap(
     network: NetworkGraph,
     circuit_qubit_to_physical_window: dict[int, tuple[int, int]],
     comp_capacity_by_schedule_qpu: dict[int, int] | None,
-) -> list[CleanedQuantumGate]:
+) -> tuple[list[CleanedQuantumGate], list[PlacementSwap]]:
     """Build one or more ``rswap`` statements for a schedule-space swap.
 
     For adjacent QPUs, this emits a single ``rswap``. For non-adjacent QPUs,
@@ -120,13 +122,17 @@ def _build_rswap_statements_for_swap(
             schedule QPU.
 
     Returns:
-        A non-empty list of ``rswap`` statements implementing ``swap``.
+        A non-empty list of ``rswap`` statements implementing ``swap`` and the
+        physical position swaps they perform.
     """
     try:
-        return _build_wrapped_rswap_statements_from_positions(
-            pos0=swap.pos0,
-            pos1=swap.pos1,
-            network=network,
+        return (
+            _build_wrapped_rswap_statements_from_positions(
+                pos0=swap.pos0,
+                pos1=swap.pos1,
+                network=network,
+            ),
+            [(swap.pos0, swap.pos1)],
         )
     except ValueError as direct_swap_error:
         if not (
@@ -145,25 +151,32 @@ def _build_rswap_statements_for_swap(
             raise direct_swap_error
 
         routed_statements: list[CleanedQuantumGate] = []
+        placement_swaps: list[PlacementSwap] = []
         for idx in range(len(routed_positions) - 1):
+            pos0 = routed_positions[idx]
+            pos1 = routed_positions[idx + 1]
             routed_statements.extend(
                 _build_wrapped_rswap_statements_from_positions(
-                    pos0=routed_positions[idx],
-                    pos1=routed_positions[idx + 1],
+                    pos0=pos0,
+                    pos1=pos1,
                     network=network,
                 )
             )
+            placement_swaps.append((pos0, pos1))
 
         for idx in range(len(routed_positions) - 3, -1, -1):
+            pos0 = routed_positions[idx]
+            pos1 = routed_positions[idx + 1]
             routed_statements.extend(
                 _build_wrapped_rswap_statements_from_positions(
-                    pos0=routed_positions[idx],
-                    pos1=routed_positions[idx + 1],
+                    pos0=pos0,
+                    pos1=pos1,
                     network=network,
                 )
             )
+            placement_swaps.append((pos0, pos1))
 
-        return routed_statements
+        return routed_statements, placement_swaps
 
 
 def _routed_swap_positions(

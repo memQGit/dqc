@@ -223,6 +223,7 @@ class Circuit:
         comp_qubits_per_qpu: list[int] | None = None,
         comm_qubits_per_qpu: list[int] | None = None,
         ebit_assignment: bool = True,
+        gate_group_op_ids: tuple[tuple[int, ...], ...] = (),
     ) -> DistributedCircuit:
         """Populate the distributed representation for this circuit.
 
@@ -238,6 +239,8 @@ class Circuit:
             ebit_assignment: Whether the compiler assigns concrete e-bit
                 pairs into the scheduler DAG. If false, schedulers choose from
                 viable e-bit pair candidates.
+            gate_group_op_ids: Operation IDs for detected gate groups that may
+                share cat-entanglement in the emitted program.
 
         Returns:
             The populated distributed circuit representation.
@@ -252,6 +255,7 @@ class Circuit:
             comp_qubits_per_qpu=comp_qubits_per_qpu,
             comm_qubits_per_qpu=comm_qubits_per_qpu,
             ebit_assignment=ebit_assignment,
+            gate_group_op_ids=gate_group_op_ids,
         )
         ops = extract_ops(statements)
         ebit_candidates_by_op_id = (
