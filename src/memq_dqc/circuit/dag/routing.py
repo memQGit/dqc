@@ -22,6 +22,7 @@ from memq_dqc.circuit.dag.remap import (
     _to_ast_qubit_ref,
 )
 from memq_dqc.circuit.dag.swap_builders import (
+    PlacementSwap,
     _build_local_swap_gate,
     _build_wrapped_rswap_statements_from_positions,
     _candidate_comp_slots_for_qpu,
@@ -54,7 +55,7 @@ def _build_remote_gate_statements(
     network_qubit_b: PhysicalQubit,
     gate_qubits: list[CircuitQubit],
     network: NetworkGraph,
-) -> tuple[list[CleanedStatement], int]:
+) -> tuple[list[CleanedStatement], int, list[PlacementSwap]]:
     """Build statements for one remote two-qubit gate execution."""
     raw_comm_pair, local_paths = _select_direct_remote_gate_option(
         network_qubit_a,
@@ -76,7 +77,7 @@ def _build_remote_gate_statements(
     ]
 
     gate_statements: list[CleanedStatement] = []
-    swap_gate_statements: list[CleanedStatement] = []
+    placement_swaps: list[PlacementSwap] = []
     local_swaps_added = 0
     for local_path in local_paths:
         # Already adjacent to the communication qubit; no local swap needed.
@@ -98,7 +99,12 @@ def _build_remote_gate_statements(
                 qubits=swap_qubits,
             )
             gate_statements.append(swap_gate_statement)
-            swap_gate_statements.append(swap_gate_statement)
+            placement_swaps.append(
+                (
+                    (_qpu_id_from_register_name(q0.register_name), q0.index),
+                    (_qpu_id_from_register_name(q1.register_name), q1.index),
+                )
+            )
             local_swaps_added += 1
 
     comm_pair = _order_comm_pair(gate_qubits, raw_comm_pair)
@@ -139,12 +145,7 @@ def _build_remote_gate_statements(
     )
     gate_statements.append(cat_disent_gate)
 
-    swap_gate_statements.reverse()
-    for swap_gate_statement in swap_gate_statements:
-        gate_statements.append(swap_gate_statement)
-        local_swaps_added += 1
-
-    return gate_statements, local_swaps_added
+    return gate_statements, local_swaps_added, placement_swaps
 
 
 def _select_direct_remote_gate_option(
@@ -209,7 +210,7 @@ def _build_routed_remote_gate_statements(
     comp_capacity_by_schedule_qpu: dict[int, int] | None,
     network: NetworkGraph,
     moving_operand_idx: int,
-) -> tuple[list[CleanedStatement], int]:
+) -> tuple[list[CleanedStatement], int, list[PlacementSwap]]:
     """Build statements for a routed remote gate via intermediary QPUs."""
     moving_gate_qubit = gate_qubits[moving_operand_idx]
     static_gate_qubit = gate_qubits[1 - moving_operand_idx]
@@ -225,7 +226,7 @@ def _build_routed_remote_gate_statements(
             f"QPU for directional movement {route_qpu_ids!r}."
         )
 
-    # Track the moving operand as it is temporarily routed toward the target.
+    # Track the moving operand as it is routed toward the target.
     moved_pos = (
         _qpu_id_from_register_name(moving_gate_qubit.register_name),
         moving_gate_qubit.index,
@@ -235,21 +236,25 @@ def _build_routed_remote_gate_statements(
         static_gate_qubit.index,
     )
     routed_statements: list[CleanedStatement] = []
-    forward_hop_positions: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    placement_swaps: list[PlacementSwap] = []
 
     # Stop one QPU before the target. The final interaction is still a
     # remote gate, not another routed hop onto the target QPU.
     for next_qpu_id in route_qpu_ids[1:-1]:
-        rswap_statements, next_pos = _build_routed_remote_gate_hop(
-            moved_pos=moved_pos,
-            static_pos=static_pos,
-            next_qpu_id=next_qpu_id,
-            circuit_qubit_to_physical_window=circuit_qubit_to_physical_window,
-            comp_capacity_by_schedule_qpu=comp_capacity_by_schedule_qpu,
-            network=network,
+        rswap_statements, next_pos, placement_swap = (
+            _build_routed_remote_gate_hop(
+                moved_pos=moved_pos,
+                static_pos=static_pos,
+                next_qpu_id=next_qpu_id,
+                circuit_qubit_to_physical_window=(
+                    circuit_qubit_to_physical_window
+                ),
+                comp_capacity_by_schedule_qpu=comp_capacity_by_schedule_qpu,
+                network=network,
+            )
         )
         routed_statements.extend(rswap_statements)
-        forward_hop_positions.append((moved_pos, next_pos))
+        placement_swaps.append(placement_swap)
         moved_pos = next_pos
 
     moved_gate_qubit = CircuitQubit(
@@ -266,7 +271,11 @@ def _build_routed_remote_gate_statements(
         ordered_gate_qubits = [static_gate_qubit, moved_gate_qubit]
         network_gate_qubits = (static_network_qubit, moved_network_qubit)
 
-    routed_gate_statements, added_local_swaps = _build_remote_gate_statements(
+    (
+        routed_gate_statements,
+        added_local_swaps,
+        routed_gate_placement_swaps,
+    ) = _build_remote_gate_statements(
         statement=statement,
         mapped_node=mapped_node,
         network_qubit_a=network_gate_qubits[0],
@@ -275,18 +284,9 @@ def _build_routed_remote_gate_statements(
         network=network,
     )
     routed_statements.extend(routed_gate_statements)
+    placement_swaps.extend(routed_gate_placement_swaps)
 
-    # Undo the temporary routed hops to restore the original placement.
-    for pos0, pos1 in reversed(forward_hop_positions):
-        routed_statements.extend(
-            _build_wrapped_rswap_statements_from_positions(
-                pos0=pos0,
-                pos1=pos1,
-                network=network,
-            )
-        )
-
-    return routed_statements, added_local_swaps
+    return routed_statements, added_local_swaps, placement_swaps
 
 
 def _build_routed_remote_gate_hop(
@@ -296,7 +296,7 @@ def _build_routed_remote_gate_hop(
     circuit_qubit_to_physical_window: dict[int, tuple[int, int]],
     comp_capacity_by_schedule_qpu: dict[int, int] | None,
     network: NetworkGraph,
-) -> tuple[list[CleanedQuantumGate], tuple[int, int]]:
+) -> tuple[list[CleanedQuantumGate], tuple[int, int], PlacementSwap]:
     """Build one routed ``rswap`` hop for a moving remote-gate operand."""
     candidate_slots = _candidate_comp_slots_for_qpu(
         qpu_id=next_qpu_id,
@@ -323,7 +323,7 @@ def _build_routed_remote_gate_hop(
             )
         except ValueError:
             continue
-        return rswap_statements, next_pos
+        return rswap_statements, next_pos, (moved_pos, next_pos)
 
     raise ValueError(
         "Unable to build routed remote gate hop from "

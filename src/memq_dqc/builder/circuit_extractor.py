@@ -25,6 +25,7 @@ from memq_dqc.builder.extract_utils import (
     identify_remote_gates,
     synthesize_state_teleportation_swaps,
 )
+from memq_dqc.circuit.op import Op
 from memq_dqc.partition import Partitioner
 from memq_dqc.preprocessing.qasm.types import CleanedQuantumGate
 
@@ -42,6 +43,8 @@ def extract_distributed_circuit(
     partitioner: Partitioner,
     *,
     ebit_assignment: bool = True,
+    group_gates: bool = True,
+    max_group_size: int | None = None,
     verbosity: Literal["quiet", "info", "debug"] = "quiet",
 ) -> ast.Program:
     """Extract distributed circuit from partitioning assignment.
@@ -51,6 +54,10 @@ def extract_distributed_circuit(
         ebit_assignment: Whether the compiler assigns concrete e-bit pairs
             into the scheduler DAG. If false, schedulers choose from viable
             e-bit pair candidates.
+        group_gates: Whether compatible remote gate groups should share one
+            cat-entanglement region in the emitted program.
+        max_group_size: Optional maximum number of two-qubit gates per emitted
+            gate group.
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
@@ -83,8 +90,19 @@ def extract_distributed_circuit(
             remote_analysis_timer.elapsed_seconds(),
         )
 
-        _, group_indices, _ = identify_gate_groups(
-            circuit, partitioner, verbose=True
+        if max_group_size is not None and max_group_size < 1:
+            raise ValueError("max_group_size must be positive when provided.")
+
+        reordered_ops, group_indices, _ = identify_gate_groups(
+            circuit,
+            partitioner,
+            verbose=True,
+            max_size=max_group_size,
+        )
+        gate_group_op_ids = (
+            _gate_group_op_ids(reordered_ops, group_indices)
+            if group_gates
+            else ()
         )
         total_grouped_gates = sum(end - start for start, end in group_indices)
         average_group_size = (
@@ -109,6 +127,7 @@ def extract_distributed_circuit(
             comm_qubits_per_qpu=comm_qubits_per_qpu,
             network=partitioner.network,
             ebit_assignment=ebit_assignment,
+            gate_group_op_ids=gate_group_op_ids,
         )
         logger.debug(
             "Built distributed circuit in %.3fs.",
@@ -145,7 +164,8 @@ def extract_distributed_circuit(
         # Routed remote gates may add additional ``rswap`` statements beyond
         # schedule-synthesized swaps.
         # TODO: make this exact and confirm cost calculations
-        assert actual_statement_count >= expected_statement_count
+        if not group_gates:
+            assert actual_statement_count >= expected_statement_count
         exact_cost = _exact_entanglement_cost(distributed)
         partitioner._algorithm._set_exact_cost(exact_cost)
         logger.info(
@@ -160,6 +180,19 @@ def extract_distributed_circuit(
             average_group_size,
         )
         return distributed.program
+
+
+def _gate_group_op_ids(
+    reordered_ops: Sequence[Op],
+    group_indices: set[tuple[int, int]],
+) -> tuple[tuple[int, ...], ...]:
+    """Return grouped operation IDs from reordered gate-group ranges."""
+    groups: list[tuple[int, ...]] = []
+    for start, end in sorted(group_indices):
+        op_ids = tuple(op.op_id for op in reordered_ops[start:end])
+        if len(op_ids) > 1:
+            groups.append(op_ids)
+    return tuple(groups)
 
 
 def _validated_partitioner_outputs(

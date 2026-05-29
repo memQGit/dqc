@@ -465,8 +465,6 @@ def test_distributed_dag_remote_gate_local_swaps_follow_path_order(
         "catent",
         "rcx",
         "catdisent",
-        "swap",
-        "swap",
     ]
     # swap
     assert remote_gate_sequence[0].qubits == [
@@ -497,16 +495,66 @@ def test_distributed_dag_remote_gate_local_swaps_follow_path_order(
         CircuitQubit("c0", 0),
         CircuitQubit("c1", 0),
     ]
-    # swap
-    assert remote_gate_sequence[5].qubits == [
-        CircuitQubit("q1", 1),
-        CircuitQubit("q1", 2),
+
+
+def test_distributed_dag_tracks_persistent_local_routing_swaps(
+    tmp_path: Path,
+) -> None:
+    class _MultiHopNetwork:
+        def __init__(self) -> None:
+            self.qubit_type_map = {
+                PhysicalQubit(0, 0, "computation"): "computation",
+                PhysicalQubit(1, 0, "computation"): "computation",
+            }
+
+        def get_comm_pair_options(self, qubit_a, qubit_b):
+            comm_pair = (
+                PhysicalQubit(0, 0, "communication"),
+                PhysicalQubit(1, 0, "communication"),
+            )
+            return [
+                (
+                    3,
+                    comm_pair,
+                    (
+                        [qubit_a, comm_pair[0]],
+                        [
+                            qubit_b,
+                            PhysicalQubit(qubit_b.qpu_id, 1, "computation"),
+                            PhysicalQubit(qubit_b.qpu_id, 2, "computation"),
+                            comm_pair[1],
+                        ],
+                    ),
+                )
+            ]
+
+    qasm_path = tmp_path / "remote_then_local.qasm"
+    qasm_path.write_text(
+        "OPENQASM 3.0;\nqubit[2] q;\ncx q[0], q[1];\nh q[1];\n",
+        encoding="utf-8",
+    )
+    circuit = _build_memq_circuit(qasm_path)
+    remote_statement_ids = {circuit.mono.ops[0].statement_id}
+
+    distributed = _build_distributed(
+        circuit,
+        remote_statement_ids=remote_statement_ids,
+        swaps_schedule=[],
+        windows=[circuit.mono.ops],
+        schedule=[{QPU(id=0): {0}, QPU(id=1): {1}}],
+        comp_qubits_per_qpu=[3, 3],
+        comm_qubits_per_qpu=[1, 1],
+        network=_MultiHopNetwork(),
+    )
+
+    local_h = [
+        statement
+        for statement in distributed.statements
+        if isinstance(statement, CleanedQuantumGate) and statement.name == "h"
     ]
-    # swap
-    assert remote_gate_sequence[6].qubits == [
-        CircuitQubit("q1", 0),
-        CircuitQubit("q1", 1),
-    ]
+
+    assert len(local_h) == 1
+    assert local_h[0].qubits == [CircuitQubit("q1", 2)]
 
 
 def test_distributed_dag_remote_gate_rejects_comm_data_operands(
@@ -739,10 +787,46 @@ def test_distributed_dag_routes_remote_gate_through_intermediary_qpu(
         and statement.name == "rcx"
     ]
 
-    assert len(routed_rswaps) == 2
+    assert len(routed_rswaps) == 1
     assert all(len(statement.qubits) == 6 for statement in routed_rswaps)
     assert len(routed_remote_gates) == 1
     assert len(routed_remote_gates[0].qubits) == 4
+
+
+def test_distributed_dag_tracks_persistent_routed_remote_gate_hops(
+    tmp_path: Path,
+    simple1_network_path: Path,
+) -> None:
+    network_path = simple1_network_path.parent / "nonuniform_1.json"
+    network = NetworkGraph(str(network_path))
+
+    qasm_path = tmp_path / "routed_remote_then_local.qasm"
+    qasm_path.write_text(
+        "OPENQASM 3.0;\nqubit[2] q;\ncx q[0], q[1];\nh q[0];\n",
+        encoding="utf-8",
+    )
+    circuit = _build_memq_circuit(qasm_path)
+    remote_statement_ids = {circuit.mono.ops[0].statement_id}
+
+    distributed = _build_distributed(
+        circuit,
+        remote_statement_ids=remote_statement_ids,
+        swaps_schedule=[],
+        windows=[circuit.mono.ops],
+        schedule=[{QPU(id=1): {0}, QPU(id=2): set(), QPU(id=3): {1}}],
+        comp_qubits_per_qpu=network.comp_qubits_per_qpu(),
+        comm_qubits_per_qpu=network.comm_qubits_per_qpu(),
+        network=network,
+    )
+
+    local_h = [
+        statement
+        for statement in distributed.statements
+        if isinstance(statement, CleanedQuantumGate) and statement.name == "h"
+    ]
+
+    assert len(local_h) == 1
+    assert local_h[0].qubits == [CircuitQubit("q2", 0)]
 
 
 def test_distributed_dag_remote_swaps_require_network(
