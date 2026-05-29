@@ -30,6 +30,7 @@ coverage.xml
 scripts/
 results/
 nvidia_demo/
+TEMPORARY_TEST.qasm
 # Local caching
 .cache/
 
