@@ -22,6 +22,9 @@ classifiers = [
     "Intended Audience :: Science/Research",
 ]
 
+[project.scripts]
+bench = "memq_dqc._bench:main"
+
 [build-system]
 requires = ["uv_build>=0.9.24,<0.10.0"]
 build-backend = "uv_build"
