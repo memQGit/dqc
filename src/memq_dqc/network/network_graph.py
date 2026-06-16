@@ -270,14 +270,8 @@ class NetworkGraph:
             )
 
         local_graph = self._local_only_graph()
-        paths_a, path_len_a = nx.predecessor(
-            local_graph, qubit_a, return_seen=True
-        )
-        paths_b, path_len_b = nx.predecessor(
-            local_graph, qubit_b, return_seen=True
-        )
-        costs_a = {node: path_len - 1 for node, path_len in path_len_a.items()}
-        costs_b = {node: path_len - 1 for node, path_len in path_len_b.items()}
+        data_paths_a = self._data_paths_to_comm_qubits(qubit_a, local_graph)
+        data_paths_b = self._data_paths_to_comm_qubits(qubit_b, local_graph)
 
         # Iterate through each set of comm qubit pairs, assemble path options
         pair_options: list[
@@ -288,15 +282,15 @@ class NetworkGraph:
             ]
         ] = []
         for comm_a, comm_b in potential_pairs:
-            if comm_a not in costs_a or comm_b not in costs_b:
+            option_a = data_paths_a.get(comm_a)
+            option_b = data_paths_b.get(comm_b)
+            if option_a is None or option_b is None:
                 continue
-            path_a = self._construct_path(paths_a, qubit_a, comm_a)
-            path_b = self._construct_path(paths_b, qubit_b, comm_b)
-            if path_a is None or path_b is None:
-                continue
+            cost_a, path_a = option_a
+            cost_b, path_b = option_b
             pair_options.append(
                 (
-                    costs_a[comm_a] + costs_b[comm_b],
+                    cost_a + cost_b,
                     (comm_a, comm_b),
                     (path_a, path_b),
                 )
@@ -546,6 +540,55 @@ class NetworkGraph:
             node=target,
             cache=cache,
         )
+
+    def _data_paths_to_comm_qubits(
+        self,
+        source: PhysicalQubit,
+        local_graph: nx.Graph,
+    ) -> dict[PhysicalQubit, tuple[int, list[PhysicalQubit]]]:
+        """Map reachable comm qubits to the cheapest valid data path.
+
+        A valid data path starts at ``source``, traverses only computation
+        qubits, and terminates on a communication qubit. Restricting the
+        interior of the path to computation qubits prevents shortest-path
+        search from routing a data qubit *through* one communication qubit to
+        reach another, which is not a valid placement for a remote gate.
+
+        Args:
+            source: Computation qubit holding gate data.
+            local_graph: Local-edge-only view of the network graph.
+
+        Returns:
+            Mapping from each reachable communication qubit to a
+            ``(cost, path)`` pair, where ``cost`` is the number of local swaps
+            required and ``path`` lists the qubits from ``source`` to the
+            communication qubit.
+        """
+        computation_nodes = [
+            node for node in local_graph.nodes if node.is_computation
+        ]
+        computation_graph = local_graph.subgraph(computation_nodes)
+        predecessors, reachable = nx.predecessor(
+            computation_graph, source, return_seen=True
+        )
+
+        data_paths: dict[PhysicalQubit, tuple[int, list[PhysicalQubit]]] = {}
+        for comm_qubit in self.communication_qubits():
+            best: tuple[int, list[PhysicalQubit]] | None = None
+            for neighbor in local_graph.neighbors(comm_qubit):
+                if not neighbor.is_computation or neighbor not in reachable:
+                    continue
+                comp_path = self._construct_path(
+                    predecessors, source, neighbor
+                )
+                if comp_path is None:
+                    continue
+                cost = len(comp_path) - 1
+                if best is None or cost < best[0]:
+                    best = (cost, comp_path + [comm_qubit])
+            if best is not None:
+                data_paths[comm_qubit] = best
+        return data_paths
 
     def _valid_comm_pairs(
         self, qubit_a: PhysicalQubit, qubit_b: PhysicalQubit
