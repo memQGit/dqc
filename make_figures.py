@@ -15,8 +15,7 @@ import pandas as pd
 from matplotlib.ticker import FuncFormatter
 
 CSV = Path(
-    "benchmarking/compiler_benchmarking/results/"
-    "benchmark_20260616_112145.csv"
+    "benchmarking/compiler_benchmarking/results/benchmark_20260616_112145.csv"
 )
 OUT = Path("benchmarking/compiler_benchmarking/results/figures")
 OUT.mkdir(parents=True, exist_ok=True)
@@ -106,6 +105,7 @@ def _save(fig: plt.Figure, name: str) -> None:
 
 # ── Figure 1: Algorithm vs baselines ──────────────────────────────────────
 def fig_algo_vs_baseline() -> None:
+    """Plot entanglement cost and overhead per algorithm vs baselines."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.6))
 
     # (a) Geometric-mean EPR per algorithm (geo-mean handles wide range).
@@ -129,7 +129,7 @@ def fig_algo_vs_baseline() -> None:
     )
     ax1.set_ylabel("EPR pairs (geometric mean)")
     ax1.set_title("(a) Entanglement cost across all cases")
-    for b, a in zip(bars, ALGOS):
+    for b, a in zip(bars, ALGOS, strict=True):
         ax1.text(
             b.get_x() + b.get_width() / 2,
             b.get_height(),
@@ -194,6 +194,7 @@ def fig_algo_vs_baseline() -> None:
 
 # ── Figure 2: Topology effects ────────────────────────────────────────────
 def fig_topology() -> None:
+    """Plot EPR cost broken down by network topology."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.6))
 
     # (a) geo-mean EPR per topology grouped by algorithm
@@ -267,6 +268,7 @@ def fig_topology() -> None:
 
 # ── Figure 3: Scaling ─────────────────────────────────────────────────────
 def fig_scaling() -> None:
+    """Plot EPR cost scaling with circuit size."""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4.6))
 
     # (a) EPR vs two-qubit gate count (the true cost driver), log-log.
@@ -331,9 +333,7 @@ def fig_scaling() -> None:
     ax2.legend(fontsize=8)
     ax2.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
 
-    fig.suptitle(
-        "Scaling with circuit size", fontsize=13, fontweight="bold"
-    )
+    fig.suptitle("Scaling with circuit size", fontsize=13, fontweight="bold")
     fig.tight_layout(rect=(0, 0, 1, 0.95))
     _save(fig, "fig3_scaling.png")
 

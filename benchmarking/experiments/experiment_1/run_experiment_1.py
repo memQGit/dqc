@@ -28,7 +28,6 @@ import datetime
 import logging
 import re
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 _EXPERIMENT_DIR = Path(__file__).resolve().parent
