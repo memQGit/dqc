@@ -486,6 +486,34 @@ def _plotly_traces(
     return json.dumps(traces)
 
 
+def _circuit_epr_data(
+    results: list[CompilerBenchmarkResult],
+) -> str:
+    """Return JSON of raw EPR data keyed by circuit name.
+
+    Each circuit maps to a list of records containing the topology,
+    partitioning algorithm, and exact EPR pair count. Used by the
+    interactive EPR explorer in the HTML dashboard.
+
+    Args:
+        results: Benchmark results.
+
+    Returns:
+        JSON string mapping circuit name to a list of
+        ``{topology, algorithm, epr}`` dicts.
+    """
+    data: dict[str, list[dict[str, str | float]]] = {}
+    for r in results:
+        data.setdefault(r.circuit_name, []).append(
+            {
+                "topology": r.network_topology,
+                "algorithm": r.algorithm,
+                "epr": round(r.epr_pairs, 2),
+            }
+        )
+    return json.dumps(data)
+
+
 def _summary_rows_html(
     results: list[CompilerBenchmarkResult],
     algorithms: list[str],
@@ -594,12 +622,8 @@ def _build_dashboard_html(
     summary_html = _summary_rows_html(results, algorithms)
     full_rows_html = _full_table_rows_html(results)
 
-    epr_by_circuit = _plotly_traces(
-        results, algorithms, "circuit_name", "epr_pairs"
-    )
-    epr_by_topology = _plotly_traces(
-        results, algorithms, "network_topology", "epr_pairs"
-    )
+    circuit_epr_json = _circuit_epr_data(results)
+    circuits_json = json.dumps(sorted({r.circuit_name for r in results}))
     overhead_by_circuit = _plotly_traces(
         results, algorithms, "circuit_name", "ops_overhead"
     )
@@ -640,10 +664,22 @@ def _build_dashboard_html(
       border-radius: 8px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem;
       box-shadow: 0 1px 3px rgba(0,0,0,.04);
     }}
-    .chart-grid {{
-      display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;
+    .explorer-controls {{
+      display: flex; align-items: center; gap: 1rem;
+      margin-bottom: 1rem; font-size: 0.85rem; font-weight: 600;
     }}
-    @media (max-width: 900px) {{ .chart-grid {{ grid-template-columns: 1fr; }} }}
+    .explorer-controls select {{
+      border: 1px solid #d8dce8; border-radius: 4px;
+      padding: 4px 8px; font-size: 0.82rem; background: #fff; cursor: pointer;
+    }}
+    .toggle-btn {{
+      background: #eef0f7; border: 1px solid #d8dce8; border-radius: 4px;
+      padding: 4px 12px; font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; color: #333; transition: background 0.15s, color 0.15s;
+    }}
+    .toggle-btn.active {{
+      background: #4a6cf7; color: #fff; border-color: #3a5ce7;
+    }}
     table {{
       width: 100%; border-collapse: collapse; font-size: 0.8rem;
     }}
@@ -685,20 +721,19 @@ def _build_dashboard_html(
   </table>
 </div>
 
-<h2>EPR Pairs by Circuit &mdash; mean across topologies</h2>
+<h2>EPR Pairs Explorer</h2>
 <div class="card">
-  <div id="chart-epr-circuit" style="height:380px"></div>
+  <div class="explorer-controls">
+    <label for="circuit-select">Circuit:</label>
+    <select id="circuit-select" onchange="renderEprChart()"></select>
+    <button id="avg-toggle" class="toggle-btn" onclick="toggleAverage()">Average across topologies: OFF</button>
+  </div>
+  <div id="chart-epr-algo" style="height:380px"></div>
 </div>
 
-<div class="chart-grid">
-  <div class="card">
-    <h2 style="margin-top:0">EPR Pairs by Topology &mdash; mean across circuits</h2>
-    <div id="chart-epr-topology" style="height:320px"></div>
-  </div>
-  <div class="card">
-    <h2 style="margin-top:0">Ops Overhead by Circuit &mdash; mean across topologies</h2>
-    <div id="chart-overhead-circuit" style="height:320px"></div>
-  </div>
+<h2>Ops Overhead by Circuit &mdash; mean across topologies</h2>
+<div class="card">
+  <div id="chart-overhead-circuit" style="height:320px"></div>
 </div>
 
 <h2>Full Results</h2>
@@ -735,16 +770,61 @@ def _build_dashboard_html(
     xaxis: {{tickangle: -38}},
   }};
 
-  Plotly.newPlot("chart-epr-circuit",
-    {epr_by_circuit},
-    {{..._layout, margin: {{t:10, r:10, b:120, l:65}},
-      yaxis: {{title: "EPR Pairs"}}}},
-    {{responsive: true}});
+  const _CIRCUIT_EPR = {circuit_epr_json};
+  const _CIRCUITS = {circuits_json};
+  let _eprAveraged = false;
 
-  Plotly.newPlot("chart-epr-topology",
-    {epr_by_topology},
-    {{..._layout, yaxis: {{title: "EPR Pairs"}}}},
-    {{responsive: true}});
+  (function () {{
+    const sel = document.getElementById("circuit-select");
+    _CIRCUITS.forEach(c => {{
+      const o = document.createElement("option");
+      o.value = o.textContent = c;
+      sel.appendChild(o);
+    }});
+    renderEprChart();
+  }})();
+
+  function toggleAverage() {{
+    _eprAveraged = !_eprAveraged;
+    const btn = document.getElementById("avg-toggle");
+    btn.textContent = "Average across topologies: " + (_eprAveraged ? "ON" : "OFF");
+    btn.classList.toggle("active", _eprAveraged);
+    renderEprChart();
+  }}
+
+  function renderEprChart() {{
+    const circuit = document.getElementById("circuit-select").value;
+    const rows = _CIRCUIT_EPR[circuit] || [];
+    const algos = [...new Set(rows.map(r => r.algorithm))].sort();
+    let traces;
+    if (_eprAveraged) {{
+      const sums = {{}}, counts = {{}};
+      rows.forEach(r => {{
+        sums[r.algorithm] = (sums[r.algorithm] || 0) + r.epr;
+        counts[r.algorithm] = (counts[r.algorithm] || 0) + 1;
+      }});
+      traces = [{{
+        name: "Avg EPR",
+        x: algos,
+        y: algos.map(a => +(sums[a] / counts[a]).toFixed(2)),
+        type: "bar",
+      }}];
+    }} else {{
+      const topos = [...new Set(rows.map(r => r.topology))].sort();
+      traces = algos.map(a => ({{
+        name: a,
+        x: topos,
+        y: topos.map(t => {{
+          const m = rows.find(r => r.algorithm === a && r.topology === t);
+          return m ? +m.epr.toFixed(2) : null;
+        }}),
+        type: "bar",
+      }}));
+    }}
+    Plotly.react("chart-epr-algo", traces,
+      {{..._layout, yaxis: {{title: "EPR Pairs"}}}},
+      {{responsive: true}});
+  }}
 
   Plotly.newPlot("chart-overhead-circuit",
     {overhead_by_circuit},
