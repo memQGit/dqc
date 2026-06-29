@@ -43,8 +43,8 @@ _REMOTE_OPERATION_COSTS: dict[str, int] = {
 # TODO: verifier should also perform some hardware verification, eg. ensuring
 # that local / remote gates reflect actual connectivity
 def verify_distributed_circuit(
-    original_circuit_path: str,
-    dist_circuit_path: str,
+    original: ast.Program | str,
+    distributed: ast.Program | str,
     shots: int = 50000000,
     fidelity_threshold: float = 0.90,
     *,
@@ -56,8 +56,10 @@ def verify_distributed_circuit(
     operations are assumed to operate perfectly.
 
     Args:
-        original_circuit_path: Path to the original circuit file.
-        dist_circuit_path: Path to the distributed circuit file.
+        original: The original circuit, either as a parsed OpenQASM 3 program
+            or a path to its ``.qasm`` file.
+        distributed: The distributed circuit, either as a parsed OpenQASM 3
+            program or a path to its ``.qasm`` file.
         shots: Number of shots to execute the circuits for.
         fidelity_threshold: The minimum fidelity required for the distributed
             circuit to be considered correct (Hellinger fidelity).
@@ -78,7 +80,10 @@ def verify_distributed_circuit(
         )
 
         original_load_timer = StepTimer()
-        qc_orig = qiskit.qasm3.load(original_circuit_path)
+        if isinstance(original, ast.Program):
+            qc_orig = qiskit.qasm3.loads(dump_qasm_program(original))
+        else:
+            qc_orig = qiskit.qasm3.load(original)
         logger.debug(
             "Loaded original circuit in %.3fs.",
             original_load_timer.elapsed_seconds(),
@@ -93,8 +98,11 @@ def verify_distributed_circuit(
         )
 
         mono_timer = StepTimer()
-        mono_circuit = dist_to_mono_circuit(dist_circuit_path)
-        qc_dist_mono = qiskit.qasm3.loads(str(mono_circuit))
+        if isinstance(distributed, ast.Program):
+            mono_qasm = dump_qasm_program(dist_to_mono_program(distributed))
+        else:
+            mono_qasm = dist_to_mono_circuit(distributed)
+        qc_dist_mono = qiskit.qasm3.loads(str(mono_qasm))
         logger.debug(
             "Converted distributed circuit to monolithic form in %.3fs.",
             mono_timer.elapsed_seconds(),
@@ -185,9 +193,27 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> str:
         circuit.
     """
     dist_prog = parse_qasm_file(dist_circuit_path)
+    return dump_qasm_program(dist_to_mono_program(dist_prog))
+
+
+def dist_to_mono_program(dist_program: ast.Program) -> ast.Program:
+    """Rewrite a distributed program into an executable monolithic program.
+
+    Performs the same rewrite as :func:`dist_to_mono_circuit` but operates on
+    an in-memory program rather than a file, so no serialization round-trip is
+    required. See :func:`dist_to_mono_circuit` for the full list of
+    transformations applied.
+
+    Args:
+        dist_program: Parsed distributed OpenQASM 3 program.
+
+    Returns:
+        An equivalent monolithic OpenQASM 3 program with remote operations
+        replaced by their local equivalents.
+    """
     new_statements = []
     # iterate through program statements and remove remote gates
-    for stmt in dist_prog.statements:
+    for stmt in dist_program.statements:
         if not isinstance(stmt, ast.Statement):
             new_statements.append(stmt)
             continue
@@ -224,10 +250,7 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> str:
             elif any(is_comm_qubit_reference(qubit) for qubit in stmt.qubits):
                 continue
         new_statements.append(stmt)
-    mono_prog = ast.Program(
-        version=dist_prog.version, statements=new_statements
-    )
-    return dump_qasm_program(mono_prog)
+    return ast.Program(version=dist_program.version, statements=new_statements)
 
 
 def manual_cost_verification(qasm: str) -> int:
