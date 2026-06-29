@@ -7,11 +7,16 @@
 
 """Public package interface for memq-dqc.
 
-This module provides a small, stable surface for imports and package
-metadata.
+This module exposes the core workflow objects and configuration types
+needed for distributed quantum compilation.
 """
 
+from .builder import extract_distributed_circuit
+from .network import NetworkGraph
+from .partition import Partitioner
+from .scheduler import Scheduler
 from .settings import (
+    DESSimulationSettings,
     EntanglementGenerationProfile,
     GlobalSettings,
     ModalityProfile,
@@ -21,26 +26,21 @@ from .settings import (
     load_settings,
     load_settings_file,
 )
-
-
-def hello() -> str:
-    """Return a simple greeting used for sanity checks.
-
-    Returns:
-        A friendly greeting string.
-    """
-    # TODO: update this
-    return "Hello from memq-dqc!"
-
+from .verify import verify_distributed_circuit
 
 __all__ = [
+    "DESSimulationSettings",
     "EntanglementGenerationProfile",
     "GlobalSettings",
     "ModalityProfile",
+    "NetworkGraph",
+    "Partitioner",
+    "Scheduler",
     "Settings",
     "VerificationSettings",
     "default_settings_path",
-    "hello",
+    "extract_distributed_circuit",
     "load_settings",
     "load_settings_file",
+    "verify_distributed_circuit",
 ]

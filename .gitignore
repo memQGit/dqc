@@ -30,6 +30,7 @@ coverage.xml
 scripts/
 results/
 nvidia_demo/
+TEMPORARY_TEST.qasm
 # Local caching
 .cache/
 
@@ -44,9 +45,10 @@ genesis/
 .agents/
 #benchmarking/
 examples/
-# CODEX
+# AI
 .codex/
 AGENTS.md
+CLAUDE.md
 local_only/
 
 # Jupyter checkpoints

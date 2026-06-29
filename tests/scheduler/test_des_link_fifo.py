@@ -5,6 +5,8 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import math
+
 import pytest
 from openqasm3 import ast
 
@@ -137,6 +139,7 @@ def _patch_scheduler_timing_model(
     rate: float,
     local_one_qubit_gate_time: float = 10.0,
     local_two_qubit_gate_time: float = 500.0,
+    des_entanglement_time_step: float = 1.0,
     epr_lifetime: float = 50.0,
 ) -> None:
     def _load_timing_model(
@@ -147,6 +150,7 @@ def _patch_scheduler_timing_model(
             local_one_qubit_gate_time=local_one_qubit_gate_time,
             local_two_qubit_gate_time=local_two_qubit_gate_time,
             entanglement_generation_rate=rate,
+            des_entanglement_time_step=des_entanglement_time_step,
             epr_lifetime=epr_lifetime,
         )
 
@@ -162,7 +166,7 @@ def test_des_link_fifo_schedule_single_cycle_success(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
-    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
+    _patch_scheduler_timing_model(monkeypatch, rate=100.0)
     distributed_circuit = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -176,14 +180,23 @@ def test_des_link_fifo_schedule_single_cycle_success(
     schedule = des_link_fifo_schedule(distributed_circuit, seed=0)
 
     assert isinstance(schedule, OperationSchedule)
-    assert [event.name for event in schedule.operations] == ["epr", "rcx"]
+    assert [event.name for event in schedule.operations] == [
+        "epr",
+        "catent",
+        "rcx",
+        "catdisent",
+    ]
 
-    epr_event, remote_op = schedule.operations
+    epr_event, catent_event, remote_op, catdisent_event = schedule.operations
     assert epr_event.start_time == 0.0
     assert epr_event.duration == 1.0
-    assert remote_op.start_time == 1.0
-    assert remote_op.duration == 513.0
-    assert schedule.makespan == 514.0
+    assert catent_event.start_time == 1.0
+    assert catent_event.duration == 513.0
+    assert remote_op.start_time == 514.0
+    assert remote_op.duration == 500.0
+    assert catdisent_event.start_time == 1014.0
+    assert catdisent_event.duration == 23.0
+    assert schedule.makespan == 1037.0
 
 
 def test_des_link_fifo_schedule_retries_until_seeded_success(
@@ -204,10 +217,15 @@ def test_des_link_fifo_schedule_retries_until_seeded_success(
 
     schedule = des_link_fifo_schedule(distributed_circuit, seed=0)
 
-    epr_event, remote_op = schedule.operations
-    assert epr_event.duration == 3.0
-    assert remote_op.start_time == 3.0
-    assert schedule.makespan == 516.0
+    epr_event, catent_event, remote_op, catdisent_event = schedule.operations
+    assert epr_event.duration == 4.0
+    assert catent_event.start_time == 4.0
+    assert catent_event.duration == 513.0
+    assert remote_op.start_time == 517.0
+    assert remote_op.duration == 500.0
+    assert catdisent_event.start_time == 1017.0
+    assert catdisent_event.duration == 23.0
+    assert schedule.makespan == 1040.0
 
 
 def test_des_link_fifo_schedule_waits_for_data_qubits_before_request(
@@ -215,7 +233,7 @@ def test_des_link_fifo_schedule_waits_for_data_qubits_before_request(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
-    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
+    _patch_scheduler_timing_model(monkeypatch, rate=100.0)
     distributed_circuit = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -234,16 +252,25 @@ def test_des_link_fifo_schedule_waits_for_data_qubits_before_request(
         "x",
         "h",
         "epr",
+        "catent",
         "rcx",
+        "catdisent",
     ]
 
-    x_op, h_op, epr_event, remote_op = schedule.operations
+    x_op, h_op, epr_event, catent_event, remote_op, catdisent_event = (
+        schedule.operations
+    )
     assert x_op.end_time == 10.0
     assert h_op.end_time == 10.0
     assert epr_event.start_time == 10.0
     assert epr_event.duration == 1.0
-    assert remote_op.start_time == 11.0
-    assert schedule.makespan == 524.0
+    assert catent_event.start_time == 11.0
+    assert catent_event.duration == 513.0
+    assert remote_op.start_time == 524.0
+    assert remote_op.duration == 500.0
+    assert catdisent_event.start_time == 1024.0
+    assert catdisent_event.duration == 23.0
+    assert schedule.makespan == 1047.0
 
 
 def test_des_link_fifo_schedule_runs_parallel_requests_on_disjoint_links(
@@ -251,7 +278,7 @@ def test_des_link_fifo_schedule_runs_parallel_requests_on_disjoint_links(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
-    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
+    _patch_scheduler_timing_model(monkeypatch, rate=100.0)
     template = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -296,7 +323,9 @@ def test_des_link_fifo_schedule_runs_parallel_requests_on_disjoint_links(
     assert second_epr.start_time == 0.0
     assert first_remote.start_time == 1.0
     assert second_remote.start_time == 1.0
-    assert schedule.makespan == 514.0
+    assert first_remote.duration == 500.0
+    assert second_remote.duration == 500.0
+    assert schedule.makespan == 501.0
 
 
 def test_scheduler_runs_des_link_fifo_via_registry(
@@ -304,7 +333,7 @@ def test_scheduler_runs_des_link_fifo_via_registry(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
-    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
+    _patch_scheduler_timing_model(monkeypatch, rate=100.0)
     distributed_circuit = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -325,7 +354,9 @@ def test_scheduler_runs_des_link_fifo_via_registry(
     assert isinstance(scheduler.schedule, OperationSchedule)
     assert [event.name for event in scheduler.schedule.operations] == [
         "epr",
+        "catent",
         "rcx",
+        "catdisent",
     ]
 
 
@@ -351,7 +382,7 @@ def test_des_link_fifo_scheduler_uses_profile_rate_defaults(
     )
 
     assert scheduler.t_cycle == pytest.approx(1.0)
-    assert scheduler.p_success == pytest.approx(3.2e-2)
+    assert scheduler.p_success == pytest.approx(1.0 - math.exp(-3.2e-2))
 
 
 def test_des_link_fifo_schedule_rejects_invalid_parameters(
@@ -367,7 +398,8 @@ def test_des_link_fifo_schedule_rejects_invalid_parameters(
         entanglement_time = 2.0
         epr_lifetime = 50.0
         state_teleport_time = 523.0
-        gate_teleport_time = 513.0
+        catent_time = 513.0
+        catdisent_time = 23.0
         des_t_cycle = 0.0
         des_success_probability = 0.0
 
@@ -395,7 +427,7 @@ def test_des_link_fifo_schedule_supports_rswap_with_two_pairs(
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
-    _patch_scheduler_timing_model(monkeypatch, rate=1.0)
+    _patch_scheduler_timing_model(monkeypatch, rate=100.0)
     template = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -432,8 +464,8 @@ def test_des_link_fifo_schedule_supports_rswap_with_two_pairs(
     assert first_epr.duration == 1.0
     assert second_epr.duration == 1.0
     assert rswap_op.start_time == 1.0
-    assert rswap_op.duration == 523.0
-    assert schedule.makespan == 524.0
+    assert rswap_op.duration == 500.0
+    assert schedule.makespan == 501.0
 
 
 def test_des_link_fifo_schedule_waits_for_both_rswap_pairs(
@@ -473,7 +505,8 @@ def test_des_link_fifo_schedule_waits_for_both_rswap_pairs(
     assert first_epr.duration == 3.0
     assert second_epr.duration == 3.0
     assert rswap_op.start_time == 3.0
-    assert schedule.makespan == 526.0
+    assert rswap_op.duration == 500.0
+    assert schedule.makespan == 503.0
 
 
 def test_des_link_fifo_schedule_regenerates_expired_pairs(
@@ -483,7 +516,7 @@ def test_des_link_fifo_schedule_regenerates_expired_pairs(
 ) -> None:
     _patch_scheduler_timing_model(
         monkeypatch,
-        rate=1.0,
+        rate=100.0,
         epr_lifetime=50.0,
     )
     template = _build_distributed_circuit(
@@ -548,4 +581,5 @@ def test_des_link_fifo_schedule_regenerates_expired_pairs(
     assert regenerated_epr.start_time == 51.0
     assert regenerated_epr.duration == 9.0
     assert rswap_op.start_time == 60.0
-    assert schedule.makespan == 583.0
+    assert rswap_op.duration == 500.0
+    assert schedule.makespan == 560.0

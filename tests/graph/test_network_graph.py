@@ -351,3 +351,101 @@ def test_remote_swap_ebit_cost_requires_two_pairs(
 
     with pytest.raises(ValueError, match="No QPU path found"):
         network.remote_swap_ebit_cost(1, 3)
+
+
+def _chained_comm_network_data() -> dict:
+    """Return a two-QPU topology with comm qubits chained on the same chip.
+
+    On each QPU the two communication qubits are linked by a local edge
+    (``c_0_0 — c_0_1``). The shortest local path from data qubit ``q_0_0`` to
+    the far comm qubit ``c_0_1`` therefore passes *through* ``c_0_0`` unless
+    interior comm qubits are excluded from path search.
+    """
+
+    def _comp(label: str, qpu: int, local: list[str]) -> dict:
+        return {
+            "id": label,
+            "type": "computation",
+            "processorId": qpu,
+            "localConnections": local,
+            "remoteConnections": [],
+        }
+
+    def _comm(label: str, qpu: int, local: list[str], remote: str) -> dict:
+        return {
+            "id": label,
+            "type": "communication",
+            "processorId": qpu,
+            "localConnections": local,
+            "remoteConnections": [remote],
+        }
+
+    return {
+        "processors": {
+            "0": {
+                "id": 0,
+                "qubits": {
+                    "computation": ["q_0_0", "q_0_1", "q_0_2"],
+                    "communication": ["c_0_0", "c_0_1"],
+                },
+            },
+            "1": {
+                "id": 1,
+                "qubits": {
+                    "computation": ["q_1_0", "q_1_1", "q_1_2"],
+                    "communication": ["c_1_0", "c_1_1"],
+                },
+            },
+        },
+        "qubits": {
+            "q_0_0": _comp("q_0_0", 0, ["c_0_0", "q_0_1"]),
+            "q_0_1": _comp("q_0_1", 0, ["q_0_0", "q_0_2"]),
+            "q_0_2": _comp("q_0_2", 0, ["q_0_1", "c_0_1"]),
+            "c_0_0": _comm("c_0_0", 0, ["c_0_1", "q_0_0"], "c_1_0"),
+            "c_0_1": _comm("c_0_1", 0, ["c_0_0", "q_0_2"], "c_1_1"),
+            "q_1_0": _comp("q_1_0", 1, ["c_1_0", "q_1_1"]),
+            "q_1_1": _comp("q_1_1", 1, ["q_1_0", "q_1_2"]),
+            "q_1_2": _comp("q_1_2", 1, ["q_1_1", "c_1_1"]),
+            "c_1_0": _comm("c_1_0", 1, ["c_1_1", "q_1_0"], "c_0_0"),
+            "c_1_1": _comm("c_1_1", 1, ["c_1_0", "q_1_2"], "c_0_1"),
+        },
+        "connections": [],
+    }
+
+
+def test_comm_pair_options_keep_data_on_computation_qubits(
+    tmp_path: Path,
+) -> None:
+    # Arrange: a topology whose comm qubits are chained on the same chip, so a
+    # naive shortest-path search would route a data qubit through one comm
+    # qubit to reach another (a non-physical placement for a remote gate).
+    path = tmp_path / "chained_comm.json"
+    path.write_text(json.dumps(_chained_comm_network_data()), encoding="utf-8")
+    network = NetworkGraph(str(path))
+    q_0_0 = _node_by_label(network, "q_0_0")
+    q_1_0 = _node_by_label(network, "q_1_0")
+
+    # Act
+    options = network.get_comm_pair_options(q_0_0, q_1_0)
+
+    # Assert: every returned path keeps interior nodes on computation qubits
+    # and only terminates on a communication qubit.
+    for _, _, (path_a, path_b) in options:
+        for local_path in (path_a, path_b):
+            assert local_path[-1].is_communication
+            assert all(node.is_computation for node in local_path[:-1])
+
+    # The far comm pair must still be reachable, via the computation detour
+    # rather than through the on-chip comm-to-comm link.
+    by_comm_pair = {
+        (comm_a.label, comm_b.label): (path_a, path_b)
+        for _, (comm_a, comm_b), (path_a, path_b) in options
+    }
+    assert ("c_0_1", "c_1_1") in by_comm_pair
+    path_a, _ = by_comm_pair[("c_0_1", "c_1_1")]
+    assert [node.label for node in path_a] == [
+        "q_0_0",
+        "q_0_1",
+        "q_0_2",
+        "c_0_1",
+    ]
