@@ -43,8 +43,14 @@ TODO.md
 Genesis/
 genesis/
 .agents/
-#benchmarking/
 examples/
+
+# Benchmarking suite — kept local-only, not shipped to GitHub
+benchmarking/
+/make_figures.py
+src/memq_dqc/_bench.py
+tests/test_scheduler_benchmarking.py
+tests/test_scheduler_makespan_benchmarking.py
 # AI
 .codex/
 AGENTS.md
