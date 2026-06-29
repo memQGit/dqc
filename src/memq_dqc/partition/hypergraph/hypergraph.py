@@ -12,7 +12,7 @@ from __future__ import annotations
 import importlib
 import logging
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from os import PathLike
 from pathlib import Path
 from typing import Any
@@ -59,6 +59,7 @@ class HypergraphPartitioner(BasePartitioner):
         epsilon: float = 0.03,
         max_group_size: int | None = None,
         window_length: int | None = None,
+        respect_qpu_capacities: bool = True,
     ) -> None:
         """Initialize the hypergraph partitioner.
 
@@ -71,12 +72,18 @@ class HypergraphPartitioner(BasePartitioner):
             max_group_size: Optional maximum two-qubit gates per group.
             window_length: Optional window length used only to adapt the
                 static assignment to the existing schedule interface.
+            respect_qpu_capacities: When True, the real per-QPU computation
+                capacities are passed to KahyPar as custom target block
+                weights so it respects non-uniform, fully-packed networks.
+                Set False to reproduce the prior behavior where KahyPar
+                balances uniformly using only ``epsilon``.
         """
         super().__init__(network, program)
         self.config_path = config_path
         self.epsilon = epsilon
         self.max_group_size = max_group_size
         self.window_length = window_length
+        self.respect_qpu_capacities = respect_qpu_capacities
 
     def run(self) -> None:
         """Run grouped-gate hypergraph partitioning.
@@ -101,6 +108,11 @@ class HypergraphPartitioner(BasePartitioner):
             k=len(qpu_ids),
             config_path=resolve_kahypar_config_path(self.config_path),
             epsilon=self.epsilon,
+            block_capacities=(
+                [qpu_capacities[qpu_id] for qpu_id in qpu_ids]
+                if self.respect_qpu_capacities
+                else None
+            ),
         )
         assignment = partition_result_to_assignment(partition_result, qpu_ids)
         _assign_missing_qubits(
@@ -205,6 +217,7 @@ def partition_hypergraph(
     k: int,
     config_path: str | PathLike[str],
     epsilon: float = 0.03,
+    block_capacities: Sequence[int] | None = None,
 ) -> dict[str, int]:
     """Partition hypergraph nodes with KahyPar.
 
@@ -213,12 +226,18 @@ def partition_hypergraph(
         k: Number of partitions.
         config_path: KahyPar INI configuration path.
         epsilon: Allowed KahyPar partition imbalance.
+        block_capacities: Optional per-block maximum qubit capacities. When
+            provided, its length must equal ``k`` and block ``i`` is given
+            ``block_capacities[i]`` as its maximum allowed weight via
+            KahyPar's custom target block weights. When omitted, KahyPar
+            balances uniformly using only ``epsilon``.
 
     Returns:
         Mapping from logical qubit string IDs to partition block IDs.
 
     Raises:
         ImportError: If KahyPar is not installed.
+        ValueError: If ``block_capacities`` is given and its length is not k.
     """
     if not packet_counter:
         return {}
@@ -255,6 +274,13 @@ def partition_hypergraph(
     context.loadINIconfiguration(str(config_path))
     context.setK(k)
     context.setEpsilon(epsilon)
+    if block_capacities is not None:
+        if len(block_capacities) != k:
+            raise ValueError(
+                "block_capacities length must equal k: "
+                f"len={len(block_capacities)}, k={k}."
+            )
+        context.setCustomTargetBlockWeights(list(block_capacities))
     context.suppressOutput(True)
     kahypar.partition(hypergraph, context)
 
