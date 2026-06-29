@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from memq_dqc.circuit import DistributedCircuit
+    from memq_dqc.scheduler.schedule import SchedulerHardwareProfile
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,6 +144,9 @@ class Partitioner:
         self._distributed_ebit_assignment = True
         self._distributed_group_gates = True
         self._distributed_max_group_size: int | None = None
+        self._distributed_group_size_profile: (
+            SchedulerHardwareProfile | None
+        ) = None
 
     def run(
         self,
@@ -150,6 +154,7 @@ class Partitioner:
         ebit_assignment: bool | None = None,
         group_gates: bool = True,
         max_group_size: int | None = None,
+        group_size_profile: SchedulerHardwareProfile | None = None,
         verbosity: Literal["quiet", "info", "debug"] = "quiet",
     ) -> None:
         """Run the configured partitioning algorithm.
@@ -164,6 +169,9 @@ class Partitioner:
                 remote gate groups inside a shared cat-entanglement region.
             max_group_size: Optional maximum number of two-qubit gates per
                 emitted gate group.
+            group_size_profile: Scheduler hardware profile whose timing bounds
+                each gate group's duration to the EPR lifetime. Defaults to
+                ``neutral_atom.polarization`` when omitted.
             verbosity: Logging verbosity for this workflow call.
 
         Updates:
@@ -177,6 +185,7 @@ class Partitioner:
         )
         self._distributed_group_gates = group_gates
         self._distributed_max_group_size = max_group_size
+        self._distributed_group_size_profile = group_size_profile
         with workflow_logging(verbosity):
             timer = StepTimer()
             logger.info(
@@ -297,6 +306,7 @@ class Partitioner:
             ebit_assignment=self._distributed_ebit_assignment,
             group_gates=self._distributed_group_gates,
             max_group_size=self._distributed_max_group_size,
+            group_size_profile=self._distributed_group_size_profile,
             verbosity=verbosity,
         )
 

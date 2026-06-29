@@ -21,6 +21,7 @@ from memq_dqc.partition import Partitioner
 from memq_dqc.partition.partitioner import QPU, BasePartitioner
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
+from memq_dqc.scheduler import SchedulerHardwareProfile
 from memq_dqc.utils import get_windows
 
 
@@ -341,6 +342,38 @@ def test_partitioner_max_group_size_limits_emitted_grouping(
         "catdisent",
     ]
     assert partitioner.cost == 2.0
+
+
+def test_partitioner_group_size_profile_caps_grouping_by_epr_lifetime(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = _shared_control_remote_program(tmp_path)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo=_ThreeQubitSharedControlPartitioner(network, program),
+    )
+    # The library-default profile's entanglement generation time exceeds the
+    # EPR lifetime, leaving a negative budget so no gate can join the seed and
+    # grouping collapses to one remote gate per cat-entanglement region.
+    partitioner.run(group_size_profile=SchedulerHardwareProfile())
+
+    assert _quantum_gate_names(partitioner) == [
+        "catent",
+        "rcx",
+        "catdisent",
+        "rz",
+        "catent",
+        "rcx",
+        "catdisent",
+        "rz",
+        "catent",
+        "rcx",
+        "catdisent",
+    ]
+    assert partitioner.cost == 3.0
 
 
 def test_extract_distributed_circuit_adds_comm_registers(

@@ -51,6 +51,12 @@ AGENTS.md
 CLAUDE.md
 local_only/
 
+# memq-dqc walkthrough demo (local hand-off only, not for GitHub)
+ml_demo/
+/demo_network.json
+/demo_network_new.json
+/demo_network_new.png
+
 # Jupyter checkpoints
 .ipynb_checkpoints/
 *-checkpoint.ipynb
