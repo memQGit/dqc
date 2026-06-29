@@ -28,6 +28,10 @@ epr_lifetime = 50 # microseconds
 entanglement_rate = 3.2e-2 # pairs per microsecond
 epr_lifetime = 50 # microseconds
 
+[entanglement_gen.demo.demo] # Illustrative rate for demo purposes
+entanglement_rate = 0.1 # pairs per microsecond
+epr_lifetime = 50 # microseconds
+
 [verification]
 shots = 10000000 # TODO: determine appropriate number or heuristics for this value
 fidelity_threshold = 0.95 # TODO: determine appropriate value
