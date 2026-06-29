@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     import openqasm3.ast as ast
 
     from memq_dqc.partition import Partitioner
+    from memq_dqc.scheduler.schedule import SchedulerHardwareProfile
 
 
 def extract_distributed_circuit(
@@ -30,6 +31,7 @@ def extract_distributed_circuit(
     ebit_assignment: bool = True,
     group_gates: bool = True,
     max_group_size: int | None = None,
+    group_size_profile: SchedulerHardwareProfile | None = None,
     verbosity: Literal["quiet", "info", "debug"] = "quiet",
 ) -> ast.Program:
     """Extract a distributed OpenQASM program from a completed partitioner.
@@ -43,6 +45,9 @@ def extract_distributed_circuit(
             cat-entanglement region in the emitted program.
         max_group_size: Optional maximum number of two-qubit gates per emitted
             gate group.
+        group_size_profile: Scheduler hardware profile whose timing bounds
+            each gate group's duration to the EPR lifetime. Defaults to
+            ``neutral_atom.polarization`` when omitted.
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
@@ -57,6 +62,7 @@ def extract_distributed_circuit(
         ebit_assignment=ebit_assignment,
         group_gates=group_gates,
         max_group_size=max_group_size,
+        group_size_profile=group_size_profile,
         verbosity=verbosity,
     )
 
