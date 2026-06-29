@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -22,6 +23,28 @@ if TYPE_CHECKING:
 
 Pos = tuple[int, int]
 PartitionAssignment = dict["QPU", set[int]]
+GateGroupRange = tuple[int, int]
+GatePacket = list[set[int]]
+
+logger = logging.getLogger(__name__)
+
+_DIAGONAL_GATES = frozenset(
+    {
+        "id",
+        "p",
+        "phase",
+        "z",
+        "s",
+        "sdg",
+        "t",
+        "tdg",
+        "rz",
+        "u1",
+    }
+)
+_ANTIDIAGONAL_GATES = frozenset({"x", "y"})
+_COMMUTING_CONTROL_GATES = _DIAGONAL_GATES | _ANTIDIAGONAL_GATES
+_REVERSIBLE_TARGET_TWO_QUBIT_GATES = frozenset({"cz"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -321,3 +344,306 @@ def circuit_qubit_physical_map(
         interval_maps.append(current_map.copy())
 
     return interval_maps
+
+
+def identify_gate_groups(
+    circuit: Circuit,
+    partition: Partitioner,
+    *,
+    verbose: bool = False,
+    max_size: int | None = None,
+) -> tuple[list[Op], set[GateGroupRange], list[GatePacket]]:
+    """Identify gate groups within a partitioned circuit.
+
+    The grouping logic follows the experimental OpenQASM statement workflow:
+    groups start from a two-qubit gate, continue across compatible gates with
+    a shared control, and may commute one future two-qubit gate into the group
+    when the intervening operations are disjoint. The function only inspects
+    the completed partitioner's windows and does not mutate or install the
+    groups anywhere.
+
+    Args:
+        circuit: Circuit whose operations are partitioned.
+        partition: Completed partitioner containing windows and schedule.
+        verbose: Whether to emit grouping summary logs.
+        max_size: Optional maximum number of two-qubit gates per group.
+
+    Returns:
+        Reordered operations, grouped index ranges in the reordered
+        operations, and gate packets represented by qubit-index sets.
+
+    Raises:
+        ValueError: If partitioning has not produced windows and schedule, or
+            if unsupported operations are present.
+    """
+    windows = partition.windows
+    schedule = partition.schedule
+    if windows is None or schedule is None:
+        raise ValueError(
+            "partition.run() must be called before identifying gate groups."
+        )
+    if len(windows) != len(schedule):
+        raise ValueError("partition windows and schedule must have same size.")
+
+    known_op_ids = {op.op_id for op in circuit.mono.ops}
+    reordered_ops: list[Op] = []
+    group_indices: set[GateGroupRange] = set()
+    for window in windows:
+        unknown_op_ids = [
+            op.op_id for op in window if op.op_id not in known_op_ids
+        ]
+        if unknown_op_ids:
+            raise ValueError(
+                "Partition windows contain operations outside the circuit: "
+                f"{unknown_op_ids}."
+            )
+
+        window_reordered_ops, window_group_indices = (
+            _identify_existing_gate_groups(window, verbose, max_size)
+        )
+        offset = len(reordered_ops)
+        group_indices.update(
+            (offset + start, offset + end)
+            for start, end in window_group_indices
+        )
+        reordered_ops.extend(window_reordered_ops)
+
+    gate_packets = _build_gate_packets(reordered_ops, group_indices)
+    # get the total number of grouped gates and the average group size for logging
+    if verbose:
+        total_grouped_gates = sum(end - start for start, end in group_indices)
+        average_group_size = (
+            total_grouped_gates / len(group_indices) if group_indices else 0
+        )
+        logger.info(
+            "Identified %d gate groups with average size %.3f.",
+            len(group_indices),
+            average_group_size,
+        )
+    return reordered_ops, group_indices, gate_packets
+
+
+def _identify_existing_gate_groups(
+    gate_ops: list[Op],
+    verbose: bool = False,
+    max_size: int | None = None,
+) -> tuple[list[Op], set[GateGroupRange]]:
+    """Identify existing gate groups within one operation window."""
+    reordered_ops: list[Op] = []
+    group_indices: set[GateGroupRange] = set()
+    num_two_qubit_gates = 0
+    op_index = 0
+    while op_index < len(gate_ops):
+        op = gate_ops[op_index]
+        _validate_supported_gate_group_op(op)
+        if len(op.qubits) == 2:
+            num_two_qubit_gates += 1
+            control, target = _get_control_and_target(op)
+            group_ops, ignored_ops = _search_for_group_gate(
+                gate_ops,
+                op_index + 1,
+                control,
+                target,
+                verbose,
+                max_size,
+            )
+            group_start = len(reordered_ops)
+            group_end = group_start + len(group_ops)
+            group_indices.add((group_start, group_end))
+            reordered_ops.extend(group_ops)
+            reordered_ops.extend(ignored_ops)
+
+            op_index += len(group_ops) + len(ignored_ops)
+        else:
+            reordered_ops.append(op)
+            op_index += 1
+
+    if verbose:
+        grouped_gate_count = sum(end - start for start, end in group_indices)
+        average_group_size = (
+            grouped_gate_count / len(group_indices) if group_indices else 0
+        )
+        logger.info("Gate grouping reordered length: %d.", len(reordered_ops))
+        logger.info("Original window length: %d.", len(gate_ops))
+        logger.info("Total 2-qubit gates: %d.", num_two_qubit_gates)
+        logger.info("Average group size: %.3f.", average_group_size)
+        logger.info("Identified %d gate groups.", len(group_indices))
+        logger.info("Total grouped gate operations: %d.", grouped_gate_count)
+
+    return reordered_ops, group_indices
+
+
+def _search_for_group_gate(
+    gate_ops: list[Op],
+    start_index: int,
+    control: int,
+    target: int,
+    verbose: bool = False,
+    max_size: int | None = None,
+) -> tuple[list[Op], list[Op]]:
+    """Search forward from one two-qubit gate to build a gate group."""
+    group_ops = [gate_ops[start_index - 1]]
+    ignored_ops: list[Op] = []
+    targets = {target}
+    group_two_qubit_count = 1
+    pending_one_qubit_gates: list[Op] = []
+
+    for relative_index, op in enumerate(gate_ops[start_index:]):
+        _validate_supported_gate_group_op(op)
+        if len(op.qubits) == 2:
+            op_control, op_target = _get_control_and_target(op)
+
+            if _shares_group_control(op, control, op_control, op_target):
+                if max_size is not None and group_two_qubit_count >= max_size:
+                    ignored_ops.extend(pending_one_qubit_gates)
+                    return group_ops, ignored_ops
+
+                group_ops.extend(pending_one_qubit_gates)
+                pending_one_qubit_gates = []
+                group_ops.append(op)
+                group_two_qubit_count += 1
+                targets.add(op_target)
+            else:
+                return _search_for_commuting_group_gate(
+                    gate_ops,
+                    start_index,
+                    relative_index,
+                    op,
+                    control,
+                    group_ops,
+                    ignored_ops,
+                    pending_one_qubit_gates,
+                    group_two_qubit_count,
+                    verbose,
+                    max_size,
+                )
+
+        elif len(op.qubits) == 1:
+            qubit = op.qubits[0].index
+            if qubit == control:
+                if op.name in _COMMUTING_CONTROL_GATES:
+                    pending_one_qubit_gates.append(op)
+                else:
+                    ignored_ops.extend(pending_one_qubit_gates)
+                    return group_ops, ignored_ops
+            elif qubit in targets:
+                pending_one_qubit_gates.append(op)
+            else:
+                ignored_ops.append(op)
+
+    ignored_ops.extend(pending_one_qubit_gates)
+    return group_ops, ignored_ops
+
+
+def _search_for_commuting_group_gate(
+    gate_ops: list[Op],
+    start_index: int,
+    relative_index: int,
+    terminating_op: Op,
+    control: int,
+    group_ops: list[Op],
+    ignored_ops: list[Op],
+    pending_one_qubit_gates: list[Op],
+    group_two_qubit_count: int,
+    verbose: bool,
+    max_size: int | None,
+) -> tuple[list[Op], list[Op]]:
+    """Try to commute one future two-qubit gate into the active group."""
+    single_qubit_gates_in_between: list[Op] = []
+    search_start = start_index + relative_index + 1
+    for next_op in gate_ops[search_start:]:
+        _validate_supported_gate_group_op(next_op)
+        if len(next_op.qubits) == 1:
+            single_qubit_gates_in_between.append(next_op)
+            continue
+        if len(next_op.qubits) != 2:
+            continue
+
+        next_control, next_target = _get_control_and_target(next_op)
+        disjoint = _disjoint_ops(terminating_op, next_op)
+        shares_group_control = _shares_group_control(
+            next_op,
+            control,
+            next_control,
+            next_target,
+        )
+        blocking_one_qubit_gates = [
+            gate
+            for gate in single_qubit_gates_in_between
+            if not _disjoint_ops(next_op, gate)
+        ]
+        size_available = max_size is None or group_two_qubit_count < max_size
+
+        if (
+            disjoint
+            and shares_group_control
+            and not blocking_one_qubit_gates
+            and size_available
+        ):
+            group_ops.extend(pending_one_qubit_gates)
+            group_ops.append(next_op)
+            ignored_ops.extend(
+                [terminating_op, *single_qubit_gates_in_between]
+            )
+        else:
+            ignored_ops.extend(pending_one_qubit_gates)
+        return group_ops, ignored_ops
+
+    ignored_ops.extend(pending_one_qubit_gates)
+    return group_ops, ignored_ops
+
+
+def _get_control_and_target(op: Op) -> tuple[int, int]:
+    """Return the first and second qubits of a two-qubit operation."""
+    if len(op.qubits) != 2:
+        raise ValueError("Expected a two-qubit operation.")
+    return op.qubits[0].index, op.qubits[1].index
+
+
+def _get_op_qubits(op: Op) -> set[int]:
+    """Return the logical qubit indices touched by an operation."""
+    return {qubit.index for qubit in op.qubits}
+
+
+def _disjoint_ops(op_a: Op, op_b: Op) -> bool:
+    """Return whether two operations act on disjoint logical qubits."""
+    return _get_op_qubits(op_a).isdisjoint(_get_op_qubits(op_b))
+
+
+def _format_op(op: Op) -> str:
+    """Format an operation for debug logging."""
+    qubits = " ".join(f"q[{qubit.index}]" for qubit in op.qubits)
+    return f"{op.name} {qubits}"
+
+
+def _shares_group_control(
+    op: Op,
+    group_control: int,
+    op_control: int,
+    op_target: int,
+) -> bool:
+    """Return whether an operation continues a shared-control group."""
+    return op_control == group_control or (
+        op_target == group_control
+        and op.name in _REVERSIBLE_TARGET_TWO_QUBIT_GATES
+    )
+
+
+def _build_gate_packets(
+    gate_ops: list[Op],
+    group_indices: set[GateGroupRange],
+) -> list[GatePacket]:
+    """Build qubit packets for each identified gate group."""
+    return [
+        [_get_op_qubits(op) for op in gate_ops[start:end]]
+        for start, end in sorted(group_indices)
+    ]
+
+
+def _validate_supported_gate_group_op(op: Op) -> None:
+    """Validate that an operation can participate in gate grouping."""
+    if len(op.qubits) not in {1, 2}:
+        raise ValueError(
+            "Only single- and two-qubit operations are supported for "
+            f"gate grouping. Received {op.name!r} on {len(op.qubits)} qubits."
+        )

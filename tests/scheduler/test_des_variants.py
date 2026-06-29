@@ -199,6 +199,42 @@ def _build_canonical_three_request_case() -> DistributedCircuit:
     )
 
 
+def _build_initial_link_contention_case() -> DistributedCircuit:
+    ops = [
+        _remote_gate(0, "rswap", "q0", "q1"),
+        _remote_gate(1, "rcx", "q2", "q3"),
+        _remote_gate(2, "rcx", "q4", "q5"),
+        _local_gate(3, "x", "q4"),
+        _local_gate(4, "h", "q4"),
+        _local_gate(5, "z", "q4"),
+        _local_gate(6, "x", "q4"),
+        _local_gate(7, "h", "q4"),
+    ]
+
+    graph = nx.DiGraph()
+    for op in ops:
+        graph.add_node(op.op_id, op=op)
+
+    for predecessor, successor in (
+        (2, 3),
+        (3, 4),
+        (4, 5),
+        (5, 6),
+        (6, 7),
+    ):
+        graph.add_edge(predecessor, successor)
+
+    return DistributedCircuit(
+        program=ast.Program(statements=[], version="3.0"),
+        statements=[],
+        ops=ops,
+        num_two_qubit_gates=3,
+        num_remote_gates=3,
+        num_local_swaps_added=0,
+        dag=_SyntheticDAG(graph),
+    )
+
+
 def _patch_scheduler_timing_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -209,7 +245,8 @@ def _patch_scheduler_timing_model(
             hardware_profile=hardware_profile,
             local_one_qubit_gate_time=1.0,
             local_two_qubit_gate_time=5.0,
-            entanglement_generation_rate=1.0,
+            entanglement_generation_rate=100.0,
+            des_entanglement_time_step=1.0,
             epr_lifetime=50.0,
         )
 
@@ -239,7 +276,9 @@ def test_scheduler_runs_des_link_fifo_via_clear_registry_name(
     assert isinstance(scheduler.schedule, OperationSchedule)
     assert [event.name for event in scheduler.schedule.operations] == [
         "epr",
+        "catent",
         "rcx",
+        "catdisent",
     ]
 
 
@@ -329,6 +368,39 @@ def test_critical_path_variant_prefers_larger_remaining_path(
     assert next_request_id == 0
 
 
+def test_des_link_variants_arbitrate_initial_same_time_contention(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_scheduler_timing_model(monkeypatch)
+    distributed_circuit = _build_initial_link_contention_case()
+
+    first_remote_starts = {}
+    for algorithm in (
+        "des_link_fifo",
+        "des_link_shortest_duration",
+        "des_link_critical_path",
+    ):
+        scheduler = Scheduler(
+            distributed_circuit,
+            algo=algorithm,
+            profile=SchedulerHardwareProfile(),
+            algo_kwargs={"seed": 0},
+        )
+        scheduler.run()
+        assert scheduler.schedule is not None
+        first_remote_starts[algorithm] = next(
+            event.op_id
+            for event in scheduler.schedule.operations
+            if hasattr(event, "op_id") and event.op_id in {0, 1, 2}
+        )
+
+    assert first_remote_starts == {
+        "des_link_fifo": 0,
+        "des_link_shortest_duration": 0,
+        "des_link_critical_path": 2,
+    }
+
+
 def test_des_variants_diverge_on_shared_link_queue(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -358,42 +430,42 @@ def test_des_variants_diverge_on_shared_link_queue(
         }
 
     assert makespans == {
-        "des_link_fifo": 18.0,
-        "des_link_shortest_duration": 17.0,
-        "des_link_critical_path": 16.0,
+        "des_link_fifo": 14.0,
+        "des_link_shortest_duration": 14.0,
+        "des_link_critical_path": 11.0,
     }
     assert start_times["des_link_fifo"] == {
         0: 1.0,
         1: 2.0,
         2: 3.0,
         3: 4.0,
-        4: 13.0,
-        5: 14.0,
-        6: 15.0,
-        7: 16.0,
-        8: 17.0,
+        4: 9.0,
+        5: 10.0,
+        6: 11.0,
+        7: 12.0,
+        8: 13.0,
     }
     assert start_times["des_link_shortest_duration"] == {
         0: 1.0,
-        1: 4.0,
-        2: 2.0,
-        3: 3.0,
-        4: 12.0,
-        5: 13.0,
-        6: 14.0,
-        7: 15.0,
-        8: 16.0,
+        1: 2.0,
+        2: 3.0,
+        3: 4.0,
+        4: 9.0,
+        5: 10.0,
+        6: 11.0,
+        7: 12.0,
+        8: 13.0,
     }
     assert start_times["des_link_critical_path"] == {
-        0: 1.0,
+        0: 2.0,
         1: 3.0,
         2: 4.0,
-        3: 2.0,
-        4: 11.0,
-        5: 12.0,
-        6: 13.0,
-        7: 14.0,
-        8: 15.0,
+        3: 1.0,
+        4: 6.0,
+        5: 7.0,
+        6: 8.0,
+        7: 9.0,
+        8: 10.0,
     }
 
 
@@ -428,7 +500,7 @@ def test_des_variants_diverge_on_canonical_three_request_queue(
         )
 
     assert results == {
-        "des_link_fifo": (23.0, [1, 2, 3]),
-        "des_link_shortest_duration": (22.0, [2, 3, 1]),
-        "des_link_critical_path": (21.0, [3, 1, 2]),
+        "des_link_fifo": (19.0, [1, 2, 3]),
+        "des_link_shortest_duration": (19.0, [1, 2, 3]),
+        "des_link_critical_path": (16.0, [3, 1, 2]),
     }

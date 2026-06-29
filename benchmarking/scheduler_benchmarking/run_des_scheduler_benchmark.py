@@ -4,7 +4,7 @@ Most cases mirror the compiler pipeline used by
 ``scripts/samples/full_algo_sample.py``:
 
 1. Load a QASM circuit and network topology.
-2. Partition the circuit with the standard ``cisco`` partitioner.
+2. Partition the circuit with the standard ``Interaction`` partitioner.
 3. Extract the distributed circuit with scheduler-assigned e-bits.
 4. Run each DES-based scheduler on the same distributed circuit.
 5. Print makespan comparisons to the terminal.
@@ -26,7 +26,6 @@ from typing import cast
 import networkx as nx
 from openqasm3 import ast
 
-from memq_dqc.builder import extract_distributed_circuit
 from memq_dqc.circuit import DistributedCircuit
 from memq_dqc.circuit.dag import DistributedCircuitDAG
 from memq_dqc.circuit.op import Op
@@ -34,10 +33,22 @@ from memq_dqc.network import NetworkGraph, PhysicalQubit
 from memq_dqc.partition import Partitioner
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.preprocessing.qasm.types import CircuitQubit
-from memq_dqc.scheduler import Scheduler, SchedulerHardwareProfile
+from memq_dqc.scheduler import (
+    DESLinkCriticalPathScheduler,
+    DESLinkFIFOScheduler,
+    DESLinkShortestDurationScheduler,
+    Scheduler,
+    SchedulerHardwareProfile,
+)
+from memq_dqc.scheduler.des_link_scheduler import (
+    BaseDESLinkScheduler,
+    _LinkState,
+    _QueueEvent,
+)
+from memq_dqc.settings import load_settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_COMPILER_ALGO = "cisco"
+DEFAULT_COMPILER_ALGO = "interaction"
 DEFAULT_DES_ALGORITHMS: tuple[str, ...] = (
     "des_link_fifo",
     "des_link_shortest_duration",
@@ -48,6 +59,154 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
+class SchedulerArbitrationStats:
+    """Link-arbitration diagnostics for one DES scheduler run.
+
+    Attributes:
+        pending_enqueues: Number of link requests that entered a pending queue.
+        policy_pops: Number of pending requests selected by the link policy.
+        multi_candidate_decisions: Number of selections with more than one
+            pending request available.
+        same_time_batches: Number of same-time same-link request batches.
+        non_fifo_selections: Number of multi-candidate selections that did not
+            pick the oldest pending request.
+        max_pending_depth: Largest observed pending queue depth.
+    """
+
+    pending_enqueues: int = 0
+    policy_pops: int = 0
+    multi_candidate_decisions: int = 0
+    same_time_batches: int = 0
+    non_fifo_selections: int = 0
+    max_pending_depth: int = 0
+
+
+@dataclass(slots=True)
+class _MutableSchedulerArbitrationStats:
+    """Mutable accumulator for link-arbitration diagnostics."""
+
+    pending_enqueues: int = 0
+    policy_pops: int = 0
+    multi_candidate_decisions: int = 0
+    same_time_batches: int = 0
+    non_fifo_selections: int = 0
+    max_pending_depth: int = 0
+
+    def frozen(self) -> SchedulerArbitrationStats:
+        """Return an immutable copy for benchmark output."""
+        return SchedulerArbitrationStats(
+            pending_enqueues=self.pending_enqueues,
+            policy_pops=self.policy_pops,
+            multi_candidate_decisions=self.multi_candidate_decisions,
+            same_time_batches=self.same_time_batches,
+            non_fifo_selections=self.non_fifo_selections,
+            max_pending_depth=self.max_pending_depth,
+        )
+
+
+class _BenchmarkArbitrationMixin:
+    """Collect link-arbitration diagnostics while running a DES scheduler."""
+
+    def _reset_run_state(self) -> None:
+        cast(BaseDESLinkScheduler, super())._reset_run_state()
+        self._benchmark_arbitration_stats = _MutableSchedulerArbitrationStats()
+
+    def _collect_same_time_link_start_requests(
+        self,
+        event: _QueueEvent,
+    ) -> tuple[int, ...]:
+        op_ids = cast(
+            BaseDESLinkScheduler,
+            super(),
+        )._collect_same_time_link_start_requests(event)
+        if len(op_ids) > 1:
+            self._benchmark_arbitration_stats.same_time_batches += 1
+        return op_ids
+
+    def _enqueue_pending_request(
+        self,
+        link_state: _LinkState,
+        op_id: int,
+    ) -> None:
+        before_depth = len(link_state.pending_requests)
+        cast(BaseDESLinkScheduler, super())._enqueue_pending_request(
+            link_state,
+            op_id,
+        )
+        after_depth = len(link_state.pending_requests)
+        if after_depth <= before_depth:
+            return
+
+        self._benchmark_arbitration_stats.pending_enqueues += 1
+        self._benchmark_arbitration_stats.max_pending_depth = max(
+            self._benchmark_arbitration_stats.max_pending_depth,
+            after_depth,
+        )
+
+    def _pop_next_pending_request(
+        self,
+        link_state: _LinkState,
+        *,
+        link_key: tuple[str, str],
+        time: float,
+    ) -> int | None:
+        pending_before = tuple(
+            pending_request.op_id
+            for pending_request in link_state.pending_requests
+        )
+        selected_op_id = cast(
+            BaseDESLinkScheduler,
+            super(),
+        )._pop_next_pending_request(
+            link_state,
+            link_key=link_key,
+            time=time,
+        )
+        if selected_op_id is None:
+            return None
+
+        self._benchmark_arbitration_stats.policy_pops += 1
+        if len(pending_before) > 1:
+            self._benchmark_arbitration_stats.multi_candidate_decisions += 1
+            if selected_op_id != pending_before[0]:
+                self._benchmark_arbitration_stats.non_fifo_selections += 1
+        return selected_op_id
+
+    def arbitration_stats(self) -> SchedulerArbitrationStats:
+        """Return diagnostics collected during the most recent run."""
+        return self._benchmark_arbitration_stats.frozen()
+
+
+_DES_LINK_SCHEDULER_CLASSES: dict[str, type[BaseDESLinkScheduler]] = {
+    "des_link_fifo": DESLinkFIFOScheduler,
+    "des_link_shortest_duration": DESLinkShortestDurationScheduler,
+    "des_link_critical_path": DESLinkCriticalPathScheduler,
+}
+_INSTRUMENTED_SCHEDULER_CLASSES: dict[str, type[BaseDESLinkScheduler]] = {}
+
+
+def _instrumented_scheduler_class(
+    algorithm: str,
+) -> type[BaseDESLinkScheduler]:
+    """Return an instrumented scheduler class for a DES-link algorithm."""
+    scheduler_class = _INSTRUMENTED_SCHEDULER_CLASSES.get(algorithm)
+    if scheduler_class is not None:
+        return scheduler_class
+
+    base_class = _DES_LINK_SCHEDULER_CLASSES[algorithm]
+    scheduler_class = cast(
+        type[BaseDESLinkScheduler],
+        type(
+            f"Benchmark{base_class.__name__}",
+            (_BenchmarkArbitrationMixin, base_class),
+            {},
+        ),
+    )
+    _INSTRUMENTED_SCHEDULER_CLASSES[algorithm] = scheduler_class
+    return scheduler_class
+
+
+@dataclass(frozen=True, slots=True)
 class SchedulerBenchmarkResult:
     """Benchmark output for one scheduler run.
 
@@ -55,11 +214,13 @@ class SchedulerBenchmarkResult:
         algorithm: Scheduler registry name.
         makespan: Final schedule makespan.
         operation_count: Number of scheduled visible events.
+        arbitration: Optional link-arbitration diagnostics.
     """
 
     algorithm: str
     makespan: float
     operation_count: int
+    arbitration: SchedulerArbitrationStats | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,6 +483,51 @@ def _build_shortest_vs_tail_contention_case() -> DistributedCircuit:
     )
 
 
+def _build_initial_link_policy_contention_case() -> DistributedCircuit:
+    """Return a case where the first idle-link request differs by policy."""
+    ops = [
+        _remote_gate(
+            op_id=0,
+            name="rswap",
+            data_register_a="q0",
+            data_register_b="q1",
+        ),
+        _remote_gate(
+            op_id=1,
+            name="rcx",
+            data_register_a="q2",
+            data_register_b="q3",
+        ),
+        _remote_gate(
+            op_id=2,
+            name="rcx",
+            data_register_a="q4",
+            data_register_b="q5",
+        ),
+        _local_gate(op_id=3, name="x", register_name="q4"),
+        _local_gate(op_id=4, name="h", register_name="q4"),
+        _local_gate(op_id=5, name="z", register_name="q4"),
+        _local_gate(op_id=6, name="x", register_name="q4"),
+        _local_gate(op_id=7, name="h", register_name="q4"),
+        _local_gate(op_id=8, name="z", register_name="q4"),
+        _local_gate(op_id=9, name="x", register_name="q4"),
+        _local_gate(op_id=10, name="h", register_name="q4"),
+    ]
+    return _distributed_circuit_from_ops(
+        ops=ops,
+        graph_edges=(
+            (2, 3),
+            (3, 4),
+            (4, 5),
+            (5, 6),
+            (6, 7),
+            (7, 8),
+            (8, 9),
+            (9, 10),
+        ),
+    )
+
+
 def _build_critical_path_fanout_contention_case() -> DistributedCircuit:
     """Return a single-link fanout case with uneven downstream tails."""
     ops = [
@@ -473,6 +679,15 @@ BENCHMARK_CASES: tuple[BenchmarkCase, ...] = (
         description=(
             "Scheduler-only single-link case mixing long rswap requests, "
             "short rcx requests, and a dependent tail."
+        ),
+    ),
+    BenchmarkCase(
+        name="synthetic_initial_link_policy_contention",
+        builder=_build_initial_link_policy_contention_case,
+        description=(
+            "Scheduler-only same-time idle-link contention case where FIFO, "
+            "shortest-duration, and critical-path choose different first "
+            "remote starts."
         ),
     ),
     BenchmarkCase(
@@ -642,9 +857,11 @@ def _log_distributed_circuit_summary(
     remote_name_counts = Counter(
         op.name for op in distributed_circuit.ops if op.is_remote
     )
+    remote_operation_count = sum(remote_name_counts.values())
     logger.info(
-        "Distributed ops: %d, remote ops: %d",
+        "Distributed ops: %d, remote/swap ops: %d, remote gates: %d",
         len(distributed_circuit.ops),
+        remote_operation_count,
         distributed_circuit.num_remote_gates,
     )
     if remote_name_counts:
@@ -679,12 +896,7 @@ def build_compiled_distributed_circuit(
         qasm_program,
         algo=compiler_algo,
     )
-    partitioner.run(verbosity="quiet")
-    extract_distributed_circuit(
-        partitioner,
-        ebit_assignment=False,
-        verbosity="quiet",
-    )
+    partitioner.run(verbosity="quiet", ebit_assignment=False)
 
     distributed_circuit = partitioner.circuit.distributed
     if distributed_circuit is None:
@@ -748,23 +960,40 @@ def benchmark_des_algorithms(
     )
     results: list[SchedulerBenchmarkResult] = []
     for algorithm in algorithms:
-        scheduler = Scheduler(
-            distributed_circuit,
-            algo=algorithm,
-            profile=hardware_profile,
-            algo_kwargs={"seed": seed},
-        )
-        scheduler.run(verbosity="quiet")
-        schedule = scheduler.schedule
+        arbitration_stats: SchedulerArbitrationStats | None = None
+        if algorithm in _DES_LINK_SCHEDULER_CLASSES:
+            scheduler_class = _instrumented_scheduler_class(algorithm)
+            des_scheduler = scheduler_class(
+                distributed_circuit,
+                profile=hardware_profile,
+                seed=seed,
+            )
+            des_scheduler.run()
+            schedule = des_scheduler.schedule
+            arbitration_stats = cast(
+                _BenchmarkArbitrationMixin,
+                des_scheduler,
+            ).arbitration_stats()
+        else:
+            scheduler = Scheduler(
+                distributed_circuit,
+                algo=algorithm,
+                profile=hardware_profile,
+                algo_kwargs={"seed": seed},
+            )
+            scheduler.run(verbosity="quiet")
+            schedule = scheduler.schedule
         if schedule is None:
             raise RuntimeError(
                 f"Scheduler {algorithm!r} did not produce a schedule."
             )
+
         results.append(
             SchedulerBenchmarkResult(
                 algorithm=algorithm,
                 makespan=schedule.makespan,
                 operation_count=len(schedule.operations),
+                arbitration=arbitration_stats,
             )
         )
     return results
@@ -776,29 +1005,69 @@ def log_benchmark_results(results: Sequence[SchedulerBenchmarkResult]) -> None:
         logger.info("No scheduler results were produced.")
         return
 
+    time_unit = load_settings().global_settings.time_unit or "time units"
     logger.info("")
     logger.info("DES Scheduler Makespan Comparison")
     logger.info("--------------------------------")
     for result in results:
+        arbitration_suffix = ""
+        if result.arbitration is not None:
+            arbitration_suffix = (
+                " link_choices="
+                f"{result.arbitration.multi_candidate_decisions:4d}"
+                " non_fifo="
+                f"{result.arbitration.non_fifo_selections:4d}"
+                " batches="
+                f"{result.arbitration.same_time_batches:4d}"
+                " maxq="
+                f"{result.arbitration.max_pending_depth:3d}"
+            )
         logger.info(
-            "%-28s makespan=%10.3f operations=%4d",
+            "%-28s makespan=%10.3f %s operations=%4d%s",
             result.algorithm,
             result.makespan,
+            time_unit,
             result.operation_count,
+            arbitration_suffix,
         )
 
     best_result = min(results, key=lambda result: result.makespan)
     logger.info("")
     logger.info(
-        "Best makespan: %s (%.3f)",
+        "Best makespan: %s (%.3f %s)",
         best_result.algorithm,
         best_result.makespan,
+        time_unit,
     )
     if len({result.makespan for result in results}) == 1:
         logger.info(
             "Note: all DES variants tied on this case. The compiled "
             "distributed DAG may already serialize same-link reuse."
         )
+        arbitration_stats = [
+            result.arbitration
+            for result in results
+            if result.arbitration is not None
+        ]
+        if arbitration_stats and all(
+            stats.multi_candidate_decisions == 0 for stats in arbitration_stats
+        ):
+            logger.info(
+                "Arbitration diagnostic: no link policy ever chose among "
+                "multiple pending requests."
+            )
+        elif arbitration_stats and all(
+            stats.non_fifo_selections == 0 for stats in arbitration_stats
+        ):
+            logger.info(
+                "Arbitration diagnostic: multi-candidate choices occurred, "
+                "but every policy selected the FIFO candidate."
+            )
+        elif arbitration_stats:
+            logger.info(
+                "Arbitration diagnostic: policies made different link choices, "
+                "but those choices did not change this case's makespan."
+            )
 
 
 def main() -> None:

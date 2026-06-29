@@ -116,10 +116,19 @@ def test_fifo_schedule_returns_operation_schedule(
     schedule = fifo_schedule(distributed_circuit)
 
     assert isinstance(schedule, OperationSchedule)
-    assert [op.name for op in schedule.operations] == ["x", "h", "epr", "rcx"]
+    assert [op.name for op in schedule.operations] == [
+        "x",
+        "h",
+        "epr",
+        "catent",
+        "rcx",
+        "catdisent",
+    ]
     assert schedule.qubits == ("q0[0]", "q1[0]", "c0[0]", "c1[0]")
 
-    x_op, h_op, epr_op, remote_op = schedule.operations
+    x_op, h_op, epr_op, catent_op, remote_op, catdisent_op = (
+        schedule.operations
+    )
     assert x_op.qubits == ("q0[0]",)
     assert x_op.start_time == 0.0
     assert x_op.duration == 10.0
@@ -130,12 +139,15 @@ def test_fifo_schedule_returns_operation_schedule(
     assert epr_op.start_time == 0.0
     assert epr_op.duration == pytest.approx(_DEFAULT_EPR_DURATION)
     assert epr_op.end_time == pytest.approx(_DEFAULT_EPR_DURATION)
-    assert remote_op.qubits == ("q0[0]", "q1[0]", "c0[0]", "c1[0]")
-    assert remote_op.start_time == pytest.approx(epr_op.end_time)
-    assert remote_op.duration == 513.0
-    assert remote_op.end_time == pytest.approx(_DEFAULT_EPR_DURATION + 513.0)
+    assert catent_op.qubits == ("q0[0]", "q1[0]", "c0[0]", "c1[0]")
+    assert catent_op.start_time == pytest.approx(epr_op.end_time)
+    assert catent_op.duration == 513.0
+    assert remote_op.start_time == pytest.approx(catent_op.end_time)
+    assert remote_op.duration == 500.0
+    assert catdisent_op.start_time == pytest.approx(remote_op.end_time)
+    assert catdisent_op.duration == 23.0
     assert remote_op.is_remote is True
-    assert schedule.makespan == pytest.approx(_DEFAULT_EPR_DURATION + 513.0)
+    assert schedule.makespan == pytest.approx(_DEFAULT_EPR_DURATION + 1036.0)
 
 
 def test_deferred_ebit_assignment_removes_comm_dependency(
@@ -149,16 +161,18 @@ def test_deferred_ebit_assignment_removes_comm_dependency(
         tmp_path,
         ebit_assignment=False,
     )
-
-    assert explicit.dag.graph.has_edge(1, 4)
+    explicit_comm_edge = (3, 6)
+    assert explicit.dag.graph.has_edge(*explicit_comm_edge)
     assert any(
         qubit.register_name.startswith("c")
-        for qubit in explicit.dag.graph[1][4]["qubits"]
+        for qubit in explicit.dag.graph[explicit_comm_edge[0]][
+            explicit_comm_edge[1]
+        ]["qubits"]
     )
-    assert not deferred.dag.graph.has_edge(1, 4)
+    assert not deferred.dag.graph.has_edge(*explicit_comm_edge)
     assert deferred.ebit_candidates_by_op_id is not None
     assert len(deferred.ebit_candidates_by_op_id[1]) == 2
-    assert len(deferred.ebit_candidates_by_op_id[4]) == 2
+    assert len(deferred.ebit_candidates_by_op_id[6]) == 2
 
 
 def test_deferred_ebit_assignment_changes_fifo_schedule(
@@ -202,7 +216,9 @@ def test_scheduler_runs_fifo_by_default(
         "x",
         "h",
         "epr",
+        "catent",
         "rcx",
+        "catdisent",
     ]
 
 
@@ -228,32 +244,6 @@ def test_scheduler_info_verbosity_reports_summary_metrics(
     assert "failed_entanglement_operations=0" in caplog.text
 
 
-def test_scheduler_debug_verbosity_reports_des_queue_snapshots(
-    tmp_path,
-    three_comp_one_comm_x2_network_path,
-    caplog,
-) -> None:
-    distributed_circuit = _build_distributed_circuit(
-        tmp_path,
-        three_comp_one_comm_x2_network_path,
-    )
-    scheduler = Scheduler(
-        distributed_circuit,
-        algo="des_link_fifo",
-        algo_kwargs={"seed": 0},
-    )
-
-    with caplog.at_level(logging.DEBUG, logger="memq_dqc"):
-        scheduler.run(verbosity="debug")
-
-    assert "DES state snapshot: seeded initial ready operations" in caplog.text
-    assert "Queue (" in caplog.text
-    assert "Current event: t=" in caplog.text
-    assert "type=START_EPR_REQUEST" in caplog.text
-    assert "Link states:" in caplog.text
-    assert "Remote requests:" in caplog.text
-
-
 def test_scheduler_accepts_explicit_multiplex_setting(
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -275,12 +265,14 @@ def test_scheduler_accepts_explicit_multiplex_setting(
     (
         "modality",
         "expected_one_qubit",
+        "expected_catent_duration",
         "expected_remote_duration",
+        "expected_catdisent_duration",
         "expected_entanglement_duration",
     ),
     [
-        ("trapped_ion.sr", 13.0, 216.0, 1.0 / 3.5e-6),
-        ("neutral_atom", 1.0, 4.8, 1.0 / 3.5e-6),
+        ("trapped_ion.sr", 13.0, 216.0, 200.0, 29.0, 1.0 / 3.5e-6),
+        ("neutral_atom", 1.0, 4.8, 0.8, 5.0, 1.0 / 3.5e-6),
     ],
 )
 def test_scheduler_accepts_explicit_modality(
@@ -288,7 +280,9 @@ def test_scheduler_accepts_explicit_modality(
     three_comp_one_comm_x2_network_path,
     modality,
     expected_one_qubit,
+    expected_catent_duration,
     expected_remote_duration,
+    expected_catdisent_duration,
     expected_entanglement_duration,
 ) -> None:
     distributed_circuit = _build_distributed_circuit(
@@ -300,11 +294,15 @@ def test_scheduler_accepts_explicit_modality(
     scheduler.run()
 
     assert scheduler.schedule is not None
-    x_op, h_op, epr_op, remote_op = scheduler.schedule.operations
+    x_op, h_op, epr_op, catent_op, remote_op, catdisent_op = (
+        scheduler.schedule.operations
+    )
     assert x_op.duration == pytest.approx(expected_one_qubit)
     assert h_op.duration == pytest.approx(expected_one_qubit)
     assert epr_op.duration == pytest.approx(expected_entanglement_duration)
+    assert catent_op.duration == pytest.approx(expected_catent_duration)
     assert remote_op.duration == pytest.approx(expected_remote_duration)
+    assert catdisent_op.duration == pytest.approx(expected_catdisent_duration)
 
 
 def test_scheduler_accepts_explicit_entanglement_profile(
@@ -323,9 +321,13 @@ def test_scheduler_accepts_explicit_entanglement_profile(
     scheduler.run()
 
     assert scheduler.schedule is not None
-    _x_op, _h_op, epr_op, remote_op = scheduler.schedule.operations
+    _x_op, _h_op, epr_op, catent_op, remote_op, catdisent_op = (
+        scheduler.schedule.operations
+    )
     assert epr_op.duration == pytest.approx(400.0)
-    assert remote_op.duration == pytest.approx(513.0)
+    assert catent_op.duration == pytest.approx(513.0)
+    assert remote_op.duration == pytest.approx(500.0)
+    assert catdisent_op.duration == pytest.approx(23.0)
 
 
 def test_scheduler_profile_object_supports_cross_family_mix(
@@ -346,11 +348,15 @@ def test_scheduler_profile_object_supports_cross_family_mix(
     scheduler.run()
 
     assert scheduler.schedule is not None
-    x_op, h_op, epr_op, remote_op = scheduler.schedule.operations
+    x_op, h_op, epr_op, catent_op, remote_op, catdisent_op = (
+        scheduler.schedule.operations
+    )
     assert x_op.duration == pytest.approx(1.0)
     assert h_op.duration == pytest.approx(1.0)
     assert epr_op.duration == pytest.approx(400.0)
-    assert remote_op.duration == pytest.approx(4.8)
+    assert catent_op.duration == pytest.approx(4.8)
+    assert remote_op.duration == pytest.approx(0.8)
+    assert catdisent_op.duration == pytest.approx(5.0)
 
 
 def test_scheduler_rejects_unknown_algorithm(
@@ -384,10 +390,10 @@ def test_fifo_schedule_builds_per_qubit_timelines(
     }
 
     assert timeline_by_qubit == {
-        "q0[0]": ["x", "rcx"],
-        "q1[0]": ["h", "rcx"],
-        "c0[0]": ["epr", "rcx"],
-        "c1[0]": ["epr", "rcx"],
+        "q0[0]": ["x", "catent", "rcx", "catdisent"],
+        "q1[0]": ["h", "catent", "rcx", "catdisent"],
+        "c0[0]": ["epr", "catent", "rcx", "catdisent"],
+        "c1[0]": ["epr", "catent", "rcx", "catdisent"],
     }
 
 

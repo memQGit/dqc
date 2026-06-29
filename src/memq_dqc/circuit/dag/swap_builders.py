@@ -9,22 +9,26 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from openqasm3 import ast
 
 from memq_dqc.builder.extract_utils import SwapOp
+from memq_dqc.circuit.dag.entanglement import _build_entanglement_statements
 from memq_dqc.circuit.dag.remap import (
     _circuit_qubit_to_physical_qubit,
     _physical_to_circuit_qubit,
     _qpu_id_from_register_name,
     _to_ast_qubit_ref,
 )
+from memq_dqc.network import PhysicalQubit
 from memq_dqc.preprocessing.qasm import clone_statement_node
 from memq_dqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
 
 if TYPE_CHECKING:
     from memq_dqc.network import NetworkGraph
+
+PlacementSwap = tuple[tuple[int, int], tuple[int, int]]
 
 
 def _candidate_comp_slots_for_qpu(
@@ -60,7 +64,7 @@ def _build_rswap_statement_from_positions(
     network: NetworkGraph,
 ) -> CleanedQuantumGate:
     """Build a routed ``rswap`` statement from two schedule-space positions."""
-    swap_node, swap_qubits = _build_swap_gate(
+    swap_node, swap_qubits, _ = _build_swap_gate(
         SwapOp(q0=-1, q1=-1, pos0=pos0, pos1=pos1),
         network,
     )
@@ -73,12 +77,36 @@ def _build_rswap_statement_from_positions(
     )
 
 
+def _build_wrapped_rswap_statements_from_positions(
+    pos0: tuple[int, int],
+    pos1: tuple[int, int],
+    network: NetworkGraph,
+) -> list[CleanedQuantumGate]:
+    """Build one ``rswap`` wrapped by cat-entangling operations."""
+    swap_node, swap_qubits, comm_pairs = _build_swap_gate(
+        SwapOp(q0=-1, q1=-1, pos0=pos0, pos1=pos1),
+        network,
+    )
+    rswap_statement = CleanedQuantumGate(
+        statement_type=ast.QuantumGate,
+        node=swap_node,
+        is_op=True,
+        name="rswap",
+        qubits=swap_qubits,
+    )
+    cat_ent_gate, cat_disent_gate = _build_entanglement_statements(
+        swap_qubits[:2],
+        comm_pairs,
+    )
+    return [cat_ent_gate, rswap_statement, cat_disent_gate]
+
+
 def _build_rswap_statements_for_swap(
     swap: SwapOp,
     network: NetworkGraph,
     circuit_qubit_to_physical_window: dict[int, tuple[int, int]],
     comp_capacity_by_schedule_qpu: dict[int, int] | None,
-) -> list[CleanedQuantumGate]:
+) -> tuple[list[CleanedQuantumGate], list[PlacementSwap]]:
     """Build one or more ``rswap`` statements for a schedule-space swap.
 
     For adjacent QPUs, this emits a single ``rswap``. For non-adjacent QPUs,
@@ -94,16 +122,18 @@ def _build_rswap_statements_for_swap(
             schedule QPU.
 
     Returns:
-        A non-empty list of ``rswap`` statements implementing ``swap``.
+        A non-empty list of ``rswap`` statements implementing ``swap`` and the
+        physical position swaps they perform.
     """
     try:
-        return [
-            _build_rswap_statement_from_positions(
+        return (
+            _build_wrapped_rswap_statements_from_positions(
                 pos0=swap.pos0,
                 pos1=swap.pos1,
                 network=network,
-            )
-        ]
+            ),
+            [(swap.pos0, swap.pos1)],
+        )
     except ValueError as direct_swap_error:
         if not (
             hasattr(network, "_remote_comm_pair_counts")
@@ -121,25 +151,32 @@ def _build_rswap_statements_for_swap(
             raise direct_swap_error
 
         routed_statements: list[CleanedQuantumGate] = []
+        placement_swaps: list[PlacementSwap] = []
         for idx in range(len(routed_positions) - 1):
-            routed_statements.append(
-                _build_rswap_statement_from_positions(
-                    pos0=routed_positions[idx],
-                    pos1=routed_positions[idx + 1],
+            pos0 = routed_positions[idx]
+            pos1 = routed_positions[idx + 1]
+            routed_statements.extend(
+                _build_wrapped_rswap_statements_from_positions(
+                    pos0=pos0,
+                    pos1=pos1,
                     network=network,
                 )
             )
+            placement_swaps.append((pos0, pos1))
 
         for idx in range(len(routed_positions) - 3, -1, -1):
-            routed_statements.append(
-                _build_rswap_statement_from_positions(
-                    pos0=routed_positions[idx],
-                    pos1=routed_positions[idx + 1],
+            pos0 = routed_positions[idx]
+            pos1 = routed_positions[idx + 1]
+            routed_statements.extend(
+                _build_wrapped_rswap_statements_from_positions(
+                    pos0=pos0,
+                    pos1=pos1,
                     network=network,
                 )
             )
+            placement_swaps.append((pos0, pos1))
 
-        return routed_statements
+        return routed_statements, placement_swaps
 
 
 def _routed_swap_positions(
@@ -193,7 +230,11 @@ def _routed_swap_positions(
 def _build_swap_gate(
     swap: SwapOp,
     network: NetworkGraph,
-) -> tuple[ast.QuantumGate, list[CircuitQubit]]:
+) -> tuple[
+    ast.QuantumGate,
+    list[CircuitQubit],
+    list[tuple[PhysicalQubit, PhysicalQubit]],
+]:
     """Build an ``rswap`` gate node and logical-qubit payload.
 
     Args:
@@ -201,7 +242,8 @@ def _build_swap_gate(
         network: Network graph used to resolve communication pairs.
 
     Returns:
-        AST gate node and cleaned logical qubits for the swap.
+        AST gate node, cleaned logical qubits for the swap, and selected
+        communication pairs.
 
     Raises:
         ValueError: If fewer than two disjoint communication pairs are
@@ -220,7 +262,7 @@ def _build_swap_gate(
         network_qubit_a,
         network_qubit_b,
     )
-    selected_pairs = []
+    selected_pairs: list[tuple[PhysicalQubit, PhysicalQubit]] = []
     used_comm_qubits = set()
     for _, comm_pair, _ in pair_options:
         comm_a, comm_b = comm_pair
@@ -242,15 +284,18 @@ def _build_swap_gate(
         for comm_qubit in comm_pair
     ]
     qubits = [*data_qubits, *comm_qubits]
-    node = clone_statement_node(
-        ast.QuantumGate(
-            modifiers=[],
-            name=ast.Identifier("rswap"),
-            arguments=[],
-            qubits=[_to_ast_qubit_ref(qubit) for qubit in qubits],
-        )
+    node = cast(
+        ast.QuantumGate,
+        clone_statement_node(
+            ast.QuantumGate(
+                modifiers=[],
+                name=ast.Identifier("rswap"),
+                arguments=[],
+                qubits=[_to_ast_qubit_ref(qubit) for qubit in qubits],
+            )
+        ),
     )
-    return node, qubits
+    return node, qubits, selected_pairs
 
 
 def _build_local_swap_gate(
@@ -259,16 +304,19 @@ def _build_local_swap_gate(
 ) -> tuple[ast.QuantumGate, list[CircuitQubit]]:
     """Build a local ``swap`` gate node and cleaned qubit payload."""
     qubits = [q0, q1]
-    node = clone_statement_node(
-        ast.QuantumGate(
-            modifiers=[],
-            name=ast.Identifier("swap"),
-            arguments=[],
-            qubits=[
-                _to_ast_qubit_ref(q0),
-                _to_ast_qubit_ref(q1),
-            ],
-        )
+    node = cast(
+        ast.QuantumGate,
+        clone_statement_node(
+            ast.QuantumGate(
+                modifiers=[],
+                name=ast.Identifier("swap"),
+                arguments=[],
+                qubits=[
+                    _to_ast_qubit_ref(q0),
+                    _to_ast_qubit_ref(q1),
+                ],
+            )
+        ),
     )
     return node, qubits
 

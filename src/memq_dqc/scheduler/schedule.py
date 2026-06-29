@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cache
@@ -31,8 +32,8 @@ DEFAULT_SCHEDULER_MODALITY: SchedulerModality = "trapped_ion.ba"
 DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE: SchedulerEntanglementProfile = (
     "ion.time_bin"
 )
-_DES_RATE_TIME_STEP = 1.0
 _DEFAULT_EPR_LIFETIME = 50.0
+_CATENT_OP_NAME = "catent"
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,8 +208,9 @@ class SchedulerTimingModel:
         hardware_profile: Selected scheduler hardware profile.
         local_one_qubit_gate_time: Duration of a local single-qubit gate.
         local_two_qubit_gate_time: Duration of a local two-qubit gate.
-        entanglement_generation_rate: Entanglement-generation probability per
-            microsecond.
+        entanglement_generation_rate: Entanglement-generation rate.
+        des_entanglement_time_step: Duration of one DES entanglement-attempt
+            cycle.
         epr_lifetime: Maximum lifetime of a generated EPR pair.
         measurement_time: Duration of a measurement operation.
     """
@@ -217,6 +219,7 @@ class SchedulerTimingModel:
     local_one_qubit_gate_time: float
     local_two_qubit_gate_time: float
     entanglement_generation_rate: float
+    des_entanglement_time_step: float
     epr_lifetime: float = _DEFAULT_EPR_LIFETIME
     measurement_time: float = _MEASUREMENT_TIME
 
@@ -237,21 +240,29 @@ class SchedulerTimingModel:
     @property
     def des_t_cycle(self) -> float:
         """Return the DES entanglement-attempt cycle length."""
-        return _DES_RATE_TIME_STEP
+        return self.des_entanglement_time_step
 
     @property
     def des_success_probability(self) -> float:
         """Return the DES per-cycle entanglement success probability."""
-        return self.entanglement_generation_rate
+        return -math.expm1(
+            -self.entanglement_generation_rate
+            * self.des_entanglement_time_step
+        )
 
     @property
-    def gate_teleport_time(self) -> float:
-        """Return the derived remote-gate teleport duration."""
+    def catent_time(self) -> float:
+        """Return the derived cat-entangling operation duration."""
         return (
             self.local_two_qubit_gate_time
-            + self.measurement_time
             + self.local_one_qubit_gate_time
+            + self.measurement_time
         )
+
+    @property
+    def catdisent_time(self) -> float:
+        """Return the derived cat-disentangling operation duration."""
+        return (2 * self.local_one_qubit_gate_time) + self.measurement_time
 
 
 class BaseScheduler(ABC):
@@ -524,28 +535,24 @@ def _load_scheduler_timing_model(
     entanglement_profile = settings.entanglement_profile(
         hardware_profile.entanglement_profile
     )
-    if entanglement_profile.entanglement_rate > 1.0:
-        raise ValueError(
-            "Scheduler entanglement rates must be at most 1 pair per "
-            "microsecond."
-        )
     return SchedulerTimingModel(
         hardware_profile=hardware_profile,
         local_one_qubit_gate_time=modality_profile.one_qubit_gate_time,
         local_two_qubit_gate_time=modality_profile.two_qubit_gate_time,
         entanglement_generation_rate=entanglement_profile.entanglement_rate,
+        des_entanglement_time_step=(
+            settings.des_simulation.entanglement_time_step
+        ),
         epr_lifetime=entanglement_profile.epr_lifetime,
     )
 
 
 def _operation_duration(op: Op, timing_model: SchedulerTimingModel) -> float:
     """Return the execution time for an operation."""
-    if op.is_remote:
-        return (
-            timing_model.state_teleport_time
-            if op.name == "rswap"
-            else timing_model.gate_teleport_time
-        )
+    if op.name == "catent":
+        return timing_model.catent_time
+    if op.name == "catdisent":
+        return timing_model.catdisent_time
     if op.name == "measure":
         return timing_model.measurement_time
     if len(op.qubits) == 1:
@@ -553,12 +560,54 @@ def _operation_duration(op: Op, timing_model: SchedulerTimingModel) -> float:
     return timing_model.local_two_qubit_gate_time
 
 
+def _is_catent_operation(op: Op) -> bool:
+    """Return whether an operation prepares a cat-entangled remote gate."""
+    return op.name == _CATENT_OP_NAME
+
+
+def _catent_ebit_labels(op: Op) -> tuple[tuple[str, str], ...]:
+    """Return the EPR qubit pairs consumed by a cat-entangling operation."""
+    if not _is_catent_operation(op):
+        return ()
+    comm_qubits = op.qubits[2:]
+    if len(comm_qubits) == 0 or len(comm_qubits) % 2 != 0:
+        raise ValueError(
+            "catent operations must contain data operands followed by one or "
+            f"more communication-qubit pairs. Received {op.qubits!r}."
+        )
+    return tuple(
+        (
+            _physical_qubit_label(comm_qubits[index]),
+            _physical_qubit_label(comm_qubits[index + 1]),
+        )
+        for index in range(0, len(comm_qubits), 2)
+    )
+
+
+def _remote_ops_with_catent_predecessor(
+    distributed_circuit: DistributedCircuit,
+) -> set[int]:
+    """Return remote op IDs whose EPR setup is owned by a catent op."""
+    graph = distributed_circuit.dag.graph
+    remote_op_ids: set[int] = set()
+    for op_id in graph.nodes:
+        op = graph.nodes[op_id]["op"]
+        if not op.is_remote:
+            continue
+        if any(
+            _is_catent_operation(graph.nodes[predecessor]["op"])
+            for predecessor in graph.predecessors(op_id)
+        ):
+            remote_op_ids.add(op_id)
+    return remote_op_ids
+
+
 def _remote_ebit_assignment_candidates(
     distributed_circuit: DistributedCircuit,
     op: Op,
 ) -> tuple[tuple[tuple[PhysicalQubit, PhysicalQubit], ...], ...]:
-    """Return scheduler-selectable e-bit assignments for a remote op."""
-    if not op.is_remote:
+    """Return scheduler-selectable e-bit assignments for an EPR-backed op."""
+    if not (op.is_remote or _is_catent_operation(op)):
         return ()
 
     candidates_by_op_id = distributed_circuit.ebit_candidates_by_op_id

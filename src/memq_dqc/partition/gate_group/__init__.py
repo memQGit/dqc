@@ -5,8 +5,8 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Cisco partitioning implementation."""
+"""Gate-grouping based partitioning implementation."""
 
-from .cisco import CiscoPartitioner
+from .gate_group import GateGroupingPartitioner
 
-__all__ = ["CiscoPartitioner"]
+__all__ = ["GateGroupingPartitioner"]

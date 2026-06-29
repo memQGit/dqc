@@ -26,11 +26,14 @@ from memq_dqc.scheduler.schedule import (
     SchedulerHardwareProfile,
     SchedulerModality,
     _build_qubit_timelines,
+    _catent_ebit_labels,
     _ebit_assignment_labels,
+    _is_catent_operation,
     _operation_duration,
     _physical_qubit_label,
     _remote_ebit_assignment_candidates,
     _remote_operation_qubit_labels,
+    _remote_ops_with_catent_predecessor,
 )
 
 _PROGRESS_BAR_WIDTH = 24
@@ -328,7 +331,53 @@ class ILPScheduler(BaseScheduler):
 
     def _build_modes(self, op: Op) -> tuple[_OperationMode, ...]:
         """Build scheduler resource modes for one operation."""
+        if _is_catent_operation(op):
+            if len(op.qubits) == 2:
+                modes: list[_OperationMode] = []
+                for mode_index, assignment in enumerate(
+                    _remote_ebit_assignment_candidates(
+                        self.distributed_circuit,
+                        op,
+                    )
+                ):
+                    modes.append(
+                        _OperationMode(
+                            mode_index=mode_index,
+                            qubits=_remote_operation_qubit_labels(
+                                op,
+                                assignment,
+                            ),
+                            epr_windows=self._build_epr_windows(assignment),
+                        )
+                    )
+                return tuple(modes)
+
+            return (
+                _OperationMode(
+                    mode_index=0,
+                    qubits=tuple(
+                        _physical_qubit_label(qubit) for qubit in op.qubits
+                    ),
+                    epr_windows=self._build_epr_windows_from_labels(
+                        _catent_ebit_labels(op)
+                    ),
+                ),
+            )
+
         if not op.is_remote:
+            return (
+                _OperationMode(
+                    mode_index=0,
+                    qubits=tuple(
+                        _physical_qubit_label(qubit) for qubit in op.qubits
+                    ),
+                    epr_windows=(),
+                ),
+            )
+
+        if op.op_id in _remote_ops_with_catent_predecessor(
+            self.distributed_circuit
+        ):
             return (
                 _OperationMode(
                     mode_index=0,
@@ -357,12 +406,20 @@ class ILPScheduler(BaseScheduler):
         assignment: tuple[tuple[PhysicalQubit, PhysicalQubit], ...],
     ) -> tuple[_EprWindow, ...]:
         """Build just-in-time EPR windows for one e-bit assignment."""
+        return self._build_epr_windows_from_labels(
+            _ebit_assignment_labels(assignment)
+        )
+
+    def _build_epr_windows_from_labels(
+        self,
+        pair_labels: tuple[tuple[str, str], ...],
+    ) -> tuple[_EprWindow, ...]:
+        """Build just-in-time EPR windows for labeled e-bit pairs."""
         duration_steps = _duration_to_steps(
             self.timing_model.entanglement_time,
             self.time_step,
         )
         duration_time = _steps_to_time(duration_steps, self.time_step)
-        pair_labels = _ebit_assignment_labels(assignment)
         if self.multiplex_entangle or len(pair_labels) == 1:
             return tuple(
                 _EprWindow(

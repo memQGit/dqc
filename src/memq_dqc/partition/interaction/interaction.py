@@ -5,7 +5,7 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
-"""Cisco-style partitioning implementation."""
+"""Interaction partitioning implementation."""
 
 from __future__ import annotations
 
@@ -32,8 +32,8 @@ from memq_dqc.utils.circuit_utils import build_window_interaction_graph
 logger = logging.getLogger(__name__)
 
 
-class CiscoPartitioner(BasePartitioner):
-    """Partition qubits using the Cisco (TODO: cite) algorithm."""
+class InteractionPartitioner(BasePartitioner):
+    """Partition qubits using the Interaction (TODO: cite) algorithm."""
 
     # TODO: both state teleportation AND remote gates must account for required rswaps to get there
     def __init__(
@@ -43,7 +43,7 @@ class CiscoPartitioner(BasePartitioner):
         *,
         window_length: int | None = None,
     ) -> None:
-        """Initialize the Cisco partitioner.
+        """Initialize the Interaction partitioner.
 
         Args:
             network: Network graph describing available resources.
@@ -54,7 +54,7 @@ class CiscoPartitioner(BasePartitioner):
         self.window_length = window_length
 
     def run(self) -> None:
-        """Run the Cisco partitioning algorithm.
+        """Run the Interaction partitioning algorithm.
 
         Updates:
             cost, schedule, and windows with the latest partitioning results.
@@ -75,6 +75,7 @@ class CiscoPartitioner(BasePartitioner):
                 self.window_length = 1
             else:
                 gate_density = num_two_qubit_ops / max(1, num_qubits)
+                # TODO: parameterize this function
                 density_scale = max(0.5, min(math.sqrt(gate_density), 2.0))
                 base_window = math.sqrt(num_two_qubit_ops) * density_scale
                 min_window = 1 if num_two_qubit_ops < 10 else 10
@@ -84,7 +85,7 @@ class CiscoPartitioner(BasePartitioner):
                 )
 
         logger.debug(
-            "Cisco partitioning parameters: logical_qubits=%d "
+            "Interaction partitioning parameters: logical_qubits=%d "
             "two_qubit_ops=%d window_length=%d mode=%s partition_sizes=%s.",
             num_qubits,
             num_two_qubit_ops,

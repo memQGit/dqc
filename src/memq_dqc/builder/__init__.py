@@ -17,7 +17,6 @@ from .extract_utils import (
     synthesize_state_teleportation_swaps,
     window_final_op_id_map,
 )
-from .formatting import rename_comm_qubits
 
 if TYPE_CHECKING:
     import openqasm3.ast as ast
@@ -29,6 +28,8 @@ def extract_distributed_circuit(
     partitioner: Partitioner,
     *,
     ebit_assignment: bool = True,
+    group_gates: bool = True,
+    max_group_size: int | None = None,
     verbosity: Literal["quiet", "info", "debug"] = "quiet",
 ) -> ast.Program:
     """Extract a distributed OpenQASM program from a completed partitioner.
@@ -38,6 +39,10 @@ def extract_distributed_circuit(
         ebit_assignment: Whether the compiler assigns concrete e-bit pairs
             into the scheduler DAG. If false, schedulers choose from viable
             e-bit pair candidates.
+        group_gates: Whether compatible remote gate groups should share one
+            cat-entanglement region in the emitted program.
+        max_group_size: Optional maximum number of two-qubit gates per emitted
+            gate group.
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
@@ -50,6 +55,8 @@ def extract_distributed_circuit(
     return _extract_distributed_circuit(
         partitioner,
         ebit_assignment=ebit_assignment,
+        group_gates=group_gates,
+        max_group_size=max_group_size,
         verbosity=verbosity,
     )
 
@@ -60,5 +67,4 @@ __all__ = [
     "circuit_qubit_physical_map",
     "synthesize_state_teleportation_swaps",
     "window_final_op_id_map",
-    "rename_comm_qubits",
 ]
