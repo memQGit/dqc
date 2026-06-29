@@ -102,6 +102,28 @@ class _RemoteRequest:
     start_enqueued: bool = False
 
 
+@dataclass(frozen=True, slots=True)
+class _CatentGroup:
+    """One cat-entanglement block scheduled as a single remote operation.
+
+    A block spans a ``catent`` op, the gates emitted before its deferred
+    ``catdisent``, and the ``catdisent`` itself. The communication link the
+    ``catent`` acquires is held until the ``catdisent`` completes, and the
+    block's execution duration (used for arbitration) sums the catent /
+    catdisent overhead and the gates acting on the cat-entangled qubits.
+
+    Attributes:
+        catent_op_id: Op id of the block's ``catent`` (the link requester).
+        member_op_ids: Inner op ids acting on the cat-entangled qubits whose
+            durations contribute to the block's execution time.
+        catdisent_op_id: Op id of the block's ``catdisent`` (releases links).
+    """
+
+    catent_op_id: int
+    member_op_ids: tuple[int, ...]
+    catdisent_op_id: int
+
+
 class BaseDESLinkScheduler(BaseScheduler):
     """Discrete-event scheduler with pluggable per-link arbitration policy."""
 
@@ -148,6 +170,10 @@ class BaseDESLinkScheduler(BaseScheduler):
         self._successors_by_op: dict[int, tuple[int, ...]] = {}
         self._remaining_predecessors: dict[int, int] = {}
         self._remaining_path_costs: dict[int, float] = {}
+        self._catent_groups: dict[int, _CatentGroup] = {}
+        self._group_by_op_id: dict[int, int] = {}
+        self._group_durations: dict[int, float] = {}
+        self._group_remaining_path_costs: dict[int, float] = {}
         self._qubit_timers: dict[str, float] = {}
         self._qubit_order: list[str] = []
         self._op_qubits: dict[int, tuple[str, ...]] = {}
@@ -213,8 +239,36 @@ class BaseDESLinkScheduler(BaseScheduler):
             successors_by_op=self._successors_by_op,
             timing_model=self.timing_model,
         )
+        self._catent_groups, self._group_by_op_id = _build_catent_groups(
+            self._op_by_id
+        )
+        self._group_durations = {
+            catent_op_id: self._group_execution_duration(group)
+            for catent_op_id, group in self._catent_groups.items()
+        }
+        self._group_remaining_path_costs = {
+            catent_op_id: (
+                self._group_durations[catent_op_id]
+                + (
+                    self._remaining_path_costs[group.catdisent_op_id]
+                    - self.timing_model.catdisent_time
+                )
+            )
+            for catent_op_id, group in self._catent_groups.items()
+        }
+        # Every remote gate inside a catent block reuses the block's single
+        # shared entanglement, so EPR generation only happens for the catent
+        # itself. The predecessor-based set catches only the first member
+        # (whose direct DAG predecessor is the catent); the group members add
+        # the rest, which otherwise would each generate their own EPR pair.
         self._remote_ops_with_catent = _remote_ops_with_catent_predecessor(
             self.distributed_circuit
+        )
+        self._remote_ops_with_catent.update(
+            member_op_id
+            for group in self._catent_groups.values()
+            for member_op_id in group.member_op_ids
+            if self._op_by_id[member_op_id].is_remote
         )
         (
             self._qubit_timers,
@@ -558,6 +612,7 @@ class BaseDESLinkScheduler(BaseScheduler):
         """Dispatch one DES event."""
         if event.event_type == _OP_COMPLETE:
             self._mark_operation_completed(event.op_id)
+            self._release_group_links_on_catdisent(event.op_id, event.time)
             return
         if event.event_type == _START_EPR_REQUEST:
             self._handle_start_epr_request(event)
@@ -717,24 +772,53 @@ class BaseDESLinkScheduler(BaseScheduler):
             self._qubit_timers[qubit] = scheduled_op.end_time
         self._enqueue_event(scheduled_op.end_time, _OP_COMPLETE, event.op_id)
 
+        # A cat-entanglement block holds its link(s) for the whole block: the
+        # release is deferred until the block's catdisent completes (see
+        # _release_group_links_on_catdisent). Non-group requests release now.
+        if event.op_id in self._catent_groups:
+            return
         for link_request in request.link_requests.values():
-            link_state = self._link_states.setdefault(
-                link_request.link_key,
-                _LinkState(),
-            )
-            link_state.active_request_id = None
-            next_request_id = self._pop_next_pending_request(
-                link_state,
-                link_key=link_request.link_key,
-                time=event.time,
-            )
-            if next_request_id is None:
-                continue
-            self._activate_remote_request(
-                next_request_id,
-                link_request.link_key,
-                event.time,
-            )
+            self._release_link_and_promote(link_request.link_key, event.time)
+
+    def _release_link_and_promote(
+        self,
+        link_key: tuple[str, str],
+        time: float,
+    ) -> None:
+        """Free one link and activate the next queued request, if any."""
+        link_state = self._link_states.setdefault(link_key, _LinkState())
+        link_state.active_request_id = None
+        next_request_id = self._pop_next_pending_request(
+            link_state,
+            link_key=link_key,
+            time=time,
+        )
+        if next_request_id is None:
+            return
+        self._activate_remote_request(next_request_id, link_key, time)
+
+    def _release_group_links_on_catdisent(
+        self,
+        op_id: int,
+        time: float,
+    ) -> None:
+        """Release a cat-ent block's held links when its catdisent ends.
+
+        Args:
+            op_id: Op id of the just-completed operation.
+            time: Completion time, used to start any promoted request.
+        """
+        catent_op_id = self._group_by_op_id.get(op_id)
+        if catent_op_id is None:
+            return
+        group = self._catent_groups[catent_op_id]
+        if op_id != group.catdisent_op_id:
+            return
+        request = self._remote_requests.get(catent_op_id)
+        if request is None:
+            return
+        for link_request in request.link_requests.values():
+            self._release_link_and_promote(link_request.link_key, time)
 
     def _record_link_event(
         self,
@@ -788,15 +872,52 @@ class BaseDESLinkScheduler(BaseScheduler):
             ),
         )
 
+    def _group_execution_duration(self, group: _CatentGroup) -> float:
+        """Return the deterministic execution time for one cat-ent block.
+
+        Sums the catent and catdisent overhead with the durations of the
+        member ops (gates acting on the cat-entangled qubits). The stochastic
+        EPR generation the block incurs is modelled separately by the event
+        loop and is not included here.
+
+        Args:
+            group: Cat-entanglement block to measure.
+
+        Returns:
+            The block's deterministic execution duration.
+        """
+        duration = (
+            self.timing_model.catent_time + self.timing_model.catdisent_time
+        )
+        for member_op_id in group.member_op_ids:
+            duration += _operation_duration(
+                self._op_by_id[member_op_id],
+                self.timing_model,
+            )
+        return duration
+
     def _remote_duration(self, op_id: int) -> float:
-        """Return the deterministic remote-op duration for one request."""
+        """Return the deterministic remote-op duration for one request.
+
+        For a request anchoring a cat-entanglement block, this is the whole
+        block's execution duration so duration-aware arbitration reflects the
+        work inside the block rather than the constant catent overhead.
+        """
+        if op_id in self._catent_groups:
+            return self._group_durations[op_id]
         return _operation_duration(
             self._remote_requests[op_id].op,
             self.timing_model,
         )
 
     def _remaining_path_cost(self, op_id: int) -> float:
-        """Return the downstream critical-path estimate for one request."""
+        """Return the downstream critical-path estimate for one request.
+
+        For a request anchoring a cat-entanglement block, this is the block's
+        execution duration plus the downstream tail after its catdisent.
+        """
+        if op_id in self._group_remaining_path_costs:
+            return self._group_remaining_path_costs[op_id]
         return self._remaining_path_costs[op_id]
 
     def _log_debug_snapshot(
@@ -972,3 +1093,62 @@ def _build_remaining_path_costs(
         )
         remaining_path_costs[op_id] = duration + successor_cost
     return remaining_path_costs
+
+
+def _build_catent_groups(
+    op_by_id: dict[int, Op],
+) -> tuple[dict[int, _CatentGroup], dict[int, int]]:
+    """Return cat-entanglement blocks reconstructed from the op stream.
+
+    Blocks are emitted contiguously by op id and never nest, so a single
+    open ``catent`` is matched with the next ``catdisent``. Inner ops are
+    those between the two; the duration-contributing members are the inner
+    ops whose operands touch the block's cat-entangled qubits (the data
+    operands of the ``catent`` and of every inner remote gate).
+
+    Args:
+        op_by_id: All scheduled ops keyed by op id.
+
+    Returns:
+        A ``(groups, group_by_op_id)`` pair, where ``groups`` maps each
+        block's ``catent`` op id to its :class:`_CatentGroup`, and
+        ``group_by_op_id`` maps every op id in a block (catent, inner ops,
+        and catdisent) to its block's ``catent`` op id.
+    """
+    groups: dict[int, _CatentGroup] = {}
+    group_by_op_id: dict[int, int] = {}
+    open_catent_id: int | None = None
+    inner_op_ids: list[int] = []
+    for op_id in sorted(op_by_id):
+        op = op_by_id[op_id]
+        if op.name == "catent":
+            open_catent_id = op_id
+            inner_op_ids = []
+        elif op.name == "catdisent":
+            if open_catent_id is None:
+                continue
+            catent_op = op_by_id[open_catent_id]
+            entangled_qubits = set(catent_op.qubits[:2])
+            for inner_op_id in inner_op_ids:
+                inner_op = op_by_id[inner_op_id]
+                if inner_op.is_remote:
+                    entangled_qubits.update(inner_op.qubits[:2])
+            member_op_ids = tuple(
+                inner_op_id
+                for inner_op_id in inner_op_ids
+                if entangled_qubits.intersection(op_by_id[inner_op_id].qubits)
+            )
+            groups[open_catent_id] = _CatentGroup(
+                catent_op_id=open_catent_id,
+                member_op_ids=member_op_ids,
+                catdisent_op_id=op_id,
+            )
+            group_by_op_id[open_catent_id] = open_catent_id
+            group_by_op_id[op_id] = open_catent_id
+            for inner_op_id in inner_op_ids:
+                group_by_op_id[inner_op_id] = open_catent_id
+            open_catent_id = None
+            inner_op_ids = []
+        elif open_catent_id is not None:
+            inner_op_ids.append(op_id)
+    return groups, group_by_op_id
