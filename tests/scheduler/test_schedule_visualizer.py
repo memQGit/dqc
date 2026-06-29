@@ -157,7 +157,7 @@ def test_plot_schedule_gantt_legacy_keeps_original_casing() -> None:
         _schedule(), title="my schedule", display="legacy"
     )
     assert ax.get_title() == "my schedule"
-    assert ax.get_xlabel() == "Time"
+    assert ax.get_xlabel() == f"Time ({_pretty_time_unit_label()})"
     bar_labels = {text.get_text() for text in ax.texts}
     assert "measure" in bar_labels
     plt.close(ax.figure)
@@ -248,4 +248,40 @@ def test_plot_schedule_gantt_pretty_explicit_ops() -> None:
     assert isinstance(ax, Axes)
     assert ax.get_ylabel() == "OPERATION"
     assert ax.patches
+    plt.close(ax.figure)
+
+
+def test_nice_tick_step_handles_large_span() -> None:
+    # Regression: spans beyond the old fixed ladder returned None.
+    step = _nice_tick_step(860_000.0)
+    assert step > 0.0
+    assert 860_000.0 / step <= 12.0
+
+
+def test_plot_schedule_gantt_pretty_renders_large_makespan() -> None:
+    # Regression: a per-unit minor locator exceeded Matplotlib's tick limit
+    # and broke rendering for large makespans.
+    makespan = 860_000.0
+    ops: tuple = (
+        _op(0, "h", ["q0[0]"], 0.0, 10.0),
+        EntanglementGeneration(
+            qubits=("c0[0]", "c1[0]"),
+            start_time=10.0,
+            duration=makespan - 10.0,
+        ),
+    )
+    qubits = ["q0[0]", "c0[0]", "c1[0]"]
+    schedule = OperationSchedule(
+        operations=ops,
+        timelines=tuple(
+            ScheduledQubitTimeline(
+                qubit=q, operations=tuple(o for o in ops if q in o.qubits)
+            )
+            for q in qubits
+        ),
+        makespan=makespan,
+    )
+    ax = plot_schedule_gantt(schedule)
+    ax.figure.canvas.draw()  # force a full render; would raise on the old bug
+    assert isinstance(ax, Axes)
     plt.close(ax.figure)
