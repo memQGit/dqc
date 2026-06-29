@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -26,6 +27,11 @@ from memq_dqc.scheduler.schedule import (
     ScheduleEvent,
 )
 from memq_dqc.settings import load_settings
+
+# Upper bound (inches) for an auto-created figure's width. Width otherwise
+# scales with the makespan, which produces an unrenderable figure for very
+# long schedules (e.g. realistic, slow entanglement generation).
+_MAX_AUTO_FIGURE_WIDTH = 48.0
 
 # Default ("screen") palette. Kept identical to the original styling so the
 # standard, non-``pretty`` chart renders exactly as before.
@@ -399,7 +405,9 @@ def _render_schedule_gantt(
             if explicit_ops
             else len(schedule.timelines)
         )
-        figure_width = max(10.0, schedule.makespan * 0.55 + 4.0)
+        figure_width = min(
+            _MAX_AUTO_FIGURE_WIDTH, max(10.0, schedule.makespan * 0.55 + 4.0)
+        )
         figure_height = max(4.0, row_count * 0.7 + 1.8)
         figure_width += style.extra_figure_width
         figure_height += style.extra_figure_height
@@ -414,7 +422,7 @@ def _render_schedule_gantt(
         _plot_qubit_rows(ax, schedule, style)
 
     ax.set_xlim(0.0, max(schedule.makespan, 1.0))
-    ax.set_xlabel(_format_text("Time", style))
+    ax.set_xlabel(_format_text(f"Time ({_pretty_time_unit_label()})", style))
     ax.set_ylabel(
         _format_text("Operation" if explicit_ops else "Physical Qubit", style)
     )
@@ -815,11 +823,23 @@ def _layout_pretty_groups(
 
 
 def _nice_tick_step(span: float) -> float:
-    """Return a tidy major-gridline interval for the given time span."""
-    target = span / 7.0 if span > 0 else 1.0
-    for candidate in (1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0):
-        if candidate >= target:
-            return candidate
+    """Return a tidy major-gridline interval for the given time span.
+
+    Targets roughly seven major gridlines and snaps to a 1/2/5 ladder scaled
+    to the span's magnitude, so the step stays sensible for both tiny and very
+    large makespans (the latter previously fell off the fixed ladder).
+    """
+    if span <= 0:
+        return 1.0
+    target = span / 7.0
+    # Floor the magnitude at 1.0 so the step never drops below one time unit,
+    # matching the original fixed ladder for small spans.
+    magnitude = 10.0 ** math.floor(math.log10(max(target, 1.0)))
+    for candidate in (1.0, 2.0, 5.0):
+        step = candidate * magnitude
+        if step >= target:
+            return step
+    return 10.0 * magnitude
     return 100.0
 
 
@@ -1024,7 +1044,10 @@ def _configure_pretty_xaxis(ax: Axes, schedule: OperationSchedule) -> None:
     ax.set_xlim(0.0, makespan)
     step = _nice_tick_step(makespan)
     ax.xaxis.set_major_locator(MultipleLocator(step))
-    ax.xaxis.set_minor_locator(MultipleLocator(1.0))
+    # Five minor divisions per major step keeps the minor-tick count bounded;
+    # a fixed per-unit step would exceed Matplotlib's locator limit on large
+    # makespans.
+    ax.xaxis.set_minor_locator(MultipleLocator(step / 5.0))
     ax.set_axisbelow(True)
     ax.grid(
         axis="x", which="major", color=_PRETTY_GRID, linewidth=0.8, zorder=0
@@ -1115,7 +1138,9 @@ def _render_pretty_gantt(
     positions, spans, row_count, ordered = _layout_pretty_groups(groups)
 
     if ax is None:
-        figure_width = max(9.0, schedule.makespan * 0.42 + 3.6)
+        figure_width = min(
+            _MAX_AUTO_FIGURE_WIDTH, max(9.0, schedule.makespan * 0.42 + 3.6)
+        )
         figure_height = max(3.6, row_count * 0.46 + 2.4)
         fig, ax = plt.subplots(figsize=(figure_width, figure_height))
         fig.subplots_adjust(
@@ -1159,7 +1184,9 @@ def _render_pretty_op_rows(
     y_positions = [float(row_count - 1 - index) for index in range(row_count)]
 
     if ax is None:
-        figure_width = max(9.0, schedule.makespan * 0.42 + 3.6)
+        figure_width = min(
+            _MAX_AUTO_FIGURE_WIDTH, max(9.0, schedule.makespan * 0.42 + 3.6)
+        )
         figure_height = max(3.6, row_count * 0.42 + 2.4)
         fig, ax = plt.subplots(figsize=(figure_width, figure_height))
         fig.subplots_adjust(
