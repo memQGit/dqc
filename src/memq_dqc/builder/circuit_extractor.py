@@ -21,6 +21,7 @@ from openqasm3 import ast
 
 from memq_dqc._logging import StepTimer, workflow_logging
 from memq_dqc.builder.extract_utils import (
+    GroupDurationLimit,
     identify_gate_groups,
     identify_remote_gates,
     synthesize_state_teleportation_swaps,
@@ -37,6 +38,47 @@ if TYPE_CHECKING:
         PartitionSchedule,
         PartitionWindows,
     )
+    from memq_dqc.scheduler.schedule import SchedulerHardwareProfile
+
+
+def _resolve_group_duration_limit(
+    profile: SchedulerHardwareProfile | None,
+) -> GroupDurationLimit:
+    """Return the EPR-lifetime gate-duration cap for one hardware profile.
+
+    A gate group's scheduled block must fit within the EPR lifetime. The
+    fixed per-block overhead is the entanglement generation time plus the
+    ``catent`` and ``catdisent`` durations; whatever lifetime remains is the
+    budget for the gates inside the group.
+
+    Args:
+        profile: Scheduler hardware profile whose timing drives the cap, or
+            ``None`` to use the default ``neutral_atom.polarization`` config.
+
+    Returns:
+        The resolved gate-duration cap for group building.
+    """
+    from memq_dqc.scheduler.schedule import (
+        SchedulerHardwareProfile,
+        _load_scheduler_timing_model,
+    )
+
+    if profile is None:
+        profile = SchedulerHardwareProfile.neutral_atom(
+            entanglement_profile="neutral_atom.polarization",
+        )
+    timing = _load_scheduler_timing_model(profile)
+    gate_duration_budget = (
+        timing.epr_lifetime
+        - timing.entanglement_time
+        - timing.catent_time
+        - timing.catdisent_time
+    )
+    return GroupDurationLimit(
+        gate_duration_budget=gate_duration_budget,
+        one_qubit_gate_time=timing.local_one_qubit_gate_time,
+        two_qubit_gate_time=timing.local_two_qubit_gate_time,
+    )
 
 
 def extract_distributed_circuit(
@@ -45,6 +87,7 @@ def extract_distributed_circuit(
     ebit_assignment: bool = True,
     group_gates: bool = True,
     max_group_size: int | None = None,
+    group_size_profile: SchedulerHardwareProfile | None = None,
     verbosity: Literal["quiet", "info", "debug"] = "quiet",
 ) -> ast.Program:
     """Extract distributed circuit from partitioning assignment.
@@ -58,6 +101,9 @@ def extract_distributed_circuit(
             cat-entanglement region in the emitted program.
         max_group_size: Optional maximum number of two-qubit gates per emitted
             gate group.
+        group_size_profile: Scheduler hardware profile whose timing bounds the
+            duration of each gate group so its scheduled block stays within
+            the EPR lifetime. Defaults to ``neutral_atom.polarization``.
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
@@ -93,11 +139,17 @@ def extract_distributed_circuit(
         if max_group_size is not None and max_group_size < 1:
             raise ValueError("max_group_size must be positive when provided.")
 
+        duration_limit = _resolve_group_duration_limit(group_size_profile)
+        logger.debug(
+            "Gate-group duration budget: %.3f time units.",
+            duration_limit.gate_duration_budget,
+        )
         reordered_ops, group_indices, _ = identify_gate_groups(
             circuit,
             partitioner,
             verbose=True,
             max_size=max_group_size,
+            duration_limit=duration_limit,
         )
         gate_group_op_ids = (
             _gate_group_op_ids(reordered_ops, group_indices)

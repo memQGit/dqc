@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -26,7 +27,61 @@ PartitionAssignment = dict["QPU", set[int]]
 GateGroupRange = tuple[int, int]
 GatePacket = list[set[int]]
 
+# Float tolerance when comparing accumulated gate durations to the budget.
+_DURATION_EPS = 1e-9
+
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class GroupDurationLimit:
+    """Caps a gate group so its scheduled block fits within the EPR lifetime.
+
+    A cat-entanglement block's deterministic duration is the fixed overhead
+    (entanglement generation, ``catent``, and ``catdisent``) plus the
+    durations of the gates inside the group. ``gate_duration_budget`` is the
+    time remaining for gates after subtracting that fixed overhead from the
+    EPR lifetime, so a group may keep absorbing gates only while their total
+    duration stays within the budget.
+
+    Attributes:
+        gate_duration_budget: Maximum total gate duration allowed in a group.
+        one_qubit_gate_time: Duration charged for a single-qubit gate.
+        two_qubit_gate_time: Duration charged for a two-qubit gate.
+    """
+
+    gate_duration_budget: float
+    one_qubit_gate_time: float
+    two_qubit_gate_time: float
+
+    def op_duration(self, op: Op) -> float:
+        """Return the duration charged for one groupable operation."""
+        if len(op.qubits) == 2:
+            return self.two_qubit_gate_time
+        return self.one_qubit_gate_time
+
+    def ops_duration(self, ops: Iterable[Op]) -> float:
+        """Return the total duration charged for a sequence of operations."""
+        return sum(self.op_duration(op) for op in ops)
+
+    def allows(
+        self,
+        current_duration: float,
+        added_ops: Iterable[Op],
+    ) -> bool:
+        """Return whether adding ``added_ops`` keeps the group within budget.
+
+        Args:
+            current_duration: Total gate duration already in the group.
+            added_ops: Operations that would be folded into the group.
+
+        Returns:
+            ``True`` if the resulting total gate duration stays within the
+            budget (within a small float tolerance).
+        """
+        prospective = current_duration + self.ops_duration(added_ops)
+        return prospective <= self.gate_duration_budget + _DURATION_EPS
+
 
 _DIAGONAL_GATES = frozenset(
     {
@@ -352,6 +407,7 @@ def identify_gate_groups(
     *,
     verbose: bool = False,
     max_size: int | None = None,
+    duration_limit: GroupDurationLimit | None = None,
 ) -> tuple[list[Op], set[GateGroupRange], list[GatePacket]]:
     """Identify gate groups within a partitioned circuit.
 
@@ -367,6 +423,9 @@ def identify_gate_groups(
         partition: Completed partitioner containing windows and schedule.
         verbose: Whether to emit grouping summary logs.
         max_size: Optional maximum number of two-qubit gates per group.
+        duration_limit: Optional cap that ends a group before its scheduled
+            block duration would exceed the EPR lifetime. The seed gate of a
+            group is always kept; the cap only limits further additions.
 
     Returns:
         Reordered operations, grouped index ranges in the reordered
@@ -399,7 +458,9 @@ def identify_gate_groups(
             )
 
         window_reordered_ops, window_group_indices = (
-            _identify_existing_gate_groups(window, verbose, max_size)
+            _identify_existing_gate_groups(
+                window, verbose, max_size, duration_limit
+            )
         )
         offset = len(reordered_ops)
         group_indices.update(
@@ -427,6 +488,7 @@ def _identify_existing_gate_groups(
     gate_ops: list[Op],
     verbose: bool = False,
     max_size: int | None = None,
+    duration_limit: GroupDurationLimit | None = None,
 ) -> tuple[list[Op], set[GateGroupRange]]:
     """Identify existing gate groups within one operation window."""
     reordered_ops: list[Op] = []
@@ -446,6 +508,7 @@ def _identify_existing_gate_groups(
                 target,
                 verbose,
                 max_size,
+                duration_limit,
             )
             group_start = len(reordered_ops)
             group_end = group_start + len(group_ops)
@@ -480,6 +543,7 @@ def _search_for_group_gate(
     target: int,
     verbose: bool = False,
     max_size: int | None = None,
+    duration_limit: GroupDurationLimit | None = None,
 ) -> tuple[list[Op], list[Op]]:
     """Search forward from one two-qubit gate to build a gate group."""
     group_ops = [gate_ops[start_index - 1]]
@@ -487,6 +551,11 @@ def _search_for_group_gate(
     targets = {target}
     group_two_qubit_count = 1
     pending_one_qubit_gates: list[Op] = []
+    group_duration = (
+        duration_limit.op_duration(group_ops[0])
+        if duration_limit is not None
+        else 0.0
+    )
 
     for relative_index, op in enumerate(gate_ops[start_index:]):
         _validate_supported_gate_group_op(op)
@@ -494,10 +563,20 @@ def _search_for_group_gate(
             op_control, op_target = _get_control_and_target(op)
 
             if _shares_group_control(op, control, op_control, op_target):
-                if max_size is not None and group_two_qubit_count >= max_size:
+                size_exceeded = (
+                    max_size is not None and group_two_qubit_count >= max_size
+                )
+                added_ops = [*pending_one_qubit_gates, op]
+                duration_exceeded = (
+                    duration_limit is not None
+                    and not duration_limit.allows(group_duration, added_ops)
+                )
+                if size_exceeded or duration_exceeded:
                     ignored_ops.extend(pending_one_qubit_gates)
                     return group_ops, ignored_ops
 
+                if duration_limit is not None:
+                    group_duration += duration_limit.ops_duration(added_ops)
                 group_ops.extend(pending_one_qubit_gates)
                 pending_one_qubit_gates = []
                 group_ops.append(op)
@@ -516,6 +595,8 @@ def _search_for_group_gate(
                     group_two_qubit_count,
                     verbose,
                     max_size,
+                    duration_limit,
+                    group_duration,
                 )
 
         elif len(op.qubits) == 1:
@@ -547,6 +628,8 @@ def _search_for_commuting_group_gate(
     group_two_qubit_count: int,
     verbose: bool,
     max_size: int | None,
+    duration_limit: GroupDurationLimit | None = None,
+    group_duration: float = 0.0,
 ) -> tuple[list[Op], list[Op]]:
     """Try to commute one future two-qubit gate into the active group."""
     single_qubit_gates_in_between: list[Op] = []
@@ -573,12 +656,17 @@ def _search_for_commuting_group_gate(
             if not _disjoint_ops(next_op, gate)
         ]
         size_available = max_size is None or group_two_qubit_count < max_size
+        duration_available = duration_limit is None or duration_limit.allows(
+            group_duration,
+            [*pending_one_qubit_gates, next_op],
+        )
 
         if (
             disjoint
             and shares_group_control
             and not blocking_one_qubit_gates
             and size_available
+            and duration_available
         ):
             group_ops.extend(pending_one_qubit_gates)
             group_ops.append(next_op)
