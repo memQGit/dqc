@@ -9,12 +9,14 @@
 
 from .verify import (
     dist_to_mono_circuit,
+    dist_to_mono_program,
     manual_cost_verification,
     verify_distributed_circuit,
 )
 
 __all__ = [
     "dist_to_mono_circuit",
+    "dist_to_mono_program",
     "manual_cost_verification",
     "verify_distributed_circuit",
 ]

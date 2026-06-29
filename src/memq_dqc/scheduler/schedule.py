@@ -7,13 +7,18 @@ import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cache
-from typing import Any, Literal, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypeVar
 
 from memq_dqc._logging import StepTimer, workflow_logging
 from memq_dqc.circuit import DistributedCircuit, Op
 from memq_dqc.network import PhysicalQubit
 from memq_dqc.preprocessing.qasm.types import CircuitQubit
 from memq_dqc.settings import load_settings
+
+if TYPE_CHECKING:
+    from os import PathLike
+
+    from matplotlib.axes import Axes
 
 logger = logging.getLogger(__name__)
 
@@ -408,6 +413,57 @@ class Scheduler:
     def schedule(self) -> OperationSchedule | None:
         """Return the latest operation schedule, if available."""
         return self._algorithm.schedule
+
+    def plot_gantt(
+        self,
+        *,
+        ax: Axes | None = None,
+        title: str | None = None,
+        display: Literal["pretty", "legacy"] = "pretty",
+        explicit_ops: bool = False,
+        show: bool = False,
+        save_path: str | PathLike[str] | None = None,
+        dpi: int = 150,
+    ) -> Axes:
+        """Render this scheduler's result as a Gantt chart.
+
+        Args:
+            ax: Existing axes to draw into. A new figure and axes are created
+                when omitted.
+            title: Optional chart title (ignored in ``"pretty"`` display).
+            display: Which rendering to produce. ``"pretty"`` is the
+                publication-ready variant; ``"legacy"`` is the on-screen
+                diagnostic chart.
+            explicit_ops: Whether to render one row per scheduled event instead
+                of one row per physical qubit.
+            show: Whether to call ``matplotlib.pyplot.show`` after rendering.
+            save_path: Optional file path. When given, the rendered figure is
+                saved there.
+            dpi: Resolution used when saving to ``save_path``.
+
+        Returns:
+            The Matplotlib axes containing the rendered schedule.
+
+        Raises:
+            ValueError: If the scheduler has not produced a schedule yet.
+        """
+        if self.schedule is None:
+            raise ValueError(
+                "No schedule available; call run() before plot_gantt()."
+            )
+        from memq_dqc.scheduler.schedule_visualizer import plot_schedule_gantt
+
+        axes = plot_schedule_gantt(
+            self.schedule,
+            ax=ax,
+            title=title,
+            show=show,
+            explicit_ops=explicit_ops,
+            display=display,
+        )
+        if save_path is not None:
+            axes.figure.savefig(str(save_path), dpi=dpi, bbox_inches="tight")
+        return axes
 
     def _resolve_algorithm(
         self,

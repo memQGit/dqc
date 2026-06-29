@@ -18,6 +18,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from os import PathLike
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypeVar, cast
 
 from openqasm3 import ast
@@ -26,7 +27,11 @@ from memq_dqc._logging import StepTimer, workflow_logging
 from memq_dqc.circuit import Circuit
 from memq_dqc.circuit.op import Op
 from memq_dqc.network import NetworkGraph
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
+from memq_dqc.preprocessing.qasm.io import (
+    dump_qasm_program,
+    load_qasm_program,
+    parse_qasm_source,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -269,6 +274,63 @@ class Partitioner:
         """Return the distributed OpenQASM program for this partitioner."""
         return self.distributed_circuit.program
 
+    @property
+    def distributed_qasm(self) -> str:
+        """Return the distributed circuit as OpenQASM 3 source text.
+
+        Extracts the distributed circuit on first access if needed.
+        """
+        return dump_qasm_program(self.distributed_program)
+
+    def save_distributed_circuit(self, path: str | PathLike[str]) -> Path:
+        """Write the distributed circuit to an OpenQASM 3 file.
+
+        Args:
+            path: Destination file path.
+
+        Returns:
+            The path the circuit was written to.
+        """
+        destination = Path(path)
+        destination.write_text(self.distributed_qasm)
+        return destination
+
+    def verify(
+        self,
+        *,
+        shots: int = 50000000,
+        fidelity_threshold: float = 0.90,
+        verbosity: Literal["quiet", "info", "debug"] = "quiet",
+    ) -> bool:
+        """Verify that the distributed circuit matches the original circuit.
+
+        Treats the distributed circuit as a single monolithic circuit in which
+        remote operations act perfectly, then compares its measurement
+        distribution against the original (pre-partition) circuit via Hellinger
+        fidelity. The original circuit is taken from this partitioner, so it
+        does not need to be supplied again. Extracts the distributed circuit on
+        first access if needed.
+
+        Args:
+            shots: Number of shots to execute each circuit for.
+            fidelity_threshold: Minimum Hellinger fidelity required for the
+                distributed circuit to be considered correct.
+            verbosity: Logging verbosity for this workflow call.
+
+        Returns:
+            True if the distributed circuit reproduces the original circuit's
+            output distribution within the fidelity threshold, False otherwise.
+        """
+        from memq_dqc.verify import verify_distributed_circuit
+
+        return verify_distributed_circuit(
+            self.circuit.mono.program,
+            self.distributed_program,
+            shots=shots,
+            fidelity_threshold=fidelity_threshold,
+            verbosity=verbosity,
+        )
+
     def _resolve_algorithm(
         self,
         network: NetworkGraph,
@@ -319,10 +381,22 @@ def _resolve_network_input(network: NetworkInput) -> NetworkGraph:
 
 
 def _resolve_program_input(program: ProgramInput) -> ast.Program:
-    """Return a parsed OpenQASM program for a supported partitioner input."""
+    """Return a parsed OpenQASM program for a supported partitioner input.
+
+    Accepts a parsed program, a path to a ``.qasm``/``.qasm3`` file, or inline
+    OpenQASM 3 source text.
+    """
     if isinstance(program, ast.Program):
         return program
-    return load_qasm_program(str(program))
+    text = str(program)
+    if _looks_like_qasm_source(text):
+        return parse_qasm_source(text)
+    return load_qasm_program(text)
+
+
+def _looks_like_qasm_source(value: str) -> bool:
+    """Return whether a string is inline OpenQASM source rather than a path."""
+    return "openqasm" in value.lower()
 
 
 def _resolve_partitioner_inputs(
@@ -346,8 +420,8 @@ def _resolve_partitioner_inputs(
 
     raise ValueError(
         "Could not infer which partitioner input is the network and which "
-        "is the program. Pass a NetworkGraph and an OpenQASM program, or "
-        "use .json and .qasm/.qasm3 paths."
+        "is the program. Pass a NetworkGraph and an OpenQASM program, use "
+        ".json and .qasm/.qasm3 paths, or pass inline OpenQASM source text."
     )
 
 
@@ -360,10 +434,13 @@ def _classify_partitioner_input(
     if isinstance(value, ast.Program):
         return "program"
     if isinstance(value, (str, PathLike)):
-        suffix = str(value).lower()
+        text = str(value)
+        suffix = text.lower()
         if suffix.endswith(".json"):
             return "network"
         if suffix.endswith((".qasm", ".qasm3")):
+            return "program"
+        if _looks_like_qasm_source(text):
             return "program"
     return None
 

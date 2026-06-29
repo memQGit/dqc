@@ -294,6 +294,42 @@ def test_verify_distributed_circuit_debug_logs_failure_details(
     assert any("Verification failed in" in msg for msg in messages)
 
 
+def test_verify_distributed_circuit_accepts_in_memory_programs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = openqasm3.parser.parse("OPENQASM 3.0;\nqubit[1] q;\n")
+    distributed = openqasm3.parser.parse("OPENQASM 3.0;\nqubit[1] q;\n")
+
+    loads_calls: list[str] = []
+    monkeypatch.setattr(
+        verify_module.qiskit.qasm3,
+        "loads",
+        lambda source: loads_calls.append(source) or object(),
+    )
+
+    def _fail_path_load(_path: Any) -> object:
+        raise AssertionError("path-based load must not be used for programs.")
+
+    monkeypatch.setattr(verify_module.qiskit.qasm3, "load", _fail_path_load)
+    monkeypatch.setattr(
+        verify_module, "dist_to_mono_program", lambda program: program
+    )
+    counts = iter([{"0": 10}, {"0": 10}])
+    monkeypatch.setattr(
+        verify_module,
+        "get_counts",
+        lambda _circuit, *, shots: next(counts),
+    )
+    monkeypatch.setattr(
+        verify_module, "hellinger_fidelity", lambda _orig, _mono: 1.0
+    )
+
+    assert verify_distributed_circuit(original, distributed, shots=10)
+    # Both the original and the distributed-as-monolithic circuits are loaded
+    # from in-memory source via loads(), never from a file path.
+    assert len(loads_calls) == 2
+
+
 def test_verify_distributed_circuit_rejects_invalid_verbosity() -> None:
     invalid_verbosity = cast(Any, "loud")
     with pytest.raises(ValueError, match="Unsupported verbosity"):
