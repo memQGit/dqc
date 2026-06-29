@@ -93,6 +93,65 @@ rcry(pi / 8) q0[0], q1[1], c0[0], c1[0];
     )
 
 
+def test_dist_to_mono_circuit_drops_catent_disent_with_comm_qubits(
+    tmp_path: Path,
+) -> None:
+    dist_qasm = """OPENQASM 3.0;
+include "builder/distgates.inc";
+qubit[2] q0;
+qubit[2] q1;
+qubit[1] c0;
+qubit[1] c1;
+catent q0[0], q1[1], c0[0], c1[0];
+rcx q0[0], q1[1], c0[0], c1[0];
+catdisent q0[0], q1[1], c0[0], c1[0];
+"""
+    dist_path = tmp_path / "dist_catent_comm.qasm"
+    dist_path.write_text(dist_qasm, encoding="utf-8")
+
+    mono_qasm = dist_to_mono_circuit(str(dist_path))
+    mono_prog = openqasm3.parser.parse(mono_qasm)
+    gates = [
+        stmt
+        for stmt in mono_prog.statements
+        if isinstance(stmt, openqasm3.ast.QuantumGate)
+    ]
+
+    assert [gate.name.name for gate in gates] == ["cx"]
+    assert len(gates[0].qubits) == 2
+
+
+def test_dist_to_mono_circuit_drops_catent_disent_without_comm_qubits(
+    tmp_path: Path,
+) -> None:
+    # Older / alternate output emits catent/catdisent with data operands
+    # only, so name-based removal (not the comm-qubit heuristic) must catch
+    # them.
+    dist_qasm = """OPENQASM 3.0;
+include "builder/distgates.inc";
+qubit[2] q0;
+qubit[2] q1;
+catent q0[0], q1[1];
+rcx q0[0], q1[1];
+catdisent q0[0], q1[1];
+"""
+    dist_path = tmp_path / "dist_catent_no_comm.qasm"
+    dist_path.write_text(dist_qasm, encoding="utf-8")
+
+    mono_qasm = dist_to_mono_circuit(str(dist_path))
+    mono_prog = openqasm3.parser.parse(mono_qasm)
+    gate_names = [
+        stmt.name.name
+        for stmt in mono_prog.statements
+        if isinstance(stmt, openqasm3.ast.QuantumGate)
+    ]
+
+    assert gate_names == ["cx"]
+    assert "catent" not in mono_qasm
+    assert "catdisent" not in mono_qasm
+    assert "distgates.inc" not in mono_qasm
+
+
 def test_manual_cost_verification_counts_remote_operations() -> None:
     qasm = """OPENQASM 3.0;
 include "builder/distgates.inc";

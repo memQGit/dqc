@@ -161,13 +161,21 @@ def get_counts(circuit: QuantumCircuit, shots: int) -> dict[str, int]:
 
 
 def dist_to_mono_circuit(dist_circuit_path: str) -> str:
-    """Convert a distributed circuit to a monolithic QuantumCircuit.
+    """Convert a distributed circuit to an executable monolithic circuit.
 
-    Rudimentary tool that takes distributed circuit and replaces remote
-    gates with local equivalent gates. Specifically RSWAP gates (TODO:
-    must get rid of RSWAPS and fix this function) are replaced with SWAP gates,
-    and R2Q gates (TODO: right now this is just (R)CX) are replaced with
-    local equivalent.
+    Takes a distributed circuit and rewrites it into an equivalent,
+    locally-executable form by:
+
+    - replacing remote operations with their local equivalents (``rcx`` ->
+      ``cx``, ``rcp`` -> ``cp``, ``rcry`` -> ``cry``, ``rcz`` -> ``cz``,
+      ``rswap`` -> ``swap``), keeping only the two data-qubit operands;
+    - dropping the cat-entanglement scaffolding (``catent`` / ``catdisent``)
+      that wraps remote operations, since the local equivalents need no
+      shared entanglement;
+    - removing communication-qubit (``c*``) declarations and any remaining
+      gates that act on communication qubits;
+    - dropping the custom ``distgates.inc`` include, which is no longer
+      referenced once remote operations are removed.
 
     Args:
         dist_circuit_path: Path to the distributed circuit file.
@@ -176,7 +184,6 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> str:
         A qasm string representing the monolithic version of the distributed
         circuit.
     """
-    # TODO: must be tested!
     dist_prog = parse_qasm_file(dist_circuit_path)
     new_statements = []
     # iterate through program statements and remove remote gates
@@ -211,6 +218,9 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> str:
             elif name == "rswap":
                 stmt = rename_quantum_gate(stmt, "swap")
                 stmt.qubits = non_comm_qubits(stmt.qubits)[:2]
+            # drop cat-entanglement scaffolding around remote operations
+            elif name in ("catent", "catdisent"):
+                continue
             elif any(is_comm_qubit_reference(qubit) for qubit in stmt.qubits):
                 continue
         new_statements.append(stmt)
