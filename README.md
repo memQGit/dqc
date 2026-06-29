@@ -70,51 +70,6 @@ partitioner = Partitioner("network.json", "circuit.qasm", algo="hypergraph")
 
 ---
 
-## Benchmarking
-
-The benchmark runner executes every combination of circuit, network topology, and partitioning algorithm and produces a terminal table, a CSV file, and an interactive HTML dashboard.
-
-### Run the full benchmark suite
-
-    uv run bench
-
-Results are written to `benchmarking/compiler_benchmarking/results/`.
-
-### Options
-
-| Flag | Description |
-|---|---|
-| `--algo ALGO` | Run only the named algorithm (repeatable) |
-| `--case NAME` | Run only the named case (repeatable) |
-| `--list-cases` | Print all discovered cases and exit |
-| `--output-csv PATH` | Write CSV to a specific path |
-| `--output-html PATH` | Write HTML dashboard to a specific path |
-| `--no-html` | Skip HTML generation |
-| `--timeout SECONDS` | Per-run wall-clock limit (default 300s, 0 to disable) |
-
-Examples:
-
-    uv run bench --algo interaction --algo hypergraph
-    uv run bench --list-cases
-    uv run bench --case qft_n18_transpiled__ring_3qpu --no-html
-
-### HTML dashboard
-
-The HTML report is self-contained and interactive. It includes:
-
-- **Algorithm summary table** — average EPR pairs, ops overhead, runtime, and win count per algorithm
-- **EPR Pairs Explorer** — select a circuit from the dropdown to see EPR pair counts for each topology, with one bar per partitioning algorithm; toggle averaging across topologies on/off
-- **Ops overhead chart** — mean ops overhead per circuit, grouped by algorithm
-- **Full results table** — all raw results, sortable by any column
-
-### Benchmark circuits and networks
-
-Circuits live in `benchmarking/benchmark_circuits/` and networks in `benchmarking/benchmark_networks/{N}_qubits/`. The runner pairs each circuit with every network topology matching its qubit count.
-
-To add a new case: drop a `.qasm` file into `benchmark_circuits/` (with the qubit count in the filename, e.g. `myalgo_n18.qasm`) and the corresponding network JSON files into `benchmark_networks/18_qubits/`.
-
----
-
 ## Visualization
 
 `memq_dqc.visualization` provides SVG-based views of the compilation output:
