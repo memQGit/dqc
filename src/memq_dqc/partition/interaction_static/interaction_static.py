@@ -64,11 +64,12 @@ class InteractionStaticPartitioner(BasePartitioner):
         circuit = self.circuit
         num_two_qubit_ops = circuit.mono.num_two_qubit_gates
         window_length_mode = "provided"
+        if self.window_length is not None and self.window_length < 1:
+            raise ValueError("window_length must be positive when provided.")
         if self.window_length is None:
             window_length_mode = "auto"
             if num_two_qubit_ops == 0:
                 self.window_length = 1
-            else:
                 gate_density = num_two_qubit_ops / max(1, num_qubits)
                 density_scale = max(0.5, min(math.sqrt(gate_density), 2.0))
                 base_window = math.sqrt(num_two_qubit_ops) * density_scale
