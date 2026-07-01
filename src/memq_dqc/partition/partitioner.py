@@ -376,6 +376,12 @@ def _get_algorithm_class(name: str) -> type[BasePartitioner]:
         )
 
         return InteractionPartitioner
+    if name in {"interaction-static", "interaction_static"}:
+        from memq_dqc.partition.interaction_static import (
+            InteractionStaticPartitioner,
+        )
+
+        return InteractionStaticPartitioner
     if name == "gate_grouping":
         from memq_dqc.partition.gate_group.gate_group import (
             GateGroupingPartitioner,
