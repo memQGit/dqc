@@ -20,6 +20,9 @@ if TYPE_CHECKING:
 
     from matplotlib.axes import Axes
 
+    from memq_dqc.compiler import Compiler
+    from memq_dqc.partition import Partitioner
+
 logger = logging.getLogger(__name__)
 
 _MEASUREMENT_TIME = 3.0
@@ -322,7 +325,7 @@ class Scheduler:
 
     def __init__(
         self,
-        distributed_circuit: DistributedCircuit,
+        source: Compiler | Partitioner | DistributedCircuit,
         *,
         algo: str | type[_Algorithm] | _Algorithm = "fifo",
         profile: SchedulerHardwareProfile | None = None,
@@ -337,7 +340,9 @@ class Scheduler:
         """Initialize the scheduler and select the algorithm.
 
         Args:
-            distributed_circuit: Distributed circuit DAG to schedule.
+            source: What to schedule. A ``Compiler`` or ``Partitioner`` (its
+                distributed circuit is used) or a ``DistributedCircuit``
+                directly.
             algo: Algorithm name, class, or preconfigured instance.
             profile: Optional convenience object selecting both modality and
                 entanglement profile. When provided, ``modality`` and
@@ -351,7 +356,7 @@ class Scheduler:
             algo_kwargs: Keyword arguments forwarded to the algorithm.
         """
         self._algorithm = self._resolve_algorithm(
-            distributed_circuit,
+            _resolve_distributed_circuit(source),
             algo,
             profile,
             modality,
@@ -506,6 +511,29 @@ class Scheduler:
             multiplex_entangle=multiplex_entangle,
             **algo_kwargs,
         )
+
+
+def _resolve_distributed_circuit(
+    source: Compiler | Partitioner | DistributedCircuit,
+) -> DistributedCircuit:
+    """Return the distributed circuit to schedule from a supported source.
+
+    Accepts a ``Compiler`` or ``Partitioner`` (whose ``distributed_circuit``
+    property is read, extracting it on first access) or a ``DistributedCircuit``
+    directly.
+
+    Raises:
+        TypeError: If ``source`` is not a supported type.
+    """
+    if isinstance(source, DistributedCircuit):
+        return source
+    distributed = getattr(source, "distributed_circuit", None)
+    if isinstance(distributed, DistributedCircuit):
+        return distributed
+    raise TypeError(
+        "Scheduler requires a Compiler, Partitioner, or DistributedCircuit; "
+        f"got {type(source).__name__}."
+    )
 
 
 def _get_algorithm_class(name: str) -> type[BaseScheduler]:
