@@ -46,8 +46,8 @@ def extract_distributed_circuit(
         max_group_size: Optional maximum number of two-qubit gates per emitted
             gate group.
         group_size_profile: Scheduler hardware profile whose timing bounds
-            each gate group's duration to the EPR lifetime. Defaults to
-            ``neutral_atom.polarization`` when omitted.
+            each gate group's duration to the EPR lifetime. When omitted the
+            EPR-lifetime cap is disabled.
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
