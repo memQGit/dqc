@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 
 def _resolve_group_duration_limit(
     profile: SchedulerHardwareProfile | None,
-) -> GroupDurationLimit:
+) -> GroupDurationLimit | None:
     """Return the EPR-lifetime gate-duration cap for one hardware profile.
 
     A gate group's scheduled block must fit within the EPR lifetime. The
@@ -52,21 +52,18 @@ def _resolve_group_duration_limit(
     budget for the gates inside the group.
 
     Args:
-        profile: Scheduler hardware profile whose timing drives the cap, or
-            ``None`` to use the default ``neutral_atom.polarization`` config.
+        profile: Scheduler hardware profile whose timing drives the cap.
+            ``None`` disables the cap, so gate groups are bounded only by
+            their gate compatibility (and any explicit ``max_group_size``).
 
     Returns:
-        The resolved gate-duration cap for group building.
+        The resolved gate-duration cap for group building, or ``None`` when
+        no profile is supplied and the cap is disabled.
     """
-    from memq_dqc.scheduler.schedule import (
-        SchedulerHardwareProfile,
-        _load_scheduler_timing_model,
-    )
+    from memq_dqc.scheduler.schedule import _load_scheduler_timing_model
 
     if profile is None:
-        profile = SchedulerHardwareProfile.neutral_atom(
-            entanglement_profile="neutral_atom.polarization",
-        )
+        return None
     timing = _load_scheduler_timing_model(profile)
     gate_duration_budget = (
         timing.epr_lifetime
@@ -103,7 +100,9 @@ def extract_distributed_circuit(
             gate group.
         group_size_profile: Scheduler hardware profile whose timing bounds the
             duration of each gate group so its scheduled block stays within
-            the EPR lifetime. Defaults to ``neutral_atom.polarization``.
+            the EPR lifetime. When omitted the EPR-lifetime cap is disabled
+            and groups are bounded only by gate compatibility and any explicit
+            ``max_group_size``.
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
@@ -140,10 +139,15 @@ def extract_distributed_circuit(
             raise ValueError("max_group_size must be positive when provided.")
 
         duration_limit = _resolve_group_duration_limit(group_size_profile)
-        logger.debug(
-            "Gate-group duration budget: %.3f time units.",
-            duration_limit.gate_duration_budget,
-        )
+        if duration_limit is None:
+            logger.debug(
+                "Gate-group EPR-lifetime cap disabled (no group_size_profile)."
+            )
+        else:
+            logger.debug(
+                "Gate-group duration budget: %.3f time units.",
+                duration_limit.gate_duration_budget,
+            )
         reordered_ops, group_indices, _ = identify_gate_groups(
             circuit,
             partitioner,
