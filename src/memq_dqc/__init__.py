@@ -8,12 +8,14 @@
 """Public package interface for memq-dqc.
 
 This module exposes the core workflow objects and configuration types
-needed for distributed quantum compilation. The full compile -> verify ->
-schedule workflow is driven entirely through ``Partitioner`` and
-``Scheduler``; supporting helpers remain importable from their own
-subpackages (e.g. ``memq_dqc.network``, ``memq_dqc.verify``).
+needed for distributed quantum compilation. The recommended entry point is
+``Compiler`` (compile -> verify) together with ``Scheduler``; ``Compiler``
+wraps the lower-level ``Partitioner``, which stays available for callers who
+want direct control over partitioning. Supporting helpers remain importable
+from their own subpackages (e.g. ``memq_dqc.network``, ``memq_dqc.verify``).
 """
 
+from .compiler import Compiler
 from .partition import Partitioner
 from .scheduler import Scheduler
 from .settings import (
@@ -29,6 +31,7 @@ from .settings import (
 )
 
 __all__ = [
+    "Compiler",
     "DESSimulationSettings",
     "EntanglementGenerationProfile",
     "GlobalSettings",
