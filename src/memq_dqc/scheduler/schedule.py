@@ -470,6 +470,38 @@ class Scheduler:
             axes.figure.savefig(str(save_path), dpi=dpi, bbox_inches="tight")
         return axes
 
+    def to_json(
+        self,
+        path: str | PathLike[str] | None = None,
+        *,
+        indent: int | None = 2,
+    ) -> str:
+        """Serialize this scheduler's result to a JSON document.
+
+        Opt-in export; scheduling never serializes automatically. See
+        :func:`memq_dqc.scheduler.serialize.schedule_to_json` for the document
+        layout.
+
+        Args:
+            path: Optional destination file. When given, the JSON document is
+                written there in addition to being returned.
+            indent: Indentation forwarded to the underlying serializer. Pass
+                ``None`` for the most compact single-line output.
+
+        Returns:
+            The JSON document as a string.
+
+        Raises:
+            ValueError: If the scheduler has not produced a schedule yet.
+        """
+        if self.schedule is None:
+            raise ValueError(
+                "No schedule available; call run() before to_json()."
+            )
+        from memq_dqc.scheduler.serialize import schedule_to_json
+
+        return schedule_to_json(self.schedule, path, indent=indent)
+
     def _resolve_algorithm(
         self,
         distributed_circuit: DistributedCircuit,

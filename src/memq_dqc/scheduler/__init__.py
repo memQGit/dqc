@@ -33,6 +33,7 @@ from .schedule import (
     SchedulerModality,
 )
 from .schedule_visualizer import plot_schedule_gantt
+from .serialize import schedule_to_json
 
 __all__ = [
     "BaseScheduler",
@@ -57,4 +58,5 @@ __all__ = [
     "des_link_shortest_duration_schedule",
     "fifo_schedule",
     "plot_schedule_gantt",
+    "schedule_to_json",
 ]
