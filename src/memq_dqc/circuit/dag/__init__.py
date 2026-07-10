@@ -7,7 +7,16 @@
 
 """Circuit DAG models and distributed DAG transformations."""
 
+from memq_dqc.circuit.dag.annotated import (
+    annotated_dag_to_json,
+    build_annotated_dag,
+)
 from memq_dqc.circuit.dag.distributed import DistributedCircuitDAG
 from memq_dqc.circuit.dag.mono import CircuitDAG
 
-__all__ = ["CircuitDAG", "DistributedCircuitDAG"]
+__all__ = [
+    "CircuitDAG",
+    "DistributedCircuitDAG",
+    "annotated_dag_to_json",
+    "build_annotated_dag",
+]

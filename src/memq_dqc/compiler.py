@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pathlib import Path
 
+    import networkx as nx
     from openqasm3 import ast
 
     from memq_dqc.circuit import Circuit, DistributedCircuit
@@ -156,6 +157,42 @@ class Compiler:
             The path the circuit was written to.
         """
         return self._partitioner.save_distributed_circuit(path)
+
+    def annotated_dag(self) -> nx.DiGraph:
+        """Return the compiled program as an annotated distributed DAG.
+
+        Opt-in export; compiling never builds this automatically. A fresh
+        annotated :class:`networkx.DiGraph` is constructed on each call. See
+        :func:`memq_dqc.circuit.dag.build_annotated_dag` for the node and edge
+        attributes.
+
+        Returns:
+            An annotated :class:`networkx.DiGraph` of the distributed circuit.
+        """
+        return self._partitioner.annotated_dag()
+
+    def to_dag_json(
+        self,
+        path: str | Path | None = None,
+        *,
+        indent: int | None = 2,
+    ) -> str:
+        """Serialize the annotated distributed DAG to a JSON document.
+
+        Opt-in export; compiling never serializes automatically. See
+        :func:`memq_dqc.circuit.dag.annotated_dag_to_json` for the document
+        layout.
+
+        Args:
+            path: Optional destination file. When given, the JSON document is
+                written there in addition to being returned.
+            indent: Indentation forwarded to the underlying serializer. Pass
+                ``None`` for the most compact single-line output.
+
+        Returns:
+            The JSON document as a string.
+        """
+        return self._partitioner.to_dag_json(path, indent=indent)
 
     def verify(
         self,

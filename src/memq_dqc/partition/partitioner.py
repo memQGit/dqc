@@ -36,6 +36,8 @@ from memq_dqc.preprocessing.qasm.io import (
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    import networkx as nx
+
     from memq_dqc.circuit import DistributedCircuit
     from memq_dqc.scheduler.schedule import SchedulerHardwareProfile
 
@@ -294,6 +296,49 @@ class Partitioner:
         destination = Path(path)
         destination.write_text(self.distributed_qasm)
         return destination
+
+    def annotated_dag(self) -> nx.DiGraph:
+        """Build an annotated distributed-DAG graph for the circuit.
+
+        Opt-in export; compilation never builds this automatically. A fresh
+        graph is constructed on each call. Extracts the distributed circuit on
+        first access if needed.
+
+        Returns:
+            An annotated :class:`networkx.DiGraph` of the distributed circuit.
+        """
+        from memq_dqc.circuit.dag import build_annotated_dag
+
+        return build_annotated_dag(self.distributed_circuit)
+
+    def to_dag_json(
+        self,
+        path: str | PathLike[str] | None = None,
+        *,
+        indent: int | None = 2,
+    ) -> str:
+        """Serialize the annotated distributed DAG to a JSON document.
+
+        Opt-in export; compilation never serializes automatically. See
+        :func:`memq_dqc.circuit.dag.annotated_dag_to_json` for the document
+        layout. Extracts the distributed circuit on first access if needed.
+
+        Args:
+            path: Optional destination file. When given, the JSON document is
+                written there in addition to being returned.
+            indent: Indentation forwarded to the underlying serializer. Pass
+                ``None`` for the most compact single-line output.
+
+        Returns:
+            The JSON document as a string.
+        """
+        from memq_dqc.circuit.dag import (
+            annotated_dag_to_json,
+            build_annotated_dag,
+        )
+
+        graph = build_annotated_dag(self.distributed_circuit)
+        return annotated_dag_to_json(graph, path, indent=indent)
 
     def verify(
         self,
