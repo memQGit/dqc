@@ -13,7 +13,12 @@ from memq_dqc.circuit.circuit import (
     MonoCircuit,
     build_circuit,
 )
-from memq_dqc.circuit.dag import CircuitDAG, DistributedCircuitDAG
+from memq_dqc.circuit.dag import (
+    CircuitDAG,
+    DistributedCircuitDAG,
+    annotated_dag_to_json,
+    build_annotated_dag,
+)
 from memq_dqc.circuit.layer import Layer
 from memq_dqc.circuit.op import Op
 
@@ -25,5 +30,7 @@ __all__ = [
     "Layer",
     "MonoCircuit",
     "Op",
+    "annotated_dag_to_json",
+    "build_annotated_dag",
     "build_circuit",
 ]
