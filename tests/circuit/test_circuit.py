@@ -5,15 +5,73 @@
 # See the LICENSE file in the project root for full license information.
 # ============================================================================
 
+import pytest
 from openqasm3 import ast
 
-from memq_dqc.builder.circuit_extractor import extract_distributed_circuit
-from memq_dqc.circuit import Circuit, build_circuit
-from memq_dqc.circuit.op import Op
-from memq_dqc.network import NetworkGraph, PhysicalQubit
-from memq_dqc.partition import Partitioner
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
-from memq_dqc.preprocessing.qasm.types import CircuitQubit
+from xdqc.builder.circuit_extractor import extract_distributed_circuit
+from xdqc.circuit import Circuit, build_circuit
+from xdqc.circuit.op import Op
+from xdqc.network import NetworkGraph, PhysicalQubit
+from xdqc.partition import Partitioner
+from xdqc.preprocessing.qasm.io import load_qasm_program
+from xdqc.preprocessing.qasm.types import CircuitQubit
+
+
+def _program(qasm_source: str) -> ast.Program:
+    from xdqc.preprocessing.qasm.io import parse_qasm_source
+
+    return parse_qasm_source(qasm_source)
+
+
+_CONVENTIONAL_QASM = (
+    'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+    "qubit[2] q;\nbit[2] c;\nh q[0];\ncx q[0], q[1];\n"
+)
+
+
+@pytest.mark.parametrize(
+    "reserved_source",
+    [
+        # Classical register named c0 collides with an emitted comm register.
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[2] q;\nbit[2] c0;\ncx q[0], q[1];\n"
+        ),
+        # Classical register named q1 collides with an emitted comp register.
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[2] q;\nbit[2] q1;\ncx q[0], q[1];\n"
+        ),
+        # A qubit register itself named c0.
+        ('OPENQASM 3.0;\ninclude "stdgates.inc";\nqubit[2] c0;\nh c0[0];\n'),
+    ],
+)
+def test_circuit_rejects_reserved_register_names(reserved_source) -> None:
+    with pytest.raises(ValueError, match="reserved"):
+        Circuit(_program(reserved_source))
+
+
+@pytest.mark.parametrize(
+    "accepted_source",
+    [
+        # Conventional bare q / c never collide (emitted names have a suffix).
+        _CONVENTIONAL_QASM,
+        # c-prefixed but not c<int>: has non-digit characters.
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[2] q;\nbit[2] c_out;\ncx q[0], q[1];\n"
+        ),
+        # Descriptive names.
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[2] data;\nbit[2] result;\ncx data[0], data[1];\n"
+        ),
+    ],
+)
+def test_circuit_accepts_non_reserved_register_names(accepted_source) -> None:
+    circuit = Circuit(_program(accepted_source))
+
+    assert circuit.mono.statements
 
 
 def test_circuit_builds_mono_from_program(simple1_circuit_path) -> None:

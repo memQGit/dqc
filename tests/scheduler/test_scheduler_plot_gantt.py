@@ -13,7 +13,7 @@ matplotlib.use("Agg")
 import pytest
 from matplotlib.axes import Axes
 
-from memq_dqc import Partitioner, Scheduler
+from xdqc import Partitioner, Scheduler
 
 
 def _ran_scheduler(circuit_path, network_path) -> Scheduler:

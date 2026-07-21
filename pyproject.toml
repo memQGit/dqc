@@ -1,5 +1,5 @@
 [project]
-name = "memq-dqc"
+name = "xdqc"
 version = "0.1.0"
 description = "memQ Distributed Quantum Compiler"
 readme = "README.md"
@@ -28,6 +28,10 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "mkdocs-gen-files>=0.5.0",
+    "mkdocs-literate-nav>=0.6.1",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.26.0",
     "notebook>=7.5.3",
     "pre-commit>=4.5.1",
     "pydoclint>=0.8.3",

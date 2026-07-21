@@ -11,13 +11,13 @@ from typing import Any, cast
 import networkx as nx
 import pytest
 
-from memq_dqc.circuit import Circuit
-from memq_dqc.network import NetworkGraph
-from memq_dqc.partition import Partitioner
-from memq_dqc.partition.partitioner import QPU, BasePartitioner
-from memq_dqc.partition.utils import partition_cost
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
-from memq_dqc.utils import get_windows
+from xdqc.circuit import Circuit
+from xdqc.network import NetworkGraph
+from xdqc.partition import Partitioner
+from xdqc.partition.partitioner import QPU, BasePartitioner
+from xdqc.partition.utils import partition_cost
+from xdqc.preprocessing.qasm.io import load_qasm_program
+from xdqc.utils import get_windows
 
 
 def test_partitioner_interaction_default(
@@ -145,7 +145,7 @@ def test_partitioner_verify_forwards_in_memory_programs(
 ) -> None:
     from openqasm3 import ast
 
-    import memq_dqc.verify as verify_pkg
+    import xdqc.verify as verify_pkg
 
     partitioner = Partitioner(
         three_comp_one_comm_x2_network_path,
@@ -239,13 +239,11 @@ def test_partitioner_run_quiet_emits_no_logs(
         algo_kwargs={"window_length": 2},
     )
 
-    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    caplog.set_level(logging.DEBUG, logger="xdqc")
     partitioner.run()
 
     records = [
-        record
-        for record in caplog.records
-        if record.name.startswith("memq_dqc")
+        record for record in caplog.records if record.name.startswith("xdqc")
     ]
     assert records == []
 
@@ -264,13 +262,13 @@ def test_partitioner_run_info_logs_summary(
         algo_kwargs={"window_length": 2},
     )
 
-    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    caplog.set_level(logging.DEBUG, logger="xdqc")
     partitioner.run(verbosity="info")
 
     messages = [
         record.getMessage()
         for record in caplog.records
-        if record.name.startswith("memq_dqc")
+        if record.name.startswith("xdqc")
     ]
     assert any(
         "Starting partitioning with BenchmarkStaticPartitioner." in msg
@@ -293,7 +291,7 @@ def test_partitioner_run_debug_logs_mappings_and_algorithm_details(
         algo_kwargs={"window_length": 2},
     )
 
-    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    caplog.set_level(logging.DEBUG, logger="xdqc")
     partitioner.run(verbosity="debug")
 
     assert partitioner.schedule
@@ -302,7 +300,7 @@ def test_partitioner_run_debug_logs_mappings_and_algorithm_details(
     messages = [
         record.getMessage()
         for record in caplog.records
-        if record.name.startswith("memq_dqc")
+        if record.name.startswith("xdqc")
     ]
 
     assert (

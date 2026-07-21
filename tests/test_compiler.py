@@ -8,12 +8,20 @@
 
 from typing import Any
 
+import networkx as nx
 import pytest
+from openqasm3 import ast
 
-from memq_dqc import Compiler, Scheduler
-from memq_dqc.circuit import DistributedCircuit
-from memq_dqc.network import NetworkGraph
-from memq_dqc.partition import Partitioner
+from xdqc import (
+    Compiler,
+    Scheduler,
+    SchedulingCompileOptions,
+    VerificationArtifacts,
+    get_verification_artifacts,
+)
+from xdqc.circuit import DistributedCircuit
+from xdqc.network import NetworkGraph
+from xdqc.partition import Partitioner
 
 
 def test_compiler_compiles_and_exposes_distributed_circuit(
@@ -48,6 +56,50 @@ def test_compiler_accepts_inline_qasm_source(
     assert isinstance(compiler.distributed_circuit, DistributedCircuit)
 
 
+def test_compiler_exposes_verification_artifacts(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    compiler = Compiler(
+        simple1_circuit_path,
+        three_comp_one_comm_x2_network_path,
+        algo_kwargs={"window_length": 2},
+    )
+    compiler.compile(ebit_assignment=True, group_gates=False)
+
+    artifacts = compiler.get_verification_artifacts()
+
+    assert isinstance(artifacts, VerificationArtifacts)
+    assert isinstance(artifacts.original_program, ast.Program)
+    assert isinstance(artifacts.distributed_program, ast.Program)
+    assert "OPENQASM" in artifacts.original_qasm
+    assert "OPENQASM" in artifacts.distributed_qasm
+    assert nx.is_directed_acyclic_graph(artifacts.original_dag)
+    assert nx.is_directed_acyclic_graph(artifacts.distributed_dag)
+    assert artifacts.original_dag is not compiler.circuit.mono.dag.graph
+
+
+def test_get_verification_artifacts_compiles_both_representations(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    artifacts = get_verification_artifacts(
+        simple1_circuit_path,
+        three_comp_one_comm_x2_network_path,
+        options=SchedulingCompileOptions(
+            partitioner_kwargs={"window_length": 2},
+        ),
+    )
+
+    assert isinstance(artifacts, VerificationArtifacts)
+    assert set(artifacts.original_dag) == {
+        data["op"].op_id for data in artifacts.original_dag.nodes.values()
+    }
+    assert set(artifacts.distributed_dag) == {
+        data["op"].op_id for data in artifacts.distributed_dag.nodes.values()
+    }
+
+
 def test_compiler_save_distributed_circuit(
     tmp_path,
     simple1_circuit_path,
@@ -72,7 +124,7 @@ def test_compiler_verify_forwards_to_partitioner(
     three_comp_one_comm_x2_network_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import memq_dqc.verify as verify_pkg
+    import xdqc.verify as verify_pkg
 
     compiler = Compiler(
         simple1_circuit_path,

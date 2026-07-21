@@ -10,13 +10,13 @@ from typing import Any
 
 from openqasm3 import ast
 
-from memq_dqc.builder.extract_utils import (
+from xdqc.builder.extract_utils import (
     identify_gate_groups,
     synthesize_state_teleportation_swaps,
 )
-from memq_dqc.circuit.op import Op
-from memq_dqc.partition.partitioner import QPU
-from memq_dqc.preprocessing.qasm.types import CircuitQubit
+from xdqc.circuit.op import Op
+from xdqc.partition.partitioner import QPU
+from xdqc.preprocessing.qasm.types import CircuitQubit
 
 
 def _op(op_id, name, *qubit_indices):

@@ -1,0 +1,61 @@
+/* ==========================================================================
+   memQ brand theming for MkDocs Material
+   Palette:
+     - Deep purple  #4801b0  (primary)
+     - Magenta      #d702fe
+     - Indigo       #6a4cff  (accent / links)
+     - Teal         #00dec6  (used sparingly)
+   ========================================================================== */
+
+:root {
+  --memq-purple: #4801b0;
+  --memq-magenta: #d702fe;
+  --memq-indigo: #6a4cff;
+  --memq-teal: #00dec6;
+
+  /* Primary drives the header, nav highlights, and section markers. */
+  --md-primary-fg-color: var(--memq-purple);
+  --md-primary-fg-color--light: var(--memq-indigo);
+  --md-primary-fg-color--dark: #35007f;
+
+  /* Accent drives links-on-hover, focus rings, and interactive states. */
+  --md-accent-fg-color: var(--memq-indigo);
+  --md-accent-fg-color--transparent: rgba(106, 76, 255, 0.1);
+}
+
+/* Slightly richer link color in the body text. */
+.md-typeset a {
+  color: var(--memq-indigo);
+}
+
+/* Teal accent, used sparingly: the active/hover tab underline in the
+   top navigation only. */
+.md-tabs__link--active,
+.md-tabs__link:hover {
+  border-bottom: 2px solid var(--memq-teal);
+}
+
+/* Dark mode: lift the primary so header text stays legible on slate. */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #5a1fd0;
+  --md-accent-fg-color: var(--memq-indigo);
+}
+
+/* A subtle brand gradient on the home hero (if a page uses .memq-hero). */
+.memq-hero {
+  background: linear-gradient(
+    135deg,
+    var(--memq-purple) 0%,
+    var(--memq-magenta) 100%
+  );
+  color: #fff;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.memq-hero h1,
+.memq-hero p {
+  color: #fff;
+  margin: 0.25rem 0;
+}
