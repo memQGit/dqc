@@ -25,7 +25,14 @@ from memq_dqc.scheduler import (
     des_link_fifo_schedule,
     des_link_shortest_duration_schedule,
 )
-from memq_dqc.scheduler.des_link_scheduler import _build_catent_groups
+from memq_dqc.scheduler.des_link_scheduler import (
+    _build_catent_groups,
+    _canonical_link_key,
+    _LinkState,
+    _PendingLinkRequest,
+    _RemoteLinkRequest,
+    _RemoteRequest,
+)
 
 # Patched timing model: 1q=10, 2q=500, measure=3 → catent=513, catdisent=23.
 # A high entanglement rate makes EPR generation succeed on the first cycle.
@@ -316,3 +323,160 @@ def test_critical_path_prefers_block_with_longer_tail(
     # (q4) first because of its longer downstream tail.
     assert _first_catent_data(fifo) == "q0[0]"
     assert _first_catent_data(critical) == "q4[0]"
+
+
+def _multi_link_request(
+    op: Op, links: list[tuple[str, str]]
+) -> _RemoteRequest:
+    link_requests = {}
+    for link_qubits in links:
+        link_key = _canonical_link_key(link_qubits)
+        link_requests[link_key] = _RemoteLinkRequest(
+            link_qubits=link_qubits, link_key=link_key
+        )
+    return _RemoteRequest(
+        op=op,
+        op_qubits=tuple(q.register_name for q in op.qubits),
+        data_qubits=(op.qubits[0].register_name, op.qubits[1].register_name),
+        link_requests=link_requests,
+    )
+
+
+def test_multi_link_activation_is_all_or_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # Two remote requests each need BOTH links (c0,c1) and (c2,c3). While
+    # either link is held by a different request, neither may take partial
+    # ownership of the other -- the hold-and-wait pattern that previously
+    # let crossed multi-link requests livelock. Links are granted only when
+    # all of a request's links are simultaneously free.
+    _patch_timing(monkeypatch)
+    circuit = _circuit([_op(0, "h", [_q("q0")])], [])
+    scheduler = DESLinkFIFOScheduler(
+        circuit, profile=SchedulerHardwareProfile(), seed=0
+    )
+    scheduler._reset_run_state()
+
+    l1 = _canonical_link_key(("c0", "c1"))
+    l2 = _canonical_link_key(("c2", "c3"))
+    op_a = _op(10, "rcx", [_q("q0"), _q("q1")], is_remote=True)
+    op_b = _op(11, "rcx", [_q("q4"), _q("q5")], is_remote=True)
+    scheduler._remote_requests[10] = _multi_link_request(
+        op_a, [("c0", "c1"), ("c2", "c3")]
+    )
+    scheduler._remote_requests[11] = _multi_link_request(
+        op_b, [("c0", "c1"), ("c2", "c3")]
+    )
+
+    # Both links are currently held by unrelated requests, with A and B
+    # queued behind them on each link.
+    scheduler._link_states[l1] = _LinkState(
+        active_request_id=98,
+        pending_requests=[
+            _PendingLinkRequest(op_id=10, enqueue_sequence=0),
+            _PendingLinkRequest(op_id=11, enqueue_sequence=2),
+        ],
+    )
+    scheduler._link_states[l2] = _LinkState(
+        active_request_id=99,
+        pending_requests=[
+            _PendingLinkRequest(op_id=10, enqueue_sequence=1),
+            _PendingLinkRequest(op_id=11, enqueue_sequence=3),
+        ],
+    )
+
+    # Free only L1: no request may activate, because each still needs L2
+    # (held by request 99). Old logic would have granted L1 to a request,
+    # creating a partial hold.
+    scheduler._link_states[l1].active_request_id = None
+    assert (
+        scheduler._select_activatable_request(
+            scheduler._link_states[l1], link_key=l1, time=0.0
+        )
+        is None
+    )
+    assert not scheduler._request_links_available(10)
+
+    # Free L2 as well: request 10 (lowest arbitration key) can now take
+    # both links atomically.
+    scheduler._link_states[l2].active_request_id = None
+    assert scheduler._request_links_available(10)
+    assert (
+        scheduler._select_activatable_request(
+            scheduler._link_states[l1], link_key=l1, time=0.0
+        )
+        == 10
+    )
+    scheduler._activate_request_links(10, 0.0)
+    assert scheduler._link_states[l1].active_request_id == 10
+    assert scheduler._link_states[l2].active_request_id == 10
+    # Request 10 is no longer queued on either link.
+    assert all(
+        pending.op_id != 10
+        for pending in scheduler._link_states[l1].pending_requests
+    )
+    assert all(
+        pending.op_id != 10
+        for pending in scheduler._link_states[l2].pending_requests
+    )
+
+
+def test_crossed_multi_link_blocks_terminate_and_serialize(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # Two cat-entanglement blocks that each hold the same two links for the
+    # whole block. Scheduling must terminate and serialize the blocks on the
+    # shared links rather than deadlock with each holding one link.
+    _patch_timing(monkeypatch)
+    ops = [
+        _op(
+            0,
+            "catent",
+            [_q("q0"), _q("q1"), _q("c0"), _q("c1"), _q("c2"), _q("c3")],
+        ),
+        _op(1, "rcx", [_q("q0"), _q("q1")], is_remote=True),
+        _op(
+            2,
+            "catdisent",
+            [_q("q0"), _q("q1"), _q("c0"), _q("c1"), _q("c2"), _q("c3")],
+        ),
+        _op(
+            3,
+            "catent",
+            [_q("q4"), _q("q5"), _q("c0"), _q("c1"), _q("c2"), _q("c3")],
+        ),
+        _op(4, "rcx", [_q("q4"), _q("q5")], is_remote=True),
+        _op(
+            5,
+            "catdisent",
+            [_q("q4"), _q("q5"), _q("c0"), _q("c1"), _q("c2"), _q("c3")],
+        ),
+    ]
+    edges = [(0, 1), (1, 2), (0, 2), (3, 4), (4, 5), (3, 5)]
+    circuit = _circuit(ops, edges)
+
+    for scheduler_fn in (
+        des_link_fifo_schedule,
+        des_link_critical_path_schedule,
+        des_link_shortest_duration_schedule,
+    ):
+        schedule = scheduler_fn(circuit, seed=0)
+        scheduled_op_ids = {
+            event.op_id
+            for event in schedule.operations
+            if hasattr(event, "op_id")
+        }
+        # Every operation is scheduled (the run terminates).
+        assert {0, 1, 2, 3, 4, 5} <= scheduled_op_ids
+
+        first_catdisent = min(
+            (e for e in schedule.operations if e.name == "catdisent"),
+            key=lambda e: e.start_time,
+        )
+        second_catent = max(
+            (e for e in schedule.operations if e.name == "catent"),
+            key=lambda e: e.start_time,
+        )
+        # The blocks do not overlap on the shared links: the second block's
+        # catent starts only after the first block releases them.
+        assert second_catent.start_time >= first_catdisent.end_time
