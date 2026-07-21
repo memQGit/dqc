@@ -10,16 +10,16 @@ from typing import Any, cast
 import pytest
 from openqasm3 import ast
 
-from memq_dqc.circuit import Circuit
-from memq_dqc.network import NetworkGraph
-from memq_dqc.partition.partitioner import QPU
-from memq_dqc.preprocessing.qasm import (
+from xdqc.circuit import Circuit
+from xdqc.network import NetworkGraph
+from xdqc.partition.partitioner import QPU
+from xdqc.preprocessing.qasm import (
     count_total_qubits,
     extract_qubit_index,
     extract_two_qubit_gates,
 )
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
-from memq_dqc.utils import (
+from xdqc.preprocessing.qasm.io import load_qasm_program
+from xdqc.utils import (
     count_two_qubit_pairs,
     create_initial_subcircuit_graph,
     distribute,
@@ -27,7 +27,7 @@ from memq_dqc.utils import (
     movement_cost,
     qubit_partition_map,
 )
-from memq_dqc.utils.circuit_utils import build_window_interaction_graph
+from xdqc.utils.circuit_utils import build_window_interaction_graph
 
 
 @pytest.mark.parametrize(

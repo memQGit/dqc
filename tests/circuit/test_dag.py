@@ -15,12 +15,12 @@ from qiskit import qasm3
 from qiskit.converters import circuit_to_dag
 from qiskit.dagcircuit import DAGCircuit
 
-from memq_dqc.builder.extract_utils import SwapOp
-from memq_dqc.circuit import Circuit, DistributedCircuit, Op
-from memq_dqc.circuit.dag import CircuitDAG
-from memq_dqc.network import NetworkGraph, PhysicalQubit
-from memq_dqc.partition.partitioner import QPU
-from memq_dqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
+from xdqc.builder.extract_utils import SwapOp
+from xdqc.circuit import Circuit, DistributedCircuit, Op
+from xdqc.circuit.dag import CircuitDAG
+from xdqc.network import NetworkGraph, PhysicalQubit
+from xdqc.partition.partitioner import QPU
+from xdqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
 
 
 def _build_memq_circuit(qasm_path: Path) -> Circuit:

@@ -9,29 +9,43 @@ import networkx as nx
 import pytest
 from openqasm3 import ast
 
-import memq_dqc.scheduler.schedule as schedule_module
-from memq_dqc.builder import extract_distributed_circuit
-from memq_dqc.circuit import DistributedCircuit
-from memq_dqc.circuit.op import Op
-from memq_dqc.network import NetworkGraph
-from memq_dqc.partition import Partitioner
-from memq_dqc.partition.partitioner import QPU, BasePartitioner
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
-from memq_dqc.preprocessing.qasm.types import CircuitQubit
-from memq_dqc.scheduler import (
+import xdqc.scheduler.schedule as schedule_module
+from xdqc.builder import extract_distributed_circuit
+from xdqc.circuit import DistributedCircuit
+from xdqc.circuit.op import Op
+from xdqc.network import NetworkGraph
+from xdqc.partition import Partitioner
+from xdqc.partition.partitioner import QPU, BasePartitioner
+from xdqc.preprocessing.qasm.io import load_qasm_program
+from xdqc.preprocessing.qasm.types import CircuitQubit
+from xdqc.scheduler import (
     DESLinkCriticalPathScheduler,
     DESLinkShortestDurationScheduler,
     OperationSchedule,
     Scheduler,
 )
-from memq_dqc.scheduler.des_link_scheduler import (
+from xdqc.scheduler.des_link_scheduler import (
     _LinkState,
     _PendingLinkRequest,
+    _RemoteLinkRequest,
+    _RemoteRequest,
 )
-from memq_dqc.scheduler.schedule import (
+from xdqc.scheduler.schedule import (
     SchedulerHardwareProfile,
     SchedulerTimingModel,
 )
+
+
+def _register_single_link_request(scheduler, op_id, link):
+    link_key = tuple(sorted(link))
+    scheduler._remote_requests[op_id] = _RemoteRequest(
+        op=None,
+        op_qubits=(),
+        data_qubits=("", ""),
+        link_requests={
+            link_key: _RemoteLinkRequest(link_qubits=link, link_key=link_key)
+        },
+    )
 
 
 class _TwoQpuPartitioner(BasePartitioner):
@@ -321,6 +335,8 @@ def test_shortest_duration_variant_prefers_shorter_request(
         "_remote_duration",
         lambda op_id: 20.0 if op_id == 0 else 5.0,
     )
+    _register_single_link_request(scheduler, 0, ("c0[0]", "c1[0]"))
+    _register_single_link_request(scheduler, 1, ("c0[0]", "c1[0]"))
     link_state = _LinkState(
         pending_requests=[
             _PendingLinkRequest(op_id=0, enqueue_sequence=0),
@@ -328,7 +344,7 @@ def test_shortest_duration_variant_prefers_shorter_request(
         ]
     )
 
-    next_request_id = scheduler._pop_next_pending_request(
+    next_request_id = scheduler._select_activatable_request(
         link_state,
         link_key=("c0[0]", "c1[0]"),
         time=0.0,
@@ -352,6 +368,8 @@ def test_critical_path_variant_prefers_larger_remaining_path(
         "_remaining_path_cost",
         lambda op_id: 100.0 if op_id == 0 else 10.0,
     )
+    _register_single_link_request(scheduler, 0, ("c0[0]", "c1[0]"))
+    _register_single_link_request(scheduler, 1, ("c0[0]", "c1[0]"))
     link_state = _LinkState(
         pending_requests=[
             _PendingLinkRequest(op_id=0, enqueue_sequence=1),
@@ -359,7 +377,7 @@ def test_critical_path_variant_prefers_larger_remaining_path(
         ]
     )
 
-    next_request_id = scheduler._pop_next_pending_request(
+    next_request_id = scheduler._select_activatable_request(
         link_state,
         link_key=("c0[0]", "c1[0]"),
         time=0.0,

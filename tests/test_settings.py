@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from memq_dqc import (
+from xdqc import (
     default_settings_path,
     load_settings,
     load_settings_file,

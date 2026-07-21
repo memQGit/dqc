@@ -10,12 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from memq_dqc.builder import extract_distributed_circuit
-from memq_dqc.network import NetworkGraph
-from memq_dqc.partition import Partitioner
-from memq_dqc.partition.partitioner import QPU, BasePartitioner
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
-from memq_dqc.scheduler import (
+from xdqc.builder import extract_distributed_circuit
+from xdqc.network import NetworkGraph
+from xdqc.partition import Partitioner
+from xdqc.partition.partitioner import QPU, BasePartitioner
+from xdqc.preprocessing.qasm.io import load_qasm_program
+from xdqc.scheduler import (
     EntanglementGeneration,
     OperationSchedule,
     ScheduledOperation,
@@ -23,7 +23,7 @@ from memq_dqc.scheduler import (
     SchedulerHardwareProfile,
     fifo_schedule,
 )
-from memq_dqc.scheduler.schedule import (
+from xdqc.scheduler.schedule import (
     _build_qubit_timelines,
     _count_failed_entanglement_operations,
 )
@@ -237,7 +237,7 @@ def test_scheduler_info_verbosity_reports_summary_metrics(
         algo_kwargs={"seed": 0},
     )
 
-    with caplog.at_level(logging.INFO, logger="memq_dqc"):
+    with caplog.at_level(logging.INFO, logger="xdqc"):
         scheduler.run(verbosity="info")
 
     assert "makespan=" in caplog.text
