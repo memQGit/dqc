@@ -557,27 +557,87 @@ class BaseDESLinkScheduler(BaseScheduler):
         del time
         return (float(pending_request.enqueue_sequence),)
 
-    def _pop_next_pending_request(
+    def _request_links_available(self, op_id: int) -> bool:
+        """Return True if every link the request needs is free or its own.
+
+        A link is available to the request when no other request currently
+        holds it. This gate lets a request acquire its links all-or-nothing,
+        so a multi-link request never takes partial ownership of some links
+        while blocked waiting for the rest.
+        """
+        request = self._remote_requests[op_id]
+        for link_key in request.link_requests:
+            link_state = self._link_states.get(link_key)
+            if (
+                link_state is not None
+                and link_state.active_request_id is not None
+                and link_state.active_request_id != op_id
+            ):
+                return False
+        return True
+
+    def _select_activatable_request(
         self,
         link_state: _LinkState,
         *,
         link_key: tuple[str, str],
         time: float,
     ) -> int | None:
-        """Return the next queued request for one link."""
+        """Return the next queued request whose links can all be acquired.
+
+        Pending requests are considered in arbitration order, but a request
+        is skipped when any communication link it needs is held by a
+        different request. Granting links all-or-nothing prevents the
+        hold-and-wait cycles that would otherwise livelock crossed
+        multi-link requests (each holding a link the other needs).
+        """
         if not link_state.pending_requests:
             return None
 
-        best_index, best_request = min(
-            enumerate(link_state.pending_requests),
-            key=lambda item: self._pending_request_sort_key(
-                item[1],
+        ordered_requests = sorted(
+            link_state.pending_requests,
+            key=lambda pending_request: self._pending_request_sort_key(
+                pending_request,
                 link_key=link_key,
                 time=time,
             ),
         )
-        del link_state.pending_requests[best_index]
-        return best_request.op_id
+        for pending_request in ordered_requests:
+            if self._request_links_available(pending_request.op_id):
+                return pending_request.op_id
+        return None
+
+    def _remove_pending_request(self, op_id: int) -> None:
+        """Drop one request from the pending queue of every link it needs."""
+        request = self._remote_requests[op_id]
+        for link_key in request.link_requests:
+            link_state = self._link_states.get(link_key)
+            if link_state is None:
+                continue
+            link_state.pending_requests = [
+                pending_request
+                for pending_request in link_state.pending_requests
+                if pending_request.op_id != op_id
+            ]
+
+    def _activate_request_links(self, op_id: int, time: float) -> None:
+        """Atomically start entanglement on all of a request's links.
+
+        The request is removed from every link's pending queue and each of
+        its links that is not already active for it begins entanglement
+        generation. Callers must first confirm the request's links are all
+        available (see ``_request_links_available``).
+        """
+        self._remove_pending_request(op_id)
+        request = self._remote_requests[op_id]
+        for link_key in request.link_requests:
+            link_state = self._link_states.get(link_key)
+            if (
+                link_state is not None
+                and link_state.active_request_id == op_id
+            ):
+                continue
+            self._activate_remote_request(op_id, link_key, time)
 
     def _collect_same_time_link_start_requests(
         self,
@@ -645,16 +705,14 @@ class BaseDESLinkScheduler(BaseScheduler):
         if link_state.active_request_id is not None:
             return
 
-        next_request_id = self._pop_next_pending_request(
+        next_request_id = self._select_activatable_request(
             link_state,
             link_key=event.link_key,
             time=event.time,
         )
         if next_request_id is None:
             return
-        self._activate_remote_request(
-            next_request_id, event.link_key, event.time
-        )
+        self._activate_request_links(next_request_id, event.time)
 
     def _handle_epr_attempt(self, event: _QueueEvent) -> None:
         """Sample one entanglement attempt and queue the next step."""
@@ -788,14 +846,14 @@ class BaseDESLinkScheduler(BaseScheduler):
         """Free one link and activate the next queued request, if any."""
         link_state = self._link_states.setdefault(link_key, _LinkState())
         link_state.active_request_id = None
-        next_request_id = self._pop_next_pending_request(
+        next_request_id = self._select_activatable_request(
             link_state,
             link_key=link_key,
             time=time,
         )
         if next_request_id is None:
             return
-        self._activate_remote_request(next_request_id, link_key, time)
+        self._activate_request_links(next_request_id, time)
 
     def _release_group_links_on_catdisent(
         self,
