@@ -11,12 +11,14 @@ from .benchmark_random import BenchmarkRandomPartitioner
 from .benchmark_static import BenchmarkStaticPartitioner
 from .hypergraph import HypergraphPartitioner
 from .interaction import InteractionPartitioner
+from .interaction_static import InteractionStaticPartitioner
 from .partitioner import Partitioner
 
 __all__ = [
     "BenchmarkRandomPartitioner",
     "BenchmarkStaticPartitioner",
-    "InteractionPartitioner",
     "HypergraphPartitioner",
+    "InteractionPartitioner",
+    "InteractionStaticPartitioner",
     "Partitioner",
 ]

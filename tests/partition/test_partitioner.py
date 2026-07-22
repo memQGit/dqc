@@ -225,6 +225,79 @@ def test_partitioner_benchmark_static_schedule_is_stationary(
         assert by_qpu_id == expected_assignment
 
 
+def test_partitioner_interaction_static_schedule_is_stationary(
+    tmp_path,
+    simple1_network_path,
+) -> None:
+    qasm_path = tmp_path / "interaction_static.qasm"
+    qasm_path.write_text(
+        "\n".join(
+            [
+                "OPENQASM 3.0;",
+                'include "stdgates.inc";',
+                "qubit[4] q;",
+                "cx q[0], q[1];",
+                "cx q[0], q[2];",
+                "cx q[1], q[3];",
+                "cx q[0], q[2];",
+                "cx q[1], q[3];",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    program = load_qasm_program(str(qasm_path))
+    network = NetworkGraph(str(simple1_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo="interaction-static",
+        algo_kwargs={"window_length": 1},
+    )
+
+    partitioner.run(ebit_assignment=True)
+
+    schedule = partitioner.schedule
+    windows = partitioner.windows
+
+    assert schedule
+    assert windows
+    assert len(schedule) == len(get_windows(Circuit(program), window_length=1))
+    assert len(windows) == len(schedule)
+
+    first_window = {qpu.id: qubits for qpu, qubits in schedule[0].items()}
+    assert sorted(first_window.values(), key=lambda qubits: min(qubits)) == [
+        {0, 2},
+        {1, 3},
+    ]
+    for window in schedule[1:]:
+        by_qpu_id = {qpu.id: qubits for qpu, qubits in window.items()}
+        assert by_qpu_id == first_window
+
+    assert partitioner.cost == 1.0
+    assert not any(
+        op.name == "rswap" for op in partitioner.distributed_circuit.ops
+    )
+
+
+def test_partitioner_interaction_static_accepts_underscore_alias(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo="interaction_static",
+        algo_kwargs={"window_length": 2},
+    )
+
+    partitioner.run()
+
+    assert partitioner.schedule
+    assert partitioner.windows
+
+
 def test_partitioner_run_quiet_emits_no_logs(
     simple1_circuit_path,
     three_comp_one_comm_x2_network_path,

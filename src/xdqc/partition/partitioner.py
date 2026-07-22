@@ -506,6 +506,12 @@ def _get_algorithm_class(name: str) -> type[BasePartitioner]:
         )
 
         return InteractionPartitioner
+    if name in {"interaction-static", "interaction_static"}:
+        from xdqc.partition.interaction_static import (
+            InteractionStaticPartitioner,
+        )
+
+        return InteractionStaticPartitioner
     if name in {"benchmark_static", "BenchmarkStatic"}:
         from xdqc.partition.benchmark_static import (
             BenchmarkStaticPartitioner,

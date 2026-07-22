@@ -22,7 +22,6 @@ from xdqc.partition.utils import (
 )
 
 
-# TODO: how to implement these algorithms in a plug-and-play way?
 def kl_partition(
     graph: nx.Graph,
     partitions: int | list[int],
