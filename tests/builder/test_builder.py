@@ -761,3 +761,33 @@ def test_extract_distributed_circuit_rejects_invalid_verbosity(
             partitioner,
             verbosity=invalid_verbosity,
         )
+
+
+def test_extract_distributed_circuit_raises_on_statement_undercount(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The statement-accounting invariant must raise a clear error (not a bare
+    # ``assert``, which would be stripped under ``python -O``) when the
+    # assembled program has fewer statements than the computed lower bound.
+    import memq_dqc.circuit.circuit as circuit_module
+
+    original = circuit_module.build_distributed_statements
+
+    def _truncated(*args: Any, **kwargs: Any):
+        statements, swaps_added = original(*args, **kwargs)
+        return statements[:1], swaps_added
+
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    partitioner = Partitioner(
+        network, program, algo_kwargs={"window_length": 2}
+    )
+    partitioner.run()
+    monkeypatch.setattr(
+        circuit_module, "build_distributed_statements", _truncated
+    )
+
+    with pytest.raises(RuntimeError, match="statement-accounting"):
+        extract_distributed_circuit(partitioner, group_gates=False)

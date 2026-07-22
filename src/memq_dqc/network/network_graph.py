@@ -239,6 +239,27 @@ class NetworkGraph:
             for qubit_groups in self._processor_qubit_groups()
         ]
 
+    def qpu_ids(self) -> list[int]:
+        """Return the QPU IDs ordered to match the per-QPU count helpers.
+
+        The ordering is identical to ``comp_qubits_per_qpu`` and
+        ``comm_qubits_per_qpu`` (sorted numerically by processor ID), so a
+        positional index into any of those lists refers to the QPU ID at the
+        same position here. Unlike deriving IDs from the qubit set, this
+        includes every declared processor even one with no qubits, keeping
+        the index-to-QPU mapping stable.
+
+        Returns:
+            QPU IDs ordered by processor ID.
+        """
+        processors = self._network_data["processors"]
+        return [
+            _normalize_processor_id(processor_id)
+            for processor_id in sorted(
+                processors.keys(), key=_processor_sort_key
+            )
+        ]
+
     def get_comm_pair_options(
         self, qubit_a: PhysicalQubit, qubit_b: PhysicalQubit
     ) -> list[
