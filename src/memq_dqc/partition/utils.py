@@ -38,7 +38,6 @@ def partition_cost(
     total = 0.0
     for u, v, weight in graph.edges(data="weight", default=1):
         if group_assignment[u] != group_assignment[v]:
-            # TODO: check this (implemented by codex)
             crossing_weight = float(weight)
             if edge_cost is not None:
                 crossing_weight *= edge_cost(

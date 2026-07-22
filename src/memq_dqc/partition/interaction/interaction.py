@@ -105,13 +105,18 @@ class InteractionPartitioner(BasePartitioner):
             len(windows),
             windows_timer.elapsed_seconds(),
         )
-        network_qpu_ids = sorted(
-            {qubit.qpu_id for qubit in self.network.qubit_type_map}
-        )
+        # QPU IDs must share the ordering of ``partition_sizes`` (both come
+        # from the network's processor order) so a partition index maps to
+        # the correct QPU when scoring crossing edges below.
+        network_qpu_ids = self.network.qpu_ids()
+        if len(network_qpu_ids) != len(partition_sizes):
+            raise ValueError(
+                "Network QPU count does not match partition count: "
+                f"{len(network_qpu_ids)} QPUs vs "
+                f"{len(partition_sizes)} partitions."
+            )
 
         def _remote_ebit_multiplier(part_a: int, part_b: int) -> float:
-            # TODO: go through this - relied on codex refactor for time crunch
-            # TODO: remove redunancy, and no nested functions
             qpu_a = network_qpu_ids[part_a]
             qpu_b = network_qpu_ids[part_b]
             return float(self.network.remote_gate_ebit_cost(qpu_a, qpu_b))
@@ -129,7 +134,6 @@ class InteractionPartitioner(BasePartitioner):
         total_entanglement_cost = partition_cost(
             initial_subcircuit,
             partition_result,
-            # TODO: go through this - relied on codex refactor for time crunch
             edge_cost=_remote_ebit_multiplier,
         )
         logger.debug(
