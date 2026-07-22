@@ -11,6 +11,7 @@ from typing import Any, cast
 
 import openqasm3
 import pytest
+from qiskit import QuantumCircuit
 
 from xdqc.verify import (
     manual_cost_verification,
@@ -201,7 +202,9 @@ def test_verify_distributed_circuit_quiet_emits_no_logs(
     )
 
     caplog.set_level(logging.DEBUG, logger="xdqc")
-    assert verify_distributed_circuit("orig.qasm", "dist.qasm", shots=10)
+    assert verify_distributed_circuit(
+        "orig.qasm", "dist.qasm", method="sampling", shots=10
+    )
 
     records = [
         record for record in caplog.records if record.name.startswith("xdqc")
@@ -234,6 +237,7 @@ def test_verify_distributed_circuit_info_logs_success(
     assert verify_distributed_circuit(
         "orig.qasm",
         "dist.qasm",
+        method="sampling",
         shots=10,
         fidelity_threshold=0.9,
         verbosity="info",
@@ -245,8 +249,8 @@ def test_verify_distributed_circuit_info_logs_success(
         if record.name.startswith("xdqc")
     ]
     assert any(
-        "Starting distributed circuit verification: shots=10 "
-        "fidelity_threshold=0.900." in msg
+        "Starting distributed circuit verification: method=sampling "
+        "shots=10 fidelity_threshold=0.900." in msg
         for msg in messages
     )
     assert any("Verification succeeded in" in msg for msg in messages)
@@ -277,6 +281,7 @@ def test_verify_distributed_circuit_debug_logs_failure_details(
     assert not verify_distributed_circuit(
         "orig.qasm",
         "dist.qasm",
+        method="sampling",
         shots=10,
         fidelity_threshold=0.9,
         verbosity="debug",
@@ -334,5 +339,104 @@ def test_verify_distributed_circuit_rejects_invalid_verbosity() -> None:
         verify_distributed_circuit(
             "orig.qasm",
             "dist.qasm",
+            method="sampling",
             verbosity=invalid_verbosity,
+        )
+
+
+def test_verify_distributed_circuit_rejects_invalid_method() -> None:
+    invalid_method = cast(Any, "exact")
+    with pytest.raises(ValueError, match="Unsupported method"):
+        verify_distributed_circuit(
+            "orig.qasm",
+            "dist.qasm",
+            method=invalid_method,
+        )
+
+
+def _measured_circuit(
+    x_qubits: tuple[int, ...],
+    clbit_to_qubit: tuple[int, ...],
+) -> QuantumCircuit:
+    """Build a deterministic 2-qubit circuit with a custom measurement map.
+
+    Applies ``x`` to each qubit in ``x_qubits`` (producing a computational
+    basis state) then measures so that classical bit ``c`` reads qubit
+    ``clbit_to_qubit[c]``.
+    """
+    qc = QuantumCircuit(2, 2)
+    for qubit in x_qubits:
+        qc.x(qubit)
+    for clbit, qubit in enumerate(clbit_to_qubit):
+        qc.measure(qubit, clbit)
+    return qc
+
+
+def _patch_loaded_circuits(
+    monkeypatch: pytest.MonkeyPatch,
+    original: QuantumCircuit,
+    mono: QuantumCircuit,
+) -> None:
+    """Make the loaders return the given circuits instead of reading files."""
+    monkeypatch.setattr(
+        verify_module.qiskit.qasm3, "load", lambda _path: original
+    )
+    monkeypatch.setattr(verify_module, "dist_to_mono_circuit", lambda _p: "")
+    monkeypatch.setattr(verify_module.qiskit.qasm3, "loads", lambda _src: mono)
+
+
+def test_statevector_method_is_invariant_to_qubit_relabeling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Same classical distribution, but the data qubit is relabeled and the
+    # measurement mapping compensates (mimics QPU repartitioning).
+    original = _measured_circuit(x_qubits=(0,), clbit_to_qubit=(0, 1))
+    relabeled = _measured_circuit(x_qubits=(1,), clbit_to_qubit=(1, 0))
+
+    _patch_loaded_circuits(monkeypatch, original, relabeled)
+
+    assert verify_distributed_circuit(
+        "orig.qasm", "dist.qasm", method="statevector"
+    )
+
+
+def test_statevector_method_detects_inequivalent_circuits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = _measured_circuit(x_qubits=(0,), clbit_to_qubit=(0, 1))
+    wrong = _measured_circuit(x_qubits=(0, 1), clbit_to_qubit=(0, 1))
+
+    _patch_loaded_circuits(monkeypatch, original, wrong)
+
+    assert not verify_distributed_circuit(
+        "orig.qasm", "dist.qasm", method="statevector"
+    )
+
+
+def test_statevector_method_rejects_circuit_exceeding_max_qubits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = _measured_circuit(x_qubits=(0,), clbit_to_qubit=(0, 1))
+    mono = _measured_circuit(x_qubits=(0,), clbit_to_qubit=(0, 1))
+
+    _patch_loaded_circuits(monkeypatch, original, mono)
+
+    with pytest.raises(ValueError, match="exceeding max_qubits"):
+        verify_distributed_circuit(
+            "orig.qasm", "dist.qasm", method="statevector", max_qubits=1
+        )
+
+
+def test_statevector_method_requires_measurements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = QuantumCircuit(2)
+    original.h(0)
+    mono = original.copy()
+
+    _patch_loaded_circuits(monkeypatch, original, mono)
+
+    with pytest.raises(ValueError, match="requires the circuit to contain"):
+        verify_distributed_circuit(
+            "orig.qasm", "dist.qasm", method="statevector"
         )
