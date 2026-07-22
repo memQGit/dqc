@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypeAlias
 
@@ -25,6 +26,7 @@ from memq_dqc.preprocessing.qasm import extract_cleaned_statements
 from memq_dqc.preprocessing.qasm.io import load_qasm_program
 from memq_dqc.preprocessing.qasm.types import (
     CircuitQubit,
+    CleanedClassicalDeclaration,
     CleanedQuantumGate,
     CleanedQuantumMeasurementStatement,
     CleanedStatement,
@@ -58,6 +60,49 @@ def extract_program_statements(
         for statement in cleaned_statements
         if not isinstance(statement.node, ast.QuantumBarrier)
     ]
+
+
+# The distributed builder emits its own per-QPU registers named ``q<qpu_id>``
+# (computation) and ``c<qpu_id>`` (communication). Any input register sharing
+# that shape would collide with an emitted register.
+_RESERVED_REGISTER_PATTERN = re.compile(r"^[qc]\d+$")
+
+
+def validate_register_names(statements: list[CleanedStatement]) -> None:
+    """Reject register names that collide with builder-reserved namespaces.
+
+    Only declarations that survive reconstruction are checked. Original
+    qubit declarations are dropped and their references remapped to the
+    generated ``q<qpu_id>`` registers, so they can never collide. Classical
+    declarations survive verbatim, so a classical register whose name
+    matches the ``q<int>`` / ``c<int>`` shape emitted by the distributed
+    compiler would collide with a generated register and silently produce
+    an invalid program; such names are rejected up front. Conventional bare
+    ``q`` / ``c`` names and descriptive names are unaffected because emitted
+    registers always carry a numeric suffix.
+
+    Args:
+        statements: Cleaned statements of the monolithic circuit.
+
+    Raises:
+        ValueError: If a surviving classical declaration uses the reserved
+            namespace.
+    """
+    for statement in statements:
+        if not isinstance(statement, CleanedClassicalDeclaration):
+            continue
+        if _RESERVED_REGISTER_PATTERN.match(statement.name):
+            kind = (
+                "communication"
+                if statement.name.startswith("c")
+                else "computation"
+            )
+            raise ValueError(
+                f"Classical register {statement.name!r} uses the reserved "
+                f"{kind}-register namespace '{statement.name[0]}<int>' "
+                "emitted by the distributed compiler. Rename it to a bare "
+                "'q'/'c' or a name without a numeric suffix."
+            )
 
 
 def extract_ops(statements: list[CleanedStatement]) -> list[Op]:
@@ -202,6 +247,7 @@ class Circuit:
             program = load_qasm_program(program_or_path)
 
         statements = extract_program_statements(program)
+        validate_register_names(statements)
         # TODO: think about how to make this easier to access (currently circuit.mono.program)
         ops = extract_ops(statements)
         self.mono = MonoCircuit(

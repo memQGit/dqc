@@ -28,7 +28,10 @@ from memq_dqc.builder.extract_utils import (
 )
 from memq_dqc.circuit.op import Op
 from memq_dqc.partition import Partitioner
-from memq_dqc.preprocessing.qasm.types import CleanedQuantumGate
+from memq_dqc.preprocessing.qasm.types import (
+    CleanedQuantumGate,
+    CleanedQubitDeclaration,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +190,15 @@ def extract_distributed_circuit(
         )
 
         num_qpus = len(schedule[0])
-        num_qubit_registers = 1
+        # Every original qubit-register declaration is dropped and replaced
+        # with per-QPU registers, so subtract the real count rather than a
+        # hardcoded 1 to keep the expected lower bound valid for circuits
+        # with more than one qubit register.
+        num_qubit_registers = sum(
+            1
+            for statement in circuit.mono.statements
+            if isinstance(statement, CleanedQubitDeclaration)
+        )
         local_swaps_added = distributed.num_local_swaps_added
         include_dist_gates = len(remote_gates) > 0 or num_swaps > 0
         expected_statement_count = (
@@ -213,11 +224,24 @@ def extract_distributed_circuit(
             len(remote_statement_ids),
         )
 
-        # Routed remote gates may add additional ``rswap`` statements beyond
-        # schedule-synthesized swaps.
-        # TODO: make this exact and confirm cost calculations
-        if not group_gates:
-            assert actual_statement_count >= expected_statement_count
+        # Routed remote gates may add extra ``rswap`` statements beyond the
+        # schedule-synthesized swaps, so ``expected_statement_count`` is a
+        # lower bound, not an exact count. Gate grouping rewrites the
+        # statement stream (merging gates into shared cat-entanglement
+        # blocks), so the bound is only checked when grouping is disabled.
+        # A plain ``assert`` is avoided so the invariant still holds under
+        # ``python -O``.
+        if (
+            not group_gates
+            and actual_statement_count < expected_statement_count
+        ):
+            raise RuntimeError(
+                "Distributed circuit extraction produced fewer statements "
+                f"than expected (actual={actual_statement_count}, "
+                f"expected>={expected_statement_count}). This indicates a "
+                "statement-accounting error while assembling the "
+                "distributed program."
+            )
         exact_cost = _exact_entanglement_cost(distributed)
         partitioner._algorithm._set_exact_cost(exact_cost)
         logger.info(
