@@ -6,7 +6,7 @@ This addresses the three page-11 comments on Fig. 9:
 2. *"Is there a general trend between the degree of connectivity and the number of EPR pairs that we can comment on?"*
 3. *"Would 'dependence on intra-QPU connectivity' be better?"* (wording — handled separately)
 
-Everything below is grounded in the compiler's actual cost accounting (`_exact_entanglement_cost` in `src/memq_dqc/builder/circuit_extractor.py`) and a re-run of the Experiment 5 QFT sweep (`benchmarking/experiments/experiment_5`, 5-QPU networks, nearest-neighbor intra-QPU connectivity, dynamic Interaction partitioner). All numbers reconcile exactly to the reported EPR cost.
+Everything below is grounded in the compiler's actual cost accounting (`_exact_entanglement_cost` in `src/xdqc/builder/circuit_extractor.py`) and a re-run of the Experiment 5 QFT sweep (`benchmarking/experiments/experiment_5`, 5-QPU networks, nearest-neighbor intra-QPU connectivity, dynamic Interaction partitioner). All numbers reconcile exactly to the reported EPR cost.
 
 ---
 
