@@ -29,7 +29,6 @@ from xdqc.preprocessing.qasm.types import (
     CleanedClassicalDeclaration,
     CleanedQuantumGate,
     CleanedQuantumMeasurementStatement,
-    CleanedQubitDeclaration,
     CleanedStatement,
 )
 
@@ -72,24 +71,25 @@ _RESERVED_REGISTER_PATTERN = re.compile(r"^[qc]\d+$")
 def validate_register_names(statements: list[CleanedStatement]) -> None:
     """Reject register names that collide with builder-reserved namespaces.
 
-    An input register -- qubit or classical -- whose name matches the
-    ``q<int>`` / ``c<int>`` shape emitted by the distributed compiler would
-    collide with a generated register and silently produce an invalid
-    program, so such names are rejected up front. Conventional bare ``q`` /
-    ``c`` names and descriptive names are unaffected because emitted
+    Only declarations that survive reconstruction are checked. Original
+    qubit declarations are dropped and their references remapped to the
+    generated ``q<qpu_id>`` registers, so they can never collide. Classical
+    declarations survive verbatim, so a classical register whose name
+    matches the ``q<int>`` / ``c<int>`` shape emitted by the distributed
+    compiler would collide with a generated register and silently produce
+    an invalid program; such names are rejected up front. Conventional bare
+    ``q`` / ``c`` names and descriptive names are unaffected because emitted
     registers always carry a numeric suffix.
 
     Args:
         statements: Cleaned statements of the monolithic circuit.
 
     Raises:
-        ValueError: If any declared register uses the reserved namespace.
+        ValueError: If a surviving classical declaration uses the reserved
+            namespace.
     """
     for statement in statements:
-        if not isinstance(
-            statement,
-            (CleanedQubitDeclaration, CleanedClassicalDeclaration),
-        ):
+        if not isinstance(statement, CleanedClassicalDeclaration):
             continue
         if _RESERVED_REGISTER_PATTERN.match(statement.name):
             kind = (
@@ -98,7 +98,7 @@ def validate_register_names(statements: list[CleanedStatement]) -> None:
                 else "computation"
             )
             raise ValueError(
-                f"Register {statement.name!r} uses the reserved "
+                f"Classical register {statement.name!r} uses the reserved "
                 f"{kind}-register namespace '{statement.name[0]}<int>' "
                 "emitted by the distributed compiler. Rename it to a bare "
                 "'q'/'c' or a name without a numeric suffix."
