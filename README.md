@@ -1,16 +1,16 @@
-# memQ Distributed Quantum Compiler (memQ-DQC)
+# xDQC — Distributed Quantum Compiler
 
 
 <p align="center">
-    <a href="https://github.com/memQGit/DistributedCompiler/actions/workflows/ci.yml">
-        <img src="https://github.com/memQGit/DistributedCompiler/actions/workflows/ci.yml/badge.svg" alt="CI Status">
+    <a href="https://github.com/memQGit/xdqc/actions/workflows/ci.yml">
+        <img src="https://github.com/memQGit/xdqc/actions/workflows/ci.yml/badge.svg" alt="CI Status">
     </a>
-    <a href="https://github.com/memQGit/DistributedCompiler/blob/main/LICENSE">
+    <a href="https://github.com/memQGit/xdqc/blob/main/LICENSE">
       <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
     </a>
 </p>
 
-memQ-DQC is an open-source Python library for distributed quantum compilation. Given a quantum circuit and a network topology, it partitions the circuit across QPUs, routes inter-QPU gates, and reconstructs a distributed circuit ready for execution or further analysis.
+xDQC is an open-source Python library for distributed quantum compilation. Given a quantum circuit and a network topology, it partitions the circuit across QPUs, routes inter-QPU gates, and reconstructs a distributed circuit ready for execution or further analysis.
 
 The library is designed to be modular and plug-and-play: researchers can run the full compilation workflow in a few lines of code, swap in different partitioning algorithms, and benchmark them against each other across circuits and network topologies.
 
@@ -25,9 +25,9 @@ The library is designed to be modular and plug-and-play: researchers can run the
 ## Quick start
 
 ```python
-from memq_dqc.partition import Partitioner
-from memq_dqc.builder import extract_distributed_circuit
-from memq_dqc.verify import verify_distributed_circuit
+from xdqc.partition import Partitioner
+from xdqc.builder import extract_distributed_circuit
+from xdqc.verify import verify_distributed_circuit
 
 # Compile
 partitioner = Partitioner("network.json", "circuit.qasm")
@@ -40,11 +40,30 @@ distributed = extract_distributed_circuit(partitioner)
 is_valid = verify_distributed_circuit("circuit.qasm", "distributed.qasm")
 ```
 
+For one-call access to both circuits and their DAGs:
+
+```python
+from xdqc import get_verification_artifacts
+from xdqc.verify import verify_distributed_circuit
+
+artifacts = get_verification_artifacts("circuit.qasm", "network.json")
+
+is_valid = verify_distributed_circuit(
+    artifacts.original_program,
+    artifacts.distributed_program,
+)
+
+original_qasm = artifacts.original_qasm
+original_dag = artifacts.original_dag
+distributed_qasm = artifacts.distributed_qasm
+distributed_dag = artifacts.distributed_dag
+```
+
 `Partitioner` accepts either file paths or pre-loaded objects:
 
 ```python
-from memq_dqc.network import NetworkGraph
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
+from xdqc.network import NetworkGraph
+from xdqc.preprocessing.qasm.io import load_qasm_program
 
 network = NetworkGraph("network.json")
 program = load_qasm_program("circuit.qasm")
@@ -72,10 +91,10 @@ partitioner = Partitioner("network.json", "circuit.qasm", algo="hypergraph")
 
 ## Visualization
 
-`memq_dqc.visualization` provides SVG-based views of the compilation output:
+`xdqc.visualization` provides SVG-based views of the compilation output:
 
 ```python
-from memq_dqc.visualization import (
+from xdqc.visualization import (
     plot_distributed_circuit,   # gate layout across QPUs
     plot_partition_flow,        # qubit migration across QPUs
     plot_partition_heatmap,     # QPU assignment heatmap per window
@@ -110,13 +129,13 @@ is_valid = verify_distributed_circuit(
 )
 ```
 
-For advanced control, configure the standard Python logger named `memq_dqc`:
+For advanced control, configure the standard Python logger named `xdqc`:
 
 ```python
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
-logging.getLogger("memq_dqc").setLevel(logging.DEBUG)
+logging.getLogger("xdqc").setLevel(logging.DEBUG)
 ```
 
 ---

@@ -1,10 +1,10 @@
 import logging
 
-from memq_dqc._logging import workflow_logging
+from xdqc._logging import workflow_logging
 
 
 def test_workflow_logging_restores_logger_state_after_repeated_calls() -> None:
-    logger = logging.getLogger("memq_dqc")
+    logger = logging.getLogger("xdqc")
     original_handlers = list(logger.handlers)
     original_level = logger.level
     original_propagate = logger.propagate

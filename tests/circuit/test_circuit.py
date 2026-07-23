@@ -8,17 +8,17 @@
 import pytest
 from openqasm3 import ast
 
-from memq_dqc.builder.circuit_extractor import extract_distributed_circuit
-from memq_dqc.circuit import Circuit, build_circuit
-from memq_dqc.circuit.op import Op
-from memq_dqc.network import NetworkGraph, PhysicalQubit
-from memq_dqc.partition import Partitioner
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
-from memq_dqc.preprocessing.qasm.types import CircuitQubit
+from xdqc.builder.circuit_extractor import extract_distributed_circuit
+from xdqc.circuit import Circuit, build_circuit
+from xdqc.circuit.op import Op
+from xdqc.network import NetworkGraph, PhysicalQubit
+from xdqc.partition import Partitioner
+from xdqc.preprocessing.qasm.io import load_qasm_program
+from xdqc.preprocessing.qasm.types import CircuitQubit
 
 
 def _program(qasm_source: str) -> ast.Program:
-    from memq_dqc.preprocessing.qasm.io import parse_qasm_source
+    from xdqc.preprocessing.qasm.io import parse_qasm_source
 
     return parse_qasm_source(qasm_source)
 

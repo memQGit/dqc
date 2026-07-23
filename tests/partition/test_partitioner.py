@@ -11,13 +11,13 @@ from typing import Any, cast
 import networkx as nx
 import pytest
 
-from memq_dqc.circuit import Circuit
-from memq_dqc.network import NetworkGraph
-from memq_dqc.partition import Partitioner
-from memq_dqc.partition.partitioner import QPU, BasePartitioner
-from memq_dqc.partition.utils import partition_cost
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
-from memq_dqc.utils import get_windows
+from xdqc.circuit import Circuit
+from xdqc.network import NetworkGraph
+from xdqc.partition import Partitioner
+from xdqc.partition.partitioner import QPU, BasePartitioner
+from xdqc.partition.utils import partition_cost
+from xdqc.preprocessing.qasm.io import load_qasm_program
+from xdqc.utils import get_windows
 
 
 def test_partitioner_interaction_default(
@@ -94,6 +94,92 @@ def test_partitioner_accepts_program_and_network_objects_in_reverse_order(
     assert isinstance(partitioner.circuit, Circuit)
     assert partitioner.schedule
     assert partitioner.windows
+
+
+def test_partitioner_accepts_inline_qasm_source(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    qasm_source = simple1_circuit_path.read_text(encoding="utf-8")
+    partitioner = Partitioner(
+        qasm_source,
+        three_comp_one_comm_x2_network_path,
+        algo_kwargs={"window_length": 2},
+    )
+
+    partitioner.run()
+
+    assert isinstance(partitioner.network, NetworkGraph)
+    assert isinstance(partitioner.circuit, Circuit)
+    assert partitioner.schedule
+    assert partitioner.windows
+
+
+def test_partitioner_distributed_qasm_and_save(
+    tmp_path,
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    partitioner = Partitioner(
+        three_comp_one_comm_x2_network_path,
+        simple1_circuit_path,
+        algo_kwargs={"window_length": 2},
+    )
+    partitioner.run()
+
+    qasm = partitioner.distributed_qasm
+    assert isinstance(qasm, str)
+    assert "OPENQASM" in qasm
+
+    out_path = tmp_path / "distributed.qasm"
+    returned = partitioner.save_distributed_circuit(out_path)
+
+    assert returned == out_path
+    assert out_path.read_text() == qasm
+
+
+def test_partitioner_verify_forwards_in_memory_programs(
+    simple1_circuit_path,
+    three_comp_one_comm_x2_network_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from openqasm3 import ast
+
+    import xdqc.verify as verify_pkg
+
+    partitioner = Partitioner(
+        three_comp_one_comm_x2_network_path,
+        simple1_circuit_path,
+        algo_kwargs={"window_length": 2},
+    )
+    partitioner.run()
+
+    captured: dict[str, Any] = {}
+
+    def fake_verify(
+        original: Any,
+        distributed: Any,
+        *,
+        shots: int,
+        fidelity_threshold: float,
+        verbosity: str,
+    ) -> bool:
+        captured.update(
+            original=original,
+            distributed=distributed,
+            shots=shots,
+            fidelity_threshold=fidelity_threshold,
+            verbosity=verbosity,
+        )
+        return True
+
+    monkeypatch.setattr(verify_pkg, "verify_distributed_circuit", fake_verify)
+
+    assert partitioner.verify(shots=123, verbosity="info") is True
+    assert captured["original"] is partitioner.circuit.mono.program
+    assert isinstance(captured["distributed"], ast.Program)
+    assert captured["shots"] == 123
+    assert captured["verbosity"] == "info"
 
 
 def test_partitioner_rejects_ambiguous_path_inputs(tmp_path) -> None:
@@ -226,13 +312,11 @@ def test_partitioner_run_quiet_emits_no_logs(
         algo_kwargs={"window_length": 2},
     )
 
-    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    caplog.set_level(logging.DEBUG, logger="xdqc")
     partitioner.run()
 
     records = [
-        record
-        for record in caplog.records
-        if record.name.startswith("memq_dqc")
+        record for record in caplog.records if record.name.startswith("xdqc")
     ]
     assert records == []
 
@@ -251,13 +335,13 @@ def test_partitioner_run_info_logs_summary(
         algo_kwargs={"window_length": 2},
     )
 
-    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    caplog.set_level(logging.DEBUG, logger="xdqc")
     partitioner.run(verbosity="info")
 
     messages = [
         record.getMessage()
         for record in caplog.records
-        if record.name.startswith("memq_dqc")
+        if record.name.startswith("xdqc")
     ]
     assert any(
         "Starting partitioning with BenchmarkStaticPartitioner." in msg
@@ -280,7 +364,7 @@ def test_partitioner_run_debug_logs_mappings_and_algorithm_details(
         algo_kwargs={"window_length": 2},
     )
 
-    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    caplog.set_level(logging.DEBUG, logger="xdqc")
     partitioner.run(verbosity="debug")
 
     assert partitioner.schedule
@@ -289,7 +373,7 @@ def test_partitioner_run_debug_logs_mappings_and_algorithm_details(
     messages = [
         record.getMessage()
         for record in caplog.records
-        if record.name.startswith("memq_dqc")
+        if record.name.startswith("xdqc")
     ]
 
     assert (

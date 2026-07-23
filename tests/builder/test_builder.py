@@ -14,15 +14,15 @@ import openqasm3
 import pytest
 from openqasm3 import ast
 
-from memq_dqc.builder import extract_distributed_circuit, identify_remote_gates
-from memq_dqc.builder.circuit_extractor import _exact_entanglement_cost
-from memq_dqc.network import NetworkGraph
-from memq_dqc.partition import Partitioner
-from memq_dqc.partition.partitioner import QPU, BasePartitioner
-from memq_dqc.preprocessing.qasm.io import load_qasm_program
-from memq_dqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
-from memq_dqc.scheduler import SchedulerHardwareProfile
-from memq_dqc.utils import get_windows
+from xdqc.builder import extract_distributed_circuit, identify_remote_gates
+from xdqc.builder.circuit_extractor import _exact_entanglement_cost
+from xdqc.network import NetworkGraph
+from xdqc.partition import Partitioner
+from xdqc.partition.partitioner import QPU, BasePartitioner
+from xdqc.preprocessing.qasm.io import load_qasm_program
+from xdqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
+from xdqc.scheduler import SchedulerHardwareProfile
+from xdqc.utils import get_windows
 
 
 class _CustomQpuIdPartitioner(BasePartitioner):
@@ -681,13 +681,11 @@ def test_extract_distributed_circuit_quiet_emits_no_logs(
     )
     partitioner.run()
 
-    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    caplog.set_level(logging.DEBUG, logger="xdqc")
     extract_distributed_circuit(partitioner)
 
     records = [
-        record
-        for record in caplog.records
-        if record.name.startswith("memq_dqc")
+        record for record in caplog.records if record.name.startswith("xdqc")
     ]
     assert records == []
 
@@ -704,13 +702,13 @@ def test_extract_distributed_circuit_info_logs_summary(
     )
     partitioner.run()
 
-    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    caplog.set_level(logging.DEBUG, logger="xdqc")
     extract_distributed_circuit(partitioner, verbosity="info")
 
     messages = [
         record.getMessage()
         for record in caplog.records
-        if record.name.startswith("memq_dqc")
+        if record.name.startswith("xdqc")
     ]
     assert "Starting distributed circuit extraction." in messages
     assert any(
@@ -732,13 +730,13 @@ def test_extract_distributed_circuit_debug_logs_diagnostics(
     )
     partitioner.run()
 
-    caplog.set_level(logging.DEBUG, logger="memq_dqc")
+    caplog.set_level(logging.DEBUG, logger="xdqc")
     extract_distributed_circuit(partitioner, verbosity="debug")
 
     messages = [
         record.getMessage()
         for record in caplog.records
-        if record.name.startswith("memq_dqc")
+        if record.name.startswith("xdqc")
     ]
     assert any("Validated partitioner outputs:" in msg for msg in messages)
     assert any("Distributed statement count:" in msg for msg in messages)
@@ -771,7 +769,7 @@ def test_extract_distributed_circuit_raises_on_statement_undercount(
     # The statement-accounting invariant must raise a clear error (not a bare
     # ``assert``, which would be stripped under ``python -O``) when the
     # assembled program has fewer statements than the computed lower bound.
-    import memq_dqc.circuit.circuit as circuit_module
+    import xdqc.circuit.circuit as circuit_module
 
     original = circuit_module.build_distributed_statements
 

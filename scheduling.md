@@ -40,7 +40,7 @@ $t_c$ and per-attempt success probability $p$.
 ## FIFO
 
 File:
-`src/memq_dqc/scheduler/fifo.py`
+`src/xdqc/scheduler/fifo.py`
 
 Class:
 `FIFOScheduler`
@@ -77,7 +77,7 @@ retries or expiration.
 ## ILP
 
 File:
-`src/memq_dqc/scheduler/ilp_scheduler.py`
+`src/xdqc/scheduler/ilp_scheduler.py`
 
 Class:
 `ILPScheduler`
@@ -119,7 +119,7 @@ to run and still uses fixed EPR windows rather than stochastic attempts.
 ## DES Link FIFO
 
 File:
-`src/memq_dqc/scheduler/des_link_fifo.py`
+`src/xdqc/scheduler/des_link_fifo.py`
 
 Class:
 `DESLinkFIFOScheduler`
@@ -153,7 +153,7 @@ regeneration, but it resolves link contention using pure FIFO order.
 ## DES Link Shortest Duration
 
 File:
-`src/memq_dqc/scheduler/des_link_shortest_duration.py`
+`src/xdqc/scheduler/des_link_shortest_duration.py`
 
 Class:
 `DESLinkShortestDurationScheduler`
@@ -184,7 +184,7 @@ reduce head-of-line blocking on busy links.
 ## DES Link Critical Path
 
 File:
-`src/memq_dqc/scheduler/des_link_critical_path.py`
+`src/xdqc/scheduler/des_link_critical_path.py`
 
 Class:
 `DESLinkCriticalPathScheduler`
