@@ -32,18 +32,18 @@ _CONVENTIONAL_QASM = (
 @pytest.mark.parametrize(
     "reserved_source",
     [
-        # Classical register named c0 collides with an emitted comm register.
+        # Classical register named c0 survives and collides with an emitted
+        # communication register.
         (
             'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
             "qubit[2] q;\nbit[2] c0;\ncx q[0], q[1];\n"
         ),
-        # Classical register named q1 collides with an emitted comp register.
+        # Classical register named q1 survives and collides with an emitted
+        # computation register.
         (
             'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
             "qubit[2] q;\nbit[2] q1;\ncx q[0], q[1];\n"
         ),
-        # A qubit register itself named c0.
-        ('OPENQASM 3.0;\ninclude "stdgates.inc";\nqubit[2] c0;\nh c0[0];\n'),
     ],
 )
 def test_circuit_rejects_reserved_register_names(reserved_source) -> None:
@@ -56,6 +56,10 @@ def test_circuit_rejects_reserved_register_names(reserved_source) -> None:
     [
         # Conventional bare q / c never collide (emitted names have a suffix).
         _CONVENTIONAL_QASM,
+        # A qubit register named c0/q0 is dropped and remapped during
+        # reconstruction, so it cannot collide with a generated register.
+        ('OPENQASM 3.0;\ninclude "stdgates.inc";\nqubit[2] c0;\nh c0[0];\n'),
+        ('OPENQASM 3.0;\ninclude "stdgates.inc";\nqubit[2] q0;\nh q0[0];\n'),
         # c-prefixed but not c<int>: has non-digit characters.
         (
             'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
