@@ -1,4 +1,4 @@
-# Contributing to memq-dqc
+# Contributing to xDQC
 
 Thanks for contributing! This repo values correctness, reproducibility, and
 clean public APIs.
@@ -22,7 +22,7 @@ If you need to auto-format:
 
 ## Project layout
 
-- Library code: `src/memq_dqc/`
+- Library code: `src/xdqc/`
 - Tests: `tests/`
 - Scripts: `scripts/`
 - Docs: `docs/`

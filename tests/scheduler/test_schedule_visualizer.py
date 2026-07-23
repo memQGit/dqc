@@ -15,13 +15,13 @@ import matplotlib.pyplot as plt
 import pytest
 from matplotlib.axes import Axes
 
-from memq_dqc.scheduler.schedule import (
+from xdqc.scheduler.schedule import (
     EntanglementGeneration,
     OperationSchedule,
     ScheduledOperation,
     ScheduledQubitTimeline,
 )
-from memq_dqc.scheduler.schedule_visualizer import (
+from xdqc.scheduler.schedule_visualizer import (
     _PRETTY_LOCAL_FILL,
     _PRETTY_REMOTE_FILL,
     _PRETTY_TEAL,

@@ -8,12 +8,12 @@
 
 from openqasm3 import ast
 
-from memq_dqc.builder.extract_utils import (
+from xdqc.builder.extract_utils import (
     GroupDurationLimit,
     _identify_existing_gate_groups,
 )
-from memq_dqc.circuit.op import Op
-from memq_dqc.preprocessing.qasm.types import CircuitQubit
+from xdqc.circuit.op import Op
+from xdqc.preprocessing.qasm.types import CircuitQubit
 
 
 def _two_qubit_op(op_id: int, control: int, target: int) -> Op:
