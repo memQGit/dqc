@@ -42,7 +42,11 @@ if TYPE_CHECKING:
 
     from xdqc.circuit import Circuit, DistributedCircuit
     from xdqc.network import NetworkGraph
-    from xdqc.partition.partitioner import BasePartitioner
+    from xdqc.partition.partitioner import (
+        BasePartitioner,
+        PartitionSchedule,
+        PartitionWindows,
+    )
     from xdqc.scheduler.instance import (
         SchedulingCompileOptions,
         SchedulingInstance,
@@ -113,6 +117,10 @@ class Compiler:
         self._partitioner = Partitioner(
             topology, circuit, algo=algo, algo_kwargs=algo_kwargs
         )
+        # Deterministic signature of a caller-injected placement, folded into
+        # the scheduling-instance fingerprint. ``None`` on the normal compile
+        # path so its fingerprint is unaffected.
+        self._injected_placement_signature: dict[str, Any] | None = None
 
     def compile(
         self,
@@ -326,7 +334,10 @@ class Compiler:
             hardware_profile=hardware_profile,
         )
         fingerprint = _fingerprint_from_parts(
-            self.circuit.mono.program, self.network, options
+            self.circuit.mono.program,
+            self.network,
+            options,
+            placement=self._injected_placement_signature,
         )
         return build_scheduling_instance(
             self.distributed_circuit,
@@ -335,6 +346,158 @@ class Compiler:
             compiler_version=_xdqc_version(),
             source_fingerprint=fingerprint,
         )
+
+    def recompile_with_placement(
+        self,
+        schedule: PartitionSchedule,
+        windows: PartitionWindows | None = None,
+        *,
+        hardware_profile: SchedulerHardwareProfile | None = None,
+    ) -> SchedulingInstance:
+        """Re-derive the distributed circuit and scheduling instance.
+
+        Injects a caller-supplied placement and rebuilds the scheduling
+        instance from it, reusing the parsed program, monolithic DAG, and
+        (unless overridden) the windows from the prior compile; only the
+        placement -> distributed derivation re-runs. Partitioning is *not*
+        re-run, so the compiler must already have produced windows (call
+        :meth:`compile` first) or ``windows`` must be supplied explicitly.
+
+        The existing distributed flags held on the partitioner
+        (``ebit_assignment``, ``group_gates``, ``max_group_size``) are
+        preserved. The injected placement is folded into the resulting
+        instance's ``source_fingerprint`` so distinct placements never collide.
+
+        Args:
+            schedule: Per-window placement mapping each QPU to the set of
+                logical qubit indices assigned to it.
+            windows: Optional replacement operation windows. When omitted, the
+                windows from the prior compile are reused.
+            hardware_profile: Scheduler hardware profile whose timings set the
+                deterministic operation durations. ``None`` selects the default
+                profile.
+
+        Returns:
+            A validated :class:`~xdqc.scheduler.instance.SchedulingInstance`
+            derived from the injected placement.
+
+        Raises:
+            ValueError: If the placement is missing windows, its schedule and
+                windows differ in length, a window is not a partition of the
+                circuit's logical qubits, per-QPU counts differ across windows,
+                or a QPU id or qubit index is out of range for the network.
+        """
+        algorithm = self._partitioner._algorithm
+        effective_windows = algorithm.windows if windows is None else windows
+        self._validate_injected_placement(schedule, effective_windows)
+
+        algorithm.schedule = schedule
+        if windows is not None:
+            algorithm.windows = windows
+        self._partitioner.circuit.distributed = None
+        self._injected_placement_signature = _placement_signature(
+            schedule, windows
+        )
+        return self.to_scheduling_instance(hardware_profile=hardware_profile)
+
+    def _validate_injected_placement(
+        self,
+        schedule: PartitionSchedule,
+        windows: PartitionWindows | None,
+    ) -> None:
+        """Validate an injected placement against the circuit and network.
+
+        Args:
+            schedule: Per-window placement to validate.
+            windows: Operation windows the placement will be paired with.
+
+        Raises:
+            ValueError: If the placement is structurally invalid or references
+                resources outside the network.
+        """
+        from xdqc.preprocessing.qasm import count_total_qubits
+
+        if not schedule:
+            raise ValueError(
+                "Injected placement schedule must contain at least one window."
+            )
+        if windows is None:
+            raise ValueError(
+                "No operation windows are available for recompilation: compile "
+                "the circuit first or pass windows explicitly."
+            )
+        if len(schedule) != len(windows):
+            raise ValueError(
+                "Injected placement schedule and windows differ in length: "
+                f"{len(schedule)} placement windows vs {len(windows)} "
+                "operation windows."
+            )
+
+        network = self.network
+        valid_qpu_ids = set(network.qpu_ids())
+        capacity_by_qpu = dict(
+            zip(
+                network.qpu_ids(),
+                network.comp_qubits_per_qpu(),
+                strict=True,
+            )
+        )
+        num_logical_qubits = count_total_qubits(self.circuit.mono.program)
+        logical_qubits = set(range(num_logical_qubits))
+
+        reference_counts: dict[int, int] | None = None
+        for window_idx, assignment in enumerate(schedule):
+            assigned: list[int] = []
+            counts: dict[int, int] = {}
+            for qpu, qubits in assignment.items():
+                if qpu.id not in valid_qpu_ids:
+                    raise ValueError(
+                        f"Injected placement window {window_idx} references "
+                        f"unknown QPU id {qpu.id}; network QPU ids are "
+                        f"{sorted(valid_qpu_ids)}."
+                    )
+                for qubit in qubits:
+                    if qubit not in logical_qubits:
+                        raise ValueError(
+                            f"Injected placement window {window_idx} assigns "
+                            f"logical qubit {qubit} on QPU {qpu.id}, which is "
+                            f"out of range for a circuit with "
+                            f"{num_logical_qubits} logical qubits."
+                        )
+                if len(qubits) > capacity_by_qpu[qpu.id]:
+                    raise ValueError(
+                        f"Injected placement window {window_idx} assigns "
+                        f"{len(qubits)} logical qubits to QPU {qpu.id}, "
+                        f"exceeding its {capacity_by_qpu[qpu.id]} computation "
+                        "qubits."
+                    )
+                assigned.extend(qubits)
+                counts[qpu.id] = len(qubits)
+
+            assigned_set = set(assigned)
+            if len(assigned) != len(assigned_set):
+                raise ValueError(
+                    f"Injected placement window {window_idx} assigns a logical "
+                    "qubit to more than one QPU."
+                )
+            if assigned_set != logical_qubits:
+                missing = sorted(logical_qubits - assigned_set)
+                unexpected = sorted(assigned_set - logical_qubits)
+                raise ValueError(
+                    f"Injected placement window {window_idx} is not a "
+                    f"partition of the circuit's {num_logical_qubits} logical "
+                    f"qubits (missing={missing}, unexpected={unexpected})."
+                )
+
+            if reference_counts is None:
+                reference_counts = counts
+            elif counts != reference_counts:
+                raise ValueError(
+                    "Injected placement changes per-QPU qubit counts across "
+                    f"windows (window {window_idx} has {counts}, expected "
+                    f"{reference_counts}); state-teleportation swap synthesis "
+                    "requires equal per-QPU counts in every window."
+                )
 
 
 def get_verification_artifacts(
@@ -440,6 +603,65 @@ def compile_scheduling_instance(
     )
 
 
+def recompile_scheduling_instance(
+    circuit: ProgramInput,
+    topology: NetworkInput,
+    *,
+    schedule: PartitionSchedule,
+    windows: PartitionWindows | None = None,
+    options: SchedulingCompileOptions | None = None,
+    verbosity: Literal["quiet", "info", "debug"] = "quiet",
+) -> SchedulingInstance:
+    """Compile a circuit and re-derive its instance from an injected placement.
+
+    Convenience wrapper mirroring :func:`compile_scheduling_instance`: it builds
+    a :class:`Compiler`, runs a full compile to establish the reusable program,
+    monolithic DAG, windows, and distributed flags, then re-derives the
+    scheduling instance from ``schedule`` (and ``windows`` when provided) via
+    :meth:`Compiler.recompile_with_placement`.
+
+    Args:
+        circuit: The input circuit, as a parsed OpenQASM 3 program, a path to a
+            ``.qasm``/``.qasm3`` file, or inline OpenQASM source text.
+        topology: The network topology, as a ``NetworkGraph`` or a path to its
+            ``.json`` description.
+        schedule: Per-window placement mapping each QPU to the set of logical
+            qubit indices assigned to it.
+        windows: Optional replacement operation windows. When omitted, the
+            windows produced by the initial compile are reused.
+        options: Compilation options. ``None`` uses the defaults.
+        verbosity: Logging verbosity for this workflow call.
+
+    Returns:
+        A validated :class:`~xdqc.scheduler.instance.SchedulingInstance`
+        derived from the injected placement.
+    """
+    from xdqc.scheduler.instance import SchedulingCompileOptions
+
+    resolved_options = options or SchedulingCompileOptions()
+    algo_kwargs = dict(resolved_options.partitioner_kwargs or {})
+    if resolved_options.partition_seed is not None:
+        algo_kwargs["seed"] = resolved_options.partition_seed
+
+    compiler = Compiler(
+        circuit,
+        topology,
+        algo=resolved_options.partitioner,
+        algo_kwargs=algo_kwargs or None,
+    )
+    compiler.compile(
+        ebit_assignment=resolved_options.ebit_assignment,
+        group_gates=resolved_options.group_gates,
+        max_group_size=resolved_options.max_group_size,
+        verbosity=verbosity,
+    )
+    return compiler.recompile_with_placement(
+        schedule,
+        windows,
+        hardware_profile=resolved_options.hardware_profile,
+    )
+
+
 def compute_scheduling_source_fingerprint(
     circuit: ProgramInput,
     topology: NetworkInput,
@@ -472,8 +694,22 @@ def _fingerprint_from_parts(
     program: ast.Program,
     network: NetworkGraph,
     options: SchedulingCompileOptions,
+    placement: dict[str, Any] | None = None,
 ) -> str:
-    """Return a deterministic fingerprint for normalized inputs and options."""
+    """Return a deterministic fingerprint for normalized inputs and options.
+
+    Args:
+        program: Normalized monolithic OpenQASM program.
+        network: The network graph.
+        options: Compilation options.
+        placement: Optional deterministic signature of a caller-injected
+            placement (see :func:`_placement_signature`). When ``None`` the
+            payload is identical to the normal compile path, keeping that
+            path's fingerprint unchanged.
+
+    Returns:
+        A hex SHA-256 digest of the normalized inputs, options, and placement.
+    """
     from xdqc.scheduler.instance import SCHEDULING_INSTANCE_SCHEMA_VERSION
     from xdqc.scheduler.schedule import (
         _resolve_scheduler_hardware_profile,
@@ -484,7 +720,7 @@ def _fingerprint_from_parts(
         modality="trapped_ion.ba",
         entanglement_profile="ion.time_bin",
     )
-    canonical = {
+    canonical: dict[str, Any] = {
         "schema_version": SCHEDULING_INSTANCE_SCHEMA_VERSION,
         "qasm": dump_qasm_program(program),
         "network": _network_signature(network),
@@ -499,8 +735,46 @@ def _fingerprint_from_parts(
             "entanglement_profile": profile.entanglement_profile,
         },
     }
+    if placement is not None:
+        canonical["placement"] = placement
     payload = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _placement_signature(
+    schedule: PartitionSchedule,
+    windows: PartitionWindows | None,
+) -> dict[str, Any]:
+    """Return a deterministic, JSON-serializable signature of a placement.
+
+    The schedule is always included; the windows are included only when a
+    caller overrides them, so a placement that reuses the prior windows folds
+    in only its schedule.
+
+    Args:
+        schedule: Per-window placement mapping each QPU to logical qubits.
+        windows: Overriding operation windows, or ``None`` when the prior
+            compile's windows are reused.
+
+    Returns:
+        A nested mapping suitable for stable JSON serialization.
+    """
+    signature: dict[str, Any] = {
+        "schedule": [
+            [
+                [qpu.id, sorted(qubits)]
+                for qpu, qubits in sorted(
+                    assignment.items(), key=lambda item: item[0].id
+                )
+            ]
+            for assignment in schedule
+        ]
+    }
+    if windows is not None:
+        signature["windows"] = [
+            [op.op_id for op in window] for window in windows
+        ]
+    return signature
 
 
 def _network_signature(network: NetworkGraph) -> dict[str, Any]:

@@ -21,6 +21,7 @@ from .compiler import (
     compile_scheduling_instance,
     compute_scheduling_source_fingerprint,
     get_verification_artifacts,
+    recompile_scheduling_instance,
 )
 from .compiler_batch import (
     SchedulingCompileRequest,
@@ -70,6 +71,7 @@ __all__ = [
     "get_verification_artifacts",
     "load_settings",
     "load_settings_file",
+    "recompile_scheduling_instance",
     "scheduling_instance_from_json",
     "scheduling_instance_to_json",
     "validate_scheduling_instance",
