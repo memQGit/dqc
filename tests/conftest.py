@@ -29,6 +29,16 @@ def hundred_qubit_network_path() -> Path:
 
 
 @pytest.fixture()
+def eight_comp_four_comm_network_path() -> Path:
+    return (
+        Path(__file__).parent
+        / "fixtures"
+        / "networks"
+        / "simple_8comp_4comm.json"
+    )
+
+
+@pytest.fixture()
 def bell_circuit_path() -> Path:
     return Path(__file__).parent / "fixtures" / "circuits" / "bell.qasm"
 
