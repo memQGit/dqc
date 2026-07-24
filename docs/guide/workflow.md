@@ -49,7 +49,7 @@ The main workflow APIs can emit progress, timing, and debug diagnostics via the
 | `xdqc.partition` | Partitioning strategies and the `Partitioner` façade. |
 | `xdqc.builder` | Distributed-circuit extraction (`circuit_extractor.py`, `extract_utils.py`). |
 | `xdqc.verify` | Correctness checking of distributed circuits. |
-| `xdqc.scheduler` | Schedulers (FIFO, ILP, discrete-event link schedulers) and scheduling-instance record types. |
+| `xdqc.scheduler` | Schedulers (FIFO, discrete-event link schedulers) and scheduling-instance record types. |
 | `xdqc.visualization` | SVG/matplotlib views of circuits, partitions, and schedules. |
 | `xdqc.utils` | Shared circuit and partition helpers. |
 

@@ -1,9 +1,8 @@
 # Scheduling Strategies
 
-This repository currently exposes five concrete scheduling strategies:
+This repository currently exposes four concrete scheduling strategies:
 
 - `fifo`
-- `ilp`
 - `des_link_fifo`
 - `des_link_shortest_duration`
 - `des_link_critical_path`
@@ -26,7 +25,7 @@ t_{2q} + 2 t_{1q} + t_{\mathrm{meas}}, &
 \end{cases}
 $$
 
-The deterministic EPR duration used by `fifo` and `ilp` is
+The deterministic EPR duration used by `fifo` is
 
 $$
 t_{\mathrm{epr}} = \frac{1}{r},
@@ -73,48 +72,6 @@ $$
 This strategy is fast and deterministic, but it is only locally greedy. It does
 not search globally for the best schedule, and it does not model stochastic EPR
 retries or expiration.
-
-## ILP
-
-File:
-`src/xdqc/scheduler/ilp_scheduler.py`
-
-Class:
-`ILPScheduler`
-
-Plain-language description:
-This scheduler formulates scheduling as an integer linear program on a discrete
-time grid. Every operation gets a binary start variable for each feasible start
-step, and the solver chooses a globally optimal schedule subject to precedence
-and resource constraints.
-
-Objective:
-
-$$
-\min \left( W \, C_{\max} + \sum_i s_i \right),
-$$
-
-where $C_{\max}$ is the makespan and $W$ is a weight chosen large enough to
-make makespan minimization dominate the secondary objective.
-
-Core constraints:
-
-$$
-\sum_t x_{i,t} = 1
-$$
-
-$$
-s_j \ge s_i + d_i \qquad \forall (i, j) \in E
-$$
-
-$$
-\sum_{i \text{ active on } q \text{ at } t} x_{i,\cdot} \le 1
-\qquad \forall q, t
-$$
-
-This strategy is deterministic and globally optimizing under its discrete-time
-model. It is usually better than `fifo` on makespan, but it is more expensive
-to run and still uses fixed EPR windows rather than stochastic attempts.
 
 ## DES Link FIFO
 

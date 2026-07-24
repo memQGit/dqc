@@ -17,7 +17,6 @@ from .des_link_shortest_duration import (
     des_link_shortest_duration_schedule,
 )
 from .fifo import FIFOScheduler, fifo_schedule
-from .ilp_scheduler import ILPScheduler
 from .instance import (
     SCHEDULING_INSTANCE_SCHEMA_VERSION,
     EPRDemand,
@@ -62,7 +61,6 @@ __all__ = [
     "EPRLinkAssignment",
     "EntanglementGeneration",
     "FIFOScheduler",
-    "ILPScheduler",
     "OperationSchedule",
     "SCHEDULING_INSTANCE_SCHEMA_VERSION",
     "SchedulerEntanglementProfile",
