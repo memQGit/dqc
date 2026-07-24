@@ -574,10 +574,6 @@ def _get_algorithm_class(name: str) -> type[BaseScheduler]:
         from xdqc.scheduler.fifo import FIFOScheduler
 
         return FIFOScheduler
-    if name == "ilp":
-        from xdqc.scheduler.ilp_scheduler import ILPScheduler
-
-        return ILPScheduler
     if name == "des_link_fifo":
         from xdqc.scheduler.des_link_fifo import DESLinkFIFOScheduler
 
