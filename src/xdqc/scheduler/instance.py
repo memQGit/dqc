@@ -68,7 +68,10 @@ class SchedulingCompileOptions:
         max_group_size: Optional maximum number of two-qubit gates per group.
         hardware_profile: Scheduler hardware profile whose timings set the
             deterministic operation durations. ``None`` selects the default
-            profile.
+            profile. Besides naming a modality and entanglement profile, a
+            :class:`~xdqc.scheduler.schedule.SchedulerHardwareProfile` can carry
+            custom hardware parameters (gate, measurement, and entanglement
+            timings) that override the selected profile's values.
     """
 
     partitioner: str = "interaction"

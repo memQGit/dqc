@@ -96,6 +96,58 @@ SchedulerHardwareProfile.sr_trapped_ion()
 SchedulerHardwareProfile.neutral_atom()
 ```
 
+### Custom hardware parameters
+
+A profile also selects the *values* the named modality and entanglement
+profile resolve to from `settings.toml`. Any of the five primitive hardware
+parameters can be overridden per compile — pass a value to replace the
+profile's, or leave it `None` to keep it:
+
+| field | default source | default (`trapped_ion.ba` / `ion.time_bin`) |
+|---|---|---|
+| `one_qubit_gate_time` | `modality.<sel>.1q_gate_time` | 10.0 µs |
+| `two_qubit_gate_time` | `modality.<sel>.2q_gate_time` | 500.0 µs |
+| `measurement_time` | built-in constant | 3.0 µs |
+| `entanglement_rate` | `entanglement_gen.<sel>.entanglement_rate` | 3.5e-6 pairs/µs |
+| `epr_lifetime` | `entanglement_gen.<sel>.epr_lifetime` | 50.0 µs |
+
+```python
+from xdqc import (
+    SchedulerHardwareProfile,
+    SchedulingCompileOptions,
+    compile_scheduling_instance,
+)
+
+inst = compile_scheduling_instance(
+    "circuit.qasm",
+    "network.json",
+    options=SchedulingCompileOptions(
+        hardware_profile=SchedulerHardwareProfile.sr_trapped_ion(
+            two_qubit_gate_time=120.0,
+            epr_lifetime=80.0,
+        )
+    ),
+)
+```
+
+Every value must be a finite positive number; anything else raises
+`ValueError` at construction. Derived timings — `catent_time`,
+`catdisent_time`, `state_teleport_time`, `entanglement_time`, and the DES
+per-cycle success probability — always recompute from the effective values, so
+they cannot contradict the parameters they are built from and are not
+separately overridable. `des_entanglement_time_step` stays global to
+`settings.toml`.
+
+Overrides are folded into `source_fingerprint` (and therefore `instance_id`),
+so two compiles differing only in a hardware parameter never collide in a
+fingerprint cache. A profile with no overrides fingerprints identically to
+passing no profile at all.
+
+The same object works for the execution schedulers, which already accept a
+profile: `Scheduler(compiler, profile=my_profile)`. Note that `profile=`
+cannot be combined with the scalar `modality=` / `entanglement_profile=`
+keywords — to override parameters, pass a profile.
+
 ## 3. `SchedulingInstance` (the artifact)
 Immutable dataclass. Fields:
 
@@ -112,7 +164,11 @@ Immutable dataclass. Fields:
 - `epr_demands: tuple[EPRDemand, ...]` — ordered by `consumer_op_id`
 - `nominal_makespan: float` — max nominal end time
 - `metadata: Mapping[str, JSONValue]` — reproducibility record (partitioner,
-  seed, profile, flags)
+  seed, profile, flags), including `metadata["hardware"]`: the **effective**
+  hardware parameters (`one_qubit_gate_time`, `two_qubit_gate_time`,
+  `measurement_time`, `entanglement_rate`, `epr_lifetime`,
+  `des_entanglement_time_step`) after any overrides, so a consumer can recover
+  the timings without re-resolving the profile against `settings.toml`
 
 ### `SchedulingOperation`
 One node of the distributed DAG.
