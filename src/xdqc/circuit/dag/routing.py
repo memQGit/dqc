@@ -36,6 +36,7 @@ from xdqc.preprocessing.qasm.types import (
 )
 
 if TYPE_CHECKING:
+    from xdqc.circuit.dag.link_selector import LinkSelector
     from xdqc.network import NetworkGraph, PhysicalQubit
 
 
@@ -55,12 +56,14 @@ def _build_remote_gate_statements(
     network_qubit_b: PhysicalQubit,
     gate_qubits: list[CircuitQubit],
     network: NetworkGraph,
+    link_selector: LinkSelector,
 ) -> tuple[list[CleanedStatement], int, list[PlacementSwap]]:
     """Build statements for one remote two-qubit gate execution."""
     raw_comm_pair, local_paths = _select_direct_remote_gate_option(
         network_qubit_a,
         network_qubit_b,
         network,
+        link_selector,
     )
 
     # The remote gate acts on the last computation qubit before each
@@ -152,22 +155,26 @@ def _select_direct_remote_gate_option(
     network_qubit_a: PhysicalQubit,
     network_qubit_b: PhysicalQubit,
     network: NetworkGraph,
+    link_selector: LinkSelector,
 ) -> tuple[
     tuple[PhysicalQubit, PhysicalQubit],
     tuple[list[PhysicalQubit], list[PhysicalQubit]],
 ]:
-    """Return the first direct remote-gate option with valid local paths."""
-    for _, comm_pair, local_paths in network.get_comm_pair_options(
-        network_qubit_a,
-        network_qubit_b,
-    ):
-        if _remote_local_paths_are_valid(local_paths):
-            return comm_pair, local_paths
-
-    raise ValueError(
-        "No valid direct remote-gate path keeps data operands on "
-        "computation qubits."
-    )
+    """Return a direct remote-gate option, balancing equal-cost links."""
+    valid_options = [
+        option
+        for option in network.get_comm_pair_options(
+            network_qubit_a,
+            network_qubit_b,
+        )
+        if _remote_local_paths_are_valid(option[2])
+    ]
+    if not valid_options:
+        raise ValueError(
+            "No valid direct remote-gate path keeps data operands on "
+            "computation qubits."
+        )
+    return link_selector.select(valid_options)
 
 
 def _remote_local_paths_are_valid(
@@ -210,6 +217,7 @@ def _build_routed_remote_gate_statements(
     comp_capacity_by_schedule_qpu: dict[int, int] | None,
     network: NetworkGraph,
     moving_operand_idx: int,
+    link_selector: LinkSelector,
 ) -> tuple[list[CleanedStatement], int, list[PlacementSwap]]:
     """Build statements for a routed remote gate via intermediary QPUs."""
     moving_gate_qubit = gate_qubits[moving_operand_idx]
@@ -282,6 +290,7 @@ def _build_routed_remote_gate_statements(
         network_qubit_b=network_gate_qubits[1],
         gate_qubits=ordered_gate_qubits,
         network=network,
+        link_selector=link_selector,
     )
     routed_statements.extend(routed_gate_statements)
     placement_swaps.extend(routed_gate_placement_swaps)
