@@ -19,6 +19,7 @@ from xdqc.builder.extract_utils import (
     circuit_qubit_physical_map,
     window_final_op_id_map,
 )
+from xdqc.circuit.dag.link_selector import LinkSelector
 from xdqc.circuit.dag.mono import CircuitDAG
 from xdqc.circuit.dag.remap import (
     _circuit_qubit_to_physical_qubit,
@@ -112,6 +113,7 @@ def _build_remote_or_routed_gate_statements(
     circuit_qubit_to_physical_window: dict[int, tuple[int, int]],
     comp_capacity_by_schedule_qpu: dict[int, int] | None,
     network: NetworkGraph,
+    link_selector: LinkSelector,
 ) -> tuple[list[CleanedStatement], int, list[PlacementSwap]]:
     """Build a direct remote gate, or fall back to routed execution."""
     network_qubit_a = _circuit_qubit_to_physical_qubit(gate_qubits[0])
@@ -125,6 +127,7 @@ def _build_remote_or_routed_gate_statements(
             network_qubit_b=network_qubit_b,
             gate_qubits=gate_qubits,
             network=network,
+            link_selector=link_selector,
         )
     except ValueError as direct_gate_error:
         direct_error = direct_gate_error
@@ -147,6 +150,7 @@ def _build_remote_or_routed_gate_statements(
                 comp_capacity_by_schedule_qpu=comp_capacity_by_schedule_qpu,
                 network=network,
                 moving_operand_idx=moving_operand_idx,
+                link_selector=link_selector,
             )
         except ValueError as route_err:
             routed_error = route_err
@@ -299,6 +303,8 @@ def build_distributed_statements(
     current_window_idx = 0
     gate_group_starts = _gate_group_starts(gate_group_op_ids)
     active_gate_group: _ActiveGateGroup | None = None
+    # One selector per build balances equal-cost links across remote gates.
+    link_selector = LinkSelector()
     for statement in statements:
         # Update statement node with correct physical qubit mapping
         mapped_node = statement.node
@@ -358,6 +364,7 @@ def build_distributed_statements(
                 ),
                 comp_capacity_by_schedule_qpu=(comp_capacity_by_schedule_qpu),
                 network=network,
+                link_selector=link_selector,
             )
             if (
                 active_gate_group is not None
