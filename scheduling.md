@@ -36,6 +36,29 @@ where $r$ is the configured entanglement generation rate.
 The DES schedulers instead model repeated entanglement attempts with cycle time
 $t_c$ and per-attempt success probability $p$.
 
+### Configuring the parameters
+
+$t_{1q}$, $t_{2q}$, $t_{\mathrm{meas}}$, $r$, and the EPR lifetime are the
+primitive parameters; every duration above is derived from them. They default
+to the modality and entanglement profile selected in
+`src/xdqc/settings.toml`, and each can be overridden per compile or per
+scheduler run on `SchedulerHardwareProfile`:
+
+```python
+from xdqc import SchedulerHardwareProfile
+
+profile = SchedulerHardwareProfile.sr_trapped_ion(
+    two_qubit_gate_time=120.0,
+    epr_lifetime=80.0,
+)
+```
+
+Pass it as `Scheduler(source, profile=profile)`, or as
+`SchedulingCompileOptions(hardware_profile=profile)` for
+`compile_scheduling_instance`. The derived durations recompute from whatever
+values are in effect, so they always stay consistent with the primitives.
+$t_c$ (`des_entanglement_time_step`) remains global to `settings.toml`.
+
 ## FIFO
 
 File:

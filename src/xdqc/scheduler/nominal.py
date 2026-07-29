@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from xdqc.circuit.circuit import DistributedCircuit
     from xdqc.network import NetworkGraph, PhysicalQubit
     from xdqc.scheduler.instance import JSONValue
+    from xdqc.scheduler.schedule import SchedulerTimingModel
 
 TIME_UNIT = "microseconds"
 
@@ -117,7 +118,9 @@ def build_scheduling_instance(
     )
 
     nominal_makespan = max(ends.values(), default=0.0)
-    metadata = _build_metadata(options, profile, compiler_version)
+    metadata = _build_metadata(
+        options, profile, compiler_version, timing_model
+    )
 
     instance = SchedulingInstance(
         schema_version=SCHEDULING_INSTANCE_SCHEMA_VERSION,
@@ -454,8 +457,21 @@ def _build_metadata(
     options: SchedulingCompileOptions,
     profile: object,
     compiler_version: str,
+    timing_model: SchedulerTimingModel,
 ) -> dict[str, JSONValue]:
-    """Return reproducibility metadata recorded on the instance."""
+    """Return reproducibility metadata recorded on the instance.
+
+    Args:
+        options: Compilation options to record.
+        profile: The resolved scheduler hardware profile.
+        compiler_version: xdqc version producing the instance.
+        timing_model: The resolved timing model, recorded under ``"hardware"``
+            so a consumer can recover the effective hardware parameters without
+            re-resolving the profile against ``settings.toml``.
+
+    Returns:
+        The metadata mapping.
+    """
     return {
         "xdqc_version": compiler_version,
         "partitioner": options.partitioner,
@@ -466,5 +482,15 @@ def _build_metadata(
         "max_group_size": options.max_group_size,
         "modality": getattr(profile, "modality", None),
         "entanglement_profile": getattr(profile, "entanglement_profile", None),
+        "hardware": {
+            "one_qubit_gate_time": timing_model.local_one_qubit_gate_time,
+            "two_qubit_gate_time": timing_model.local_two_qubit_gate_time,
+            "measurement_time": timing_model.measurement_time,
+            "entanglement_rate": timing_model.entanglement_generation_rate,
+            "epr_lifetime": timing_model.epr_lifetime,
+            "des_entanglement_time_step": (
+                timing_model.des_entanglement_time_step
+            ),
+        },
         "schema_version": SCHEDULING_INSTANCE_SCHEMA_VERSION,
     }

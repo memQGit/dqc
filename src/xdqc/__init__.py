@@ -31,6 +31,7 @@ from .compiler_batch import (
 from .partition import Partitioner
 from .scheduler import (
     Scheduler,
+    SchedulerHardwareProfile,
     SchedulingCompileOptions,
     SchedulingInstance,
     scheduling_instance_from_json,
@@ -57,6 +58,7 @@ __all__ = [
     "ModalityProfile",
     "Partitioner",
     "Scheduler",
+    "SchedulerHardwareProfile",
     "SchedulingCompileOptions",
     "SchedulingCompileRequest",
     "SchedulingCompileResult",
