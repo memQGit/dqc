@@ -4,9 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from xdqc import compile_scheduling_instance
+from xdqc import (
+    SchedulerHardwareProfile,
+    compile_scheduling_instance,
+    compute_scheduling_source_fingerprint,
+    load_settings,
+)
 from xdqc.scheduler import scheduling_instance_to_json
-from xdqc.scheduler.instance import SchedulingCompileOptions
+from xdqc.scheduler.instance import (
+    SchedulingCompileOptions,
+    SchedulingInstance,
+)
 from xdqc.scheduler.nominal import TIME_UNIT
 
 _CONSUMER_OP_TYPES = {"epr_generation", "remote_swap", "remote_gate"}
@@ -144,3 +152,141 @@ def test_bell_has_no_epr_demands(
         bell_circuit_path, three_comp_one_comm_x2_network_path
     )
     assert instance.epr_demands == ()
+
+
+def _hardware(instance: SchedulingInstance) -> dict[str, float]:
+    """Return the instance's recorded hardware parameters as plain floats."""
+    recorded = instance.metadata["hardware"]
+    assert isinstance(recorded, dict)
+    return {
+        key: value
+        for key, value in recorded.items()
+        if isinstance(value, float)
+    }
+
+
+def test_default_metadata_records_settings_hardware(instance) -> None:
+    settings = load_settings()
+    profile = SchedulerHardwareProfile()
+    modality = settings.modality_profile(profile.modality)
+    entanglement = settings.entanglement_profile(profile.entanglement_profile)
+
+    hardware = _hardware(instance)
+
+    assert hardware["one_qubit_gate_time"] == pytest.approx(
+        modality.one_qubit_gate_time
+    )
+    assert hardware["two_qubit_gate_time"] == pytest.approx(
+        modality.two_qubit_gate_time
+    )
+    assert hardware["entanglement_rate"] == pytest.approx(
+        entanglement.entanglement_rate
+    )
+    assert hardware["epr_lifetime"] == pytest.approx(entanglement.epr_lifetime)
+    assert hardware["des_entanglement_time_step"] == pytest.approx(
+        settings.des_simulation.entanglement_time_step
+    )
+
+
+def test_gate_time_override_slows_the_schedule(
+    instance,
+    simple1_circuit_path: Path,
+    three_comp_one_comm_x2_network_path: Path,
+) -> None:
+    baseline_two_qubit = _hardware(instance)["two_qubit_gate_time"]
+    options = SchedulingCompileOptions(
+        hardware_profile=SchedulerHardwareProfile(
+            two_qubit_gate_time=2 * baseline_two_qubit
+        )
+    )
+
+    slower = compile_scheduling_instance(
+        simple1_circuit_path,
+        three_comp_one_comm_x2_network_path,
+        options=options,
+    )
+
+    assert _hardware(slower)["two_qubit_gate_time"] == pytest.approx(
+        2 * baseline_two_qubit
+    )
+    assert slower.nominal_makespan > instance.nominal_makespan
+    baseline_durations = {op.op_id: op.duration for op in instance.operations}
+    assert any(
+        op.duration > baseline_durations[op.op_id] for op in slower.operations
+    )
+    assert all(
+        op.duration >= baseline_durations[op.op_id] for op in slower.operations
+    )
+
+
+def test_override_compile_is_reproducible(
+    simple1_circuit_path: Path,
+    three_comp_one_comm_x2_network_path: Path,
+) -> None:
+    options = SchedulingCompileOptions(
+        partition_seed=0,
+        hardware_profile=SchedulerHardwareProfile(
+            two_qubit_gate_time=120.0, epr_lifetime=80.0
+        ),
+    )
+
+    first = compile_scheduling_instance(
+        simple1_circuit_path,
+        three_comp_one_comm_x2_network_path,
+        options=options,
+    )
+    second = compile_scheduling_instance(
+        simple1_circuit_path,
+        three_comp_one_comm_x2_network_path,
+        options=options,
+    )
+
+    assert scheduling_instance_to_json(
+        first, indent=None
+    ) == scheduling_instance_to_json(second, indent=None)
+
+
+def test_overrides_change_the_source_fingerprint(
+    simple1_circuit_path: Path,
+    three_comp_one_comm_x2_network_path: Path,
+) -> None:
+    baseline = compute_scheduling_source_fingerprint(
+        simple1_circuit_path, three_comp_one_comm_x2_network_path
+    )
+    overridden = compute_scheduling_source_fingerprint(
+        simple1_circuit_path,
+        three_comp_one_comm_x2_network_path,
+        SchedulingCompileOptions(
+            hardware_profile=SchedulerHardwareProfile(
+                two_qubit_gate_time=120.0
+            )
+        ),
+    )
+    other = compute_scheduling_source_fingerprint(
+        simple1_circuit_path,
+        three_comp_one_comm_x2_network_path,
+        SchedulingCompileOptions(
+            hardware_profile=SchedulerHardwareProfile(
+                two_qubit_gate_time=240.0
+            )
+        ),
+    )
+
+    assert baseline != overridden
+    assert overridden != other
+
+
+def test_empty_overrides_leave_the_fingerprint_unchanged(
+    simple1_circuit_path: Path,
+    three_comp_one_comm_x2_network_path: Path,
+) -> None:
+    baseline = compute_scheduling_source_fingerprint(
+        simple1_circuit_path, three_comp_one_comm_x2_network_path
+    )
+    explicit_default = compute_scheduling_source_fingerprint(
+        simple1_circuit_path,
+        three_comp_one_comm_x2_network_path,
+        SchedulingCompileOptions(hardware_profile=SchedulerHardwareProfile()),
+    )
+
+    assert baseline == explicit_default

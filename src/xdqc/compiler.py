@@ -565,7 +565,10 @@ def compile_scheduling_instance(
             ``.json`` description.
         options: Compilation options. ``None`` uses the defaults
             (``interaction`` partitioner, explicit e-bit assignment, no gate
-            grouping).
+            grouping, default hardware profile). Set
+            ``options.hardware_profile`` to select a hardware modality or to
+            override individual hardware parameters such as gate, measurement,
+            and entanglement timings.
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
@@ -720,20 +723,23 @@ def _fingerprint_from_parts(
         modality="trapped_ion.ba",
         entanglement_profile="ion.time_bin",
     )
+    canonical_options: dict[str, Any] = {
+        "partitioner": options.partitioner,
+        "partitioner_kwargs": dict(options.partitioner_kwargs or {}),
+        "partition_seed": options.partition_seed,
+        "ebit_assignment": options.ebit_assignment,
+        "group_gates": options.group_gates,
+        "max_group_size": options.max_group_size,
+        "modality": profile.modality,
+        "entanglement_profile": profile.entanglement_profile,
+    }
+    if profile.overrides:
+        canonical_options["hardware_overrides"] = profile.overrides
     canonical: dict[str, Any] = {
         "schema_version": SCHEDULING_INSTANCE_SCHEMA_VERSION,
         "qasm": dump_qasm_program(program),
         "network": _network_signature(network),
-        "options": {
-            "partitioner": options.partitioner,
-            "partitioner_kwargs": dict(options.partitioner_kwargs or {}),
-            "partition_seed": options.partition_seed,
-            "ebit_assignment": options.ebit_assignment,
-            "group_gates": options.group_gates,
-            "max_group_size": options.max_group_size,
-            "modality": profile.modality,
-            "entanglement_profile": profile.entanglement_profile,
-        },
+        "options": canonical_options,
     }
     if placement is not None:
         canonical["placement"] = placement

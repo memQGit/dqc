@@ -42,22 +42,96 @@ DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE: SchedulerEntanglementProfile = (
 )
 _DEFAULT_EPR_LIFETIME = 50.0
 _CATENT_OP_NAME = "catent"
+_HARDWARE_OVERRIDE_FIELDS: tuple[str, ...] = (
+    "one_qubit_gate_time",
+    "two_qubit_gate_time",
+    "measurement_time",
+    "entanglement_rate",
+    "epr_lifetime",
+)
+
+
+def _validate_hardware_override(name: str, value: float | None) -> None:
+    """Validate one optional hardware-parameter override.
+
+    Args:
+        name: Field name, used in the error message.
+        value: The override value, or ``None`` when unset.
+
+    Raises:
+        ValueError: If the value is not a finite positive number.
+    """
+    if value is None:
+        return
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(
+            f"SchedulerHardwareProfile.{name} must be a positive number, "
+            f"got {value!r}."
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class SchedulerHardwareProfile:
     """User-facing hardware selection for scheduler timing.
 
+    The two selector fields pick a named profile from ``settings.toml``. The
+    remaining fields are optional per-instance overrides of the individual
+    hardware parameters that profile resolves to: ``None`` keeps the profile's
+    value, and any other value replaces it. Derived timings (cat-entangling,
+    cat-disentangling, state teleport, entanglement duration, DES success
+    probability) always recompute from the effective values, so they cannot
+    contradict the parameters they are built from.
+
+    Example:
+        A Sr+ trapped-ion device with a faster two-qubit gate and a longer EPR
+        lifetime than the packaged profile assumes::
+
+            profile = SchedulerHardwareProfile.sr_trapped_ion(
+                two_qubit_gate_time=120.0,
+                epr_lifetime=80.0,
+            )
+
     Attributes:
         modality: Modality profile used for local gate times.
         entanglement_profile: Entanglement-generation profile used for
             entanglement timing.
+        one_qubit_gate_time: Optional override for the local single-qubit gate
+            duration.
+        two_qubit_gate_time: Optional override for the local two-qubit gate
+            duration.
+        measurement_time: Optional override for the measurement duration.
+        entanglement_rate: Optional override for the entanglement-generation
+            rate.
+        epr_lifetime: Optional override for the maximum EPR-pair lifetime.
     """
 
     modality: SchedulerModality = DEFAULT_SCHEDULER_MODALITY
     entanglement_profile: SchedulerEntanglementProfile = (
         DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
     )
+    one_qubit_gate_time: float | None = None
+    two_qubit_gate_time: float | None = None
+    measurement_time: float | None = None
+    entanglement_rate: float | None = None
+    epr_lifetime: float | None = None
+
+    def __post_init__(self) -> None:
+        """Validate that every supplied override is a positive number.
+
+        Raises:
+            ValueError: If any override is not a finite positive number.
+        """
+        for name in _HARDWARE_OVERRIDE_FIELDS:
+            _validate_hardware_override(name, getattr(self, name))
+
+    @property
+    def overrides(self) -> dict[str, float]:
+        """Return the supplied overrides, keyed by field name."""
+        return {
+            name: value
+            for name in _HARDWARE_OVERRIDE_FIELDS
+            if (value := getattr(self, name)) is not None
+        }
 
     @classmethod
     def ba_trapped_ion(
@@ -66,11 +140,34 @@ class SchedulerHardwareProfile:
         entanglement_profile: SchedulerEntanglementProfile = (
             DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
         ),
+        one_qubit_gate_time: float | None = None,
+        two_qubit_gate_time: float | None = None,
+        measurement_time: float | None = None,
+        entanglement_rate: float | None = None,
+        epr_lifetime: float | None = None,
     ) -> SchedulerHardwareProfile:
-        """Return the Ba+ trapped-ion hardware selection."""
+        """Return the Ba+ trapped-ion hardware selection.
+
+        Args:
+            entanglement_profile: Entanglement-generation profile to pair with
+                the modality.
+            one_qubit_gate_time: Optional single-qubit gate duration override.
+            two_qubit_gate_time: Optional two-qubit gate duration override.
+            measurement_time: Optional measurement duration override.
+            entanglement_rate: Optional entanglement-generation rate override.
+            epr_lifetime: Optional EPR-pair lifetime override.
+
+        Returns:
+            The hardware profile.
+        """
         return cls(
             modality="trapped_ion.ba",
             entanglement_profile=entanglement_profile,
+            one_qubit_gate_time=one_qubit_gate_time,
+            two_qubit_gate_time=two_qubit_gate_time,
+            measurement_time=measurement_time,
+            entanglement_rate=entanglement_rate,
+            epr_lifetime=epr_lifetime,
         )
 
     @classmethod
@@ -80,11 +177,34 @@ class SchedulerHardwareProfile:
         entanglement_profile: SchedulerEntanglementProfile = (
             DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
         ),
+        one_qubit_gate_time: float | None = None,
+        two_qubit_gate_time: float | None = None,
+        measurement_time: float | None = None,
+        entanglement_rate: float | None = None,
+        epr_lifetime: float | None = None,
     ) -> SchedulerHardwareProfile:
-        """Return the Sr+ trapped-ion hardware selection."""
+        """Return the Sr+ trapped-ion hardware selection.
+
+        Args:
+            entanglement_profile: Entanglement-generation profile to pair with
+                the modality.
+            one_qubit_gate_time: Optional single-qubit gate duration override.
+            two_qubit_gate_time: Optional two-qubit gate duration override.
+            measurement_time: Optional measurement duration override.
+            entanglement_rate: Optional entanglement-generation rate override.
+            epr_lifetime: Optional EPR-pair lifetime override.
+
+        Returns:
+            The hardware profile.
+        """
         return cls(
             modality="trapped_ion.sr",
             entanglement_profile=entanglement_profile,
+            one_qubit_gate_time=one_qubit_gate_time,
+            two_qubit_gate_time=two_qubit_gate_time,
+            measurement_time=measurement_time,
+            entanglement_rate=entanglement_rate,
+            epr_lifetime=epr_lifetime,
         )
 
     @classmethod
@@ -94,11 +214,34 @@ class SchedulerHardwareProfile:
         entanglement_profile: SchedulerEntanglementProfile = (
             DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
         ),
+        one_qubit_gate_time: float | None = None,
+        two_qubit_gate_time: float | None = None,
+        measurement_time: float | None = None,
+        entanglement_rate: float | None = None,
+        epr_lifetime: float | None = None,
     ) -> SchedulerHardwareProfile:
-        """Return the neutral-atom hardware selection."""
+        """Return the neutral-atom hardware selection.
+
+        Args:
+            entanglement_profile: Entanglement-generation profile to pair with
+                the modality.
+            one_qubit_gate_time: Optional single-qubit gate duration override.
+            two_qubit_gate_time: Optional two-qubit gate duration override.
+            measurement_time: Optional measurement duration override.
+            entanglement_rate: Optional entanglement-generation rate override.
+            epr_lifetime: Optional EPR-pair lifetime override.
+
+        Returns:
+            The hardware profile.
+        """
         return cls(
             modality="neutral_atom",
             entanglement_profile=entanglement_profile,
+            one_qubit_gate_time=one_qubit_gate_time,
+            two_qubit_gate_time=two_qubit_gate_time,
+            measurement_time=measurement_time,
+            entanglement_rate=entanglement_rate,
+            epr_lifetime=epr_lifetime,
         )
 
 
@@ -292,8 +435,11 @@ class BaseScheduler(ABC):
         Args:
             distributed_circuit: Distributed circuit DAG to schedule.
             profile: Optional convenience object selecting both modality and
-                entanglement profile. When provided, ``modality`` and
-                ``entanglement_profile`` must be left at their defaults.
+                entanglement profile, and carrying any custom hardware
+                parameter overrides. When provided, ``modality`` and
+                ``entanglement_profile`` must be left at their defaults; pass a
+                profile rather than the scalar selectors to override individual
+                hardware parameters.
             modality: Hardware timing profile used for local 1Q/2Q gate
                 durations. Defaults to ``"trapped_ion.ba"`` (Ba+ trapped ion).
             entanglement_profile: Entanglement-generation profile used for
@@ -641,21 +787,35 @@ def _resolve_scheduler_hardware_profile(
 def _load_scheduler_timing_model(
     hardware_profile: SchedulerHardwareProfile,
 ) -> SchedulerTimingModel:
-    """Load scheduler timing values for one supported hardware profile."""
+    """Load scheduler timing values for one supported hardware profile.
+
+    Each value comes from the profile's named ``settings.toml`` entry unless
+    the profile carries an explicit override for it.
+    """
     settings = load_settings()
     modality_profile = settings.modality_profile(hardware_profile.modality)
     entanglement_profile = settings.entanglement_profile(
         hardware_profile.entanglement_profile
     )
+    overrides = hardware_profile.overrides
     return SchedulerTimingModel(
         hardware_profile=hardware_profile,
-        local_one_qubit_gate_time=modality_profile.one_qubit_gate_time,
-        local_two_qubit_gate_time=modality_profile.two_qubit_gate_time,
-        entanglement_generation_rate=entanglement_profile.entanglement_rate,
+        local_one_qubit_gate_time=overrides.get(
+            "one_qubit_gate_time", modality_profile.one_qubit_gate_time
+        ),
+        local_two_qubit_gate_time=overrides.get(
+            "two_qubit_gate_time", modality_profile.two_qubit_gate_time
+        ),
+        entanglement_generation_rate=overrides.get(
+            "entanglement_rate", entanglement_profile.entanglement_rate
+        ),
         des_entanglement_time_step=(
             settings.des_simulation.entanglement_time_step
         ),
-        epr_lifetime=entanglement_profile.epr_lifetime,
+        epr_lifetime=overrides.get(
+            "epr_lifetime", entanglement_profile.epr_lifetime
+        ),
+        measurement_time=overrides.get("measurement_time", _MEASUREMENT_TIME),
     )
 
 
