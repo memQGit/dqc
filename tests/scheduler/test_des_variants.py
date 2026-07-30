@@ -412,10 +412,12 @@ def test_des_link_variants_arbitrate_initial_same_time_contention(
             if hasattr(event, "op_id") and event.op_id in {0, 1, 2}
         )
 
+    # Op 0 is an rswap (two state teleportations), so shortest-duration
+    # arbitration prefers the cheaper rcx requests ahead of it.
     assert first_remote_starts == {
         "des_link_fifo": 0,
-        "des_link_shortest_duration": 0,
-        "des_link_critical_path": 2,
+        "des_link_shortest_duration": 1,
+        "des_link_critical_path": 0,
     }
 
 
@@ -448,9 +450,9 @@ def test_des_variants_diverge_on_shared_link_queue(
         }
 
     assert makespans == {
-        "des_link_fifo": 14.0,
-        "des_link_shortest_duration": 14.0,
-        "des_link_critical_path": 11.0,
+        "des_link_fifo": 30.0,
+        "des_link_shortest_duration": 32.0,
+        "des_link_critical_path": 29.0,
     }
     assert start_times["des_link_fifo"] == {
         0: 1.0,
@@ -463,27 +465,29 @@ def test_des_variants_diverge_on_shared_link_queue(
         7: 12.0,
         8: 13.0,
     }
+    # Op 1 is an rswap; shortest-duration arbitration defers it behind the
+    # cheaper rcx requests.
     assert start_times["des_link_shortest_duration"] == {
         0: 1.0,
-        1: 2.0,
-        2: 3.0,
-        3: 4.0,
-        4: 9.0,
-        5: 10.0,
-        6: 11.0,
-        7: 12.0,
-        8: 13.0,
+        1: 4.0,
+        2: 2.0,
+        3: 3.0,
+        4: 8.0,
+        5: 9.0,
+        6: 10.0,
+        7: 11.0,
+        8: 12.0,
     }
     assert start_times["des_link_critical_path"] == {
-        0: 2.0,
-        1: 3.0,
+        0: 3.0,
+        1: 1.0,
         2: 4.0,
-        3: 1.0,
-        4: 6.0,
-        5: 7.0,
-        6: 8.0,
-        7: 9.0,
-        8: 10.0,
+        3: 2.0,
+        4: 7.0,
+        5: 8.0,
+        6: 9.0,
+        7: 10.0,
+        8: 11.0,
     }
 
 
@@ -518,7 +522,7 @@ def test_des_variants_diverge_on_canonical_three_request_queue(
         )
 
     assert results == {
-        "des_link_fifo": (19.0, [1, 2, 3]),
-        "des_link_shortest_duration": (19.0, [1, 2, 3]),
-        "des_link_critical_path": (16.0, [3, 1, 2]),
+        "des_link_fifo": (30.0, [1, 2, 3]),
+        "des_link_shortest_duration": (32.0, [2, 3, 1]),
+        "des_link_critical_path": (29.0, [1, 3, 2]),
     }

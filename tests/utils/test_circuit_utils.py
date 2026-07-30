@@ -214,6 +214,8 @@ def test_movement_cost_uses_network_route_cost(simple1_network_path) -> None:
     old_partition = [{0}, {1}]
     new_partition = [{0, 1}, set()]
 
+    # Relocating one qubit across a direct link is one remote swap: two
+    # e-bit pairs, not free.
     assert (
         movement_cost(
             new_partition,
@@ -221,7 +223,7 @@ def test_movement_cost_uses_network_route_cost(simple1_network_path) -> None:
             network=network,
             qpu_ids=[1, 2],
         )
-        == 0.0
+        == 2.0
     )
 
 

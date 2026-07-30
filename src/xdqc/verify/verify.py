@@ -20,6 +20,10 @@ from qiskit.quantum_info import Statevector, hellinger_fidelity
 from qiskit_aer import AerSimulator
 
 from xdqc._logging import StepTimer, workflow_logging
+from xdqc.network.network_graph import (
+    REMOTE_GATE_EBIT_COST,
+    REMOTE_SWAP_EBIT_COST,
+)
 from xdqc.preprocessing.qasm import (
     dump_qasm_program,
     is_comm_qubit_declaration,
@@ -33,11 +37,11 @@ from xdqc.preprocessing.qasm import (
 logger = logging.getLogger(__name__)
 
 _REMOTE_OPERATION_COSTS: dict[str, int] = {
-    "rswap": 2,
-    "rcp": 1,
-    "rcry": 1,
-    "rcx": 1,
-    "rcz": 1,
+    "rswap": REMOTE_SWAP_EBIT_COST,
+    "rcp": REMOTE_GATE_EBIT_COST,
+    "rcry": REMOTE_GATE_EBIT_COST,
+    "rcx": REMOTE_GATE_EBIT_COST,
+    "rcz": REMOTE_GATE_EBIT_COST,
 }
 
 
@@ -472,9 +476,10 @@ def dist_to_mono_program(dist_program: ast.Program) -> ast.Program:
 def manual_cost_verification(qasm: str) -> int:
     """Return the total manual cost of remote operations in a QASM string.
 
-    Costs:
-        ``rswap`` costs 4.
-        ``rcp``, ``rcry``, ``rcx``, and ``rcz`` each cost 2.
+    Costs are in e-bit pairs:
+        ``rswap`` costs :data:`REMOTE_SWAP_EBIT_COST` (two teleportations).
+        ``rcp``, ``rcry``, ``rcx``, and ``rcz`` each cost
+        :data:`REMOTE_GATE_EBIT_COST`.
 
     Args:
         qasm: OpenQASM source code to analyze.

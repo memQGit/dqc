@@ -27,6 +27,10 @@ from xdqc.builder.extract_utils import (
     synthesize_state_teleportation_swaps,
 )
 from xdqc.circuit.op import Op
+from xdqc.network.network_graph import (
+    REMOTE_GATE_EBIT_COST,
+    REMOTE_SWAP_EBIT_COST,
+)
 from xdqc.partition import Partitioner
 from xdqc.preprocessing.qasm.types import (
     CleanedQuantumGate,
@@ -298,13 +302,17 @@ def _validated_partitioner_outputs(
 
 
 def _exact_entanglement_cost(distributed: DistributedCircuit) -> float:
-    """Return exact e-bit cost from emitted cat-entanglement pairs.
+    """Return exact e-bit cost from emitted remote operations.
 
-    A matched ``catent``/``catdisent`` pair is the source of truth for e-bit
-    usage. When concrete communication operands are present, the number of
-    e-bits is the number of communication-qubit pairs in ``catent``. When
-    e-bit assignment is deferred and communication operands have been stripped,
-    the wrapped operation determines the required pair count.
+    A matched ``catent``/``catdisent`` pair is the source of truth for
+    cat-entangled remote gates. When concrete communication operands are
+    present, the number of e-bits is the number of communication-qubit pairs
+    in ``catent``; when e-bit assignment is deferred and communication
+    operands have been stripped, one pair is required per gate.
+
+    A remote swap carries no cat-entanglement: it teleports both states and
+    always costs :data:`REMOTE_SWAP_EBIT_COST` pairs, counted directly from
+    each emitted ``rswap``.
 
     Raises:
         ValueError: If a cat-entanglement pair is malformed or unmatched.
@@ -314,7 +322,9 @@ def _exact_entanglement_cost(distributed: DistributedCircuit) -> float:
     for index, statement in enumerate(distributed.statements):
         if not isinstance(statement, CleanedQuantumGate):
             continue
-        if statement.name == "catent":
+        if statement.name == "rswap":
+            exact_cost += float(REMOTE_SWAP_EBIT_COST)
+        elif statement.name == "catent":
             if pending_catent is not None:
                 pending_index, _, _ = pending_catent
                 raise ValueError(
@@ -324,7 +334,7 @@ def _exact_entanglement_cost(distributed: DistributedCircuit) -> float:
             pending_catent = (
                 index,
                 statement,
-                _catent_ebit_count(statement, distributed.statements, index),
+                _catent_ebit_count(statement),
             )
         elif statement.name == "catdisent":
             if pending_catent is None:
@@ -349,11 +359,7 @@ def _exact_entanglement_cost(distributed: DistributedCircuit) -> float:
     return exact_cost
 
 
-def _catent_ebit_count(
-    catent: CleanedQuantumGate,
-    statements: Sequence[object],
-    catent_index: int,
-) -> float:
+def _catent_ebit_count(catent: CleanedQuantumGate) -> float:
     """Return e-bit count represented by one ``catent`` statement."""
     if len(catent.qubits) < 2:
         raise ValueError(
@@ -378,20 +384,6 @@ def _catent_ebit_count(
             )
         return float(comm_operand_count // 2)
 
-    wrapped_statement = _next_quantum_gate_statement(
-        statements,
-        start_index=catent_index + 1,
-    )
-    return 2.0 if wrapped_statement.name == "rswap" else 1.0
-
-
-def _next_quantum_gate_statement(
-    statements: Sequence[object],
-    *,
-    start_index: int,
-) -> CleanedQuantumGate:
-    """Return the next quantum gate statement after ``start_index``."""
-    for statement in statements[start_index:]:
-        if isinstance(statement, CleanedQuantumGate):
-            return statement
-    raise ValueError("catent has no following quantum gate to wrap.")
+    # Operands were stripped for deferred assignment. Only remote gates are
+    # cat-entangled, and each consumes a single pair.
+    return float(REMOTE_GATE_EBIT_COST)

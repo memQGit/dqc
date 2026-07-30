@@ -40,6 +40,28 @@ _EPR_ATTEMPT = "EPR_ATTEMPT"
 _EPR_READY = "EPR_READY"
 _EPR_EXPIRE = "EPR_EXPIRE"
 _REMOTE_OP_START = "REMOTE_OP_START"
+
+#: Expired pairs tolerated for one request before giving up on it.
+#:
+#: A multi-pair operation needs all its pairs alive at the same instant. Each
+#: link generates independently, so whether they coincide is stochastic: a
+#: profile whose EPR lifetime is below the *mean* generation time can still
+#: assemble its pairs whenever its links happen to succeed early. Only the
+#: simulation can decide that, so this is a termination safeguard, not a
+#: feasibility test -- it exists so a configuration that in practice never
+#: coincides stops instead of regenerating forever.
+#:
+#: Sized from measurement. With links each alive a fraction f of the time,
+#: observed worst-case expiries before coinciding were 4 at f~33%, 50 at f~5%,
+#: and 413 at f~0.5% -- roughly 2/f. This bound therefore leaves ample headroom
+#: down to f~0.02%.
+#:
+#: Note the bound counts rounds, not work: each round costs about one mean
+#: generation time, so a profile combining a very slow rate with a short
+#: lifetime simulates for a long time before giving up. Such a profile needs
+#: mean_generation^2 / lifetime events to succeed at all, so it is not
+#: practically simulable either way.
+_MAX_EXPIRED_PAIRS_PER_REQUEST = 10_000
 _OP_COMPLETE = "OP_COMPLETE"
 _EventType: TypeAlias = str
 
@@ -100,6 +122,7 @@ class _RemoteRequest:
     data_qubits: tuple[str, str]
     link_requests: dict[tuple[str, str], _RemoteLinkRequest]
     start_enqueued: bool = False
+    expired_pair_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -787,6 +810,18 @@ class BaseDESLinkScheduler(BaseScheduler):
             end_time=event.time,
             was_used=False,
         )
+        request.expired_pair_count += 1
+        if request.expired_pair_count > _MAX_EXPIRED_PAIRS_PER_REQUEST:
+            raise ValueError(
+                f"Operation {event.op_id} ({request.op.name!r}) needs "
+                f"{len(request.link_requests)} e-bit pairs held at once, but "
+                f"{request.expired_pair_count} pairs expired before they all "
+                "coincided, so scheduling was abandoned. An EPR lifetime of "
+                f"{self.timing_model.epr_lifetime:.3g} is short relative to "
+                f"the ~{self.timing_model.entanglement_time:.3g} needed to "
+                "generate one pair, so the links rarely succeed close enough "
+                "together. Raise epr_lifetime or the entanglement rate."
+            )
         request.start_enqueued = False
         self._activate_remote_request(event.op_id, event.link_key, event.time)
 
