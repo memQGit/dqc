@@ -376,11 +376,15 @@ class SchedulerTimingModel:
 
     @property
     def state_teleport_time(self) -> float:
-        """Return the derived state-teleport duration."""
+        """Return the derived state-teleport duration.
+
+        One teleportation costs a two-qubit gate, three single-qubit gates,
+        and two measurements.
+        """
         return (
             self.local_two_qubit_gate_time
-            + (2 * self.local_one_qubit_gate_time)
-            + self.measurement_time
+            + (3 * self.local_one_qubit_gate_time)
+            + (2 * self.measurement_time)
         )
 
     @property
@@ -825,6 +829,9 @@ def _operation_duration(op: Op, timing_model: SchedulerTimingModel) -> float:
         return timing_model.catent_time
     if op.name == "catdisent":
         return timing_model.catdisent_time
+    if op.name == "rswap":
+        # A remote swap exchanges two states, i.e. two state teleportations.
+        return 2 * timing_model.state_teleport_time
     if op.name == "measure":
         return timing_model.measurement_time
     if len(op.qubits) == 1:

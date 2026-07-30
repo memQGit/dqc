@@ -625,4 +625,5 @@ def test_partition_cost_supports_topology_aware_ebit_multiplier(
         ),
     )
     assert two_hop_cost == 2.0 * two_hop_multiplier
-    assert two_hop_cost == 10.0
+    # Weight 2 edge over a two-hop route: 2 * (one remote swap + one gate).
+    assert two_hop_cost == 6.0

@@ -397,7 +397,7 @@ def test_des_link_fifo_schedule_rejects_invalid_parameters(
         entanglement_generation_rate = 0.5
         entanglement_time = 2.0
         epr_lifetime = 50.0
-        state_teleport_time = 523.0
+        state_teleport_time = 536.0
         catent_time = 513.0
         catdisent_time = 23.0
         des_t_cycle = 0.0
@@ -464,8 +464,8 @@ def test_des_link_fifo_schedule_supports_rswap_with_two_pairs(
     assert first_epr.duration == 1.0
     assert second_epr.duration == 1.0
     assert rswap_op.start_time == 1.0
-    assert rswap_op.duration == 500.0
-    assert schedule.makespan == 501.0
+    assert rswap_op.duration == 1072.0
+    assert schedule.makespan == 1073.0
 
 
 def test_des_link_fifo_schedule_waits_for_both_rswap_pairs(
@@ -505,8 +505,8 @@ def test_des_link_fifo_schedule_waits_for_both_rswap_pairs(
     assert first_epr.duration == 3.0
     assert second_epr.duration == 3.0
     assert rswap_op.start_time == 3.0
-    assert rswap_op.duration == 500.0
-    assert schedule.makespan == 503.0
+    assert rswap_op.duration == 1072.0
+    assert schedule.makespan == 1075.0
 
 
 def test_des_link_fifo_schedule_regenerates_expired_pairs(
@@ -581,5 +581,5 @@ def test_des_link_fifo_schedule_regenerates_expired_pairs(
     assert regenerated_epr.start_time == 51.0
     assert regenerated_epr.duration == 9.0
     assert rswap_op.start_time == 60.0
-    assert rswap_op.duration == 500.0
-    assert schedule.makespan == 560.0
+    assert rswap_op.duration == 1072.0
+    assert schedule.makespan == 1132.0

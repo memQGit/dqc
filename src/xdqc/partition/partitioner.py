@@ -556,7 +556,13 @@ def _total_schedule_ebit_cost(
     windows: PartitionWindows,
     network: NetworkGraph,
 ) -> float:
-    """Return total routed e-bit usage implied by a schedule."""
+    """Return total routed e-bit usage implied by a schedule.
+
+    Raises:
+        ValueError: If the schedule needs a remote operation the network
+            cannot carry, including a swap across QPUs without two
+            disjoint links.
+    """
     total_cost = 0.0
     previous_assignment: dict[int, int] | None = None
     remote_gate_ebit_cost = network.remote_gate_ebit_cost
@@ -589,10 +595,28 @@ def _total_schedule_ebit_cost(
             left_qubit, right_qubit = op.qubit_indices
             left_qpu_id = current_assignment[left_qubit]
             right_qpu_id = current_assignment[right_qubit]
-            if left_qpu_id != right_qpu_id:
+            if left_qpu_id == right_qpu_id:
+                continue
+            # A swap in the source circuit lowers to a remote swap, which
+            # needs two disjoint links on a direct connection rather than
+            # the single link a remote gate uses. Cost it as the swap it
+            # becomes so the price matches what will actually be built.
+            if op.name == "swap":
+                if not network.supports_remote_swap(left_qpu_id, right_qpu_id):
+                    raise ValueError(
+                        "Swap across QPUs "
+                        f"{left_qpu_id} and {right_qpu_id} requires two "
+                        "disjoint communication links; this network does "
+                        "not provide them, so the swap cannot be placed "
+                        "across these QPUs."
+                    )
                 total_cost += float(
-                    remote_gate_ebit_cost(left_qpu_id, right_qpu_id)
+                    remote_swap_ebit_cost(left_qpu_id, right_qpu_id)
                 )
+                continue
+            total_cost += float(
+                remote_gate_ebit_cost(left_qpu_id, right_qpu_id)
+            )
 
         previous_assignment = current_assignment
 

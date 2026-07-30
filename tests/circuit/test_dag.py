@@ -921,13 +921,9 @@ def test_distributed_dag_remote_swap_uses_two_disjoint_comm_pairs(
         for statement in distributed.statements
         if isinstance(statement, CleanedQuantumGate)
     ]
-    assert quantum_gate_names == [
-        "h",
-        "catent",
-        "rswap",
-        "catdisent",
-        "x",
-    ]
+    # A remote swap is teleportation-based: it is emitted standalone, with
+    # no surrounding catent / catdisent.
+    assert quantum_gate_names == ["h", "rswap", "x"]
     assert len(rswaps) == 1
     assert rswaps[0].qubits == [
         CircuitQubit("q0", 0),
@@ -940,8 +936,9 @@ def test_distributed_dag_remote_swap_uses_two_disjoint_comm_pairs(
     output = io.StringIO()
     openqasm3.dump(distributed.program, output)
     dumped_qasm = output.getvalue()
-    assert "catent q0[0], q1[0], c0[0], c1[0], c0[1], c1[1];" in dumped_qasm
-    assert "catdisent q0[0], q1[0], c0[0], c1[0], c0[1], c1[1];" in dumped_qasm
+    assert "rswap q0[0], q1[0], c0[0], c1[0], c0[1], c1[1];" in dumped_qasm
+    assert "catent" not in dumped_qasm
+    assert "catdisent" not in dumped_qasm
 
     deferred = _build_distributed(
         circuit,
@@ -954,11 +951,11 @@ def test_distributed_dag_remote_swap_uses_two_disjoint_comm_pairs(
         network=_RswapNetwork(),
         ebit_assignment=False,
     )
-    catent_op = next(op for op in deferred.ops if op.name == "catent")
+    rswap_op = next(op for op in deferred.ops if op.name == "rswap")
     assert deferred.ebit_candidates_by_op_id is not None
-    catent_candidates = deferred.ebit_candidates_by_op_id[catent_op.op_id]
-    assert catent_candidates
-    assert all(len(candidate) == 2 for candidate in catent_candidates)
+    rswap_candidates = deferred.ebit_candidates_by_op_id[rswap_op.op_id]
+    assert rswap_candidates
+    assert all(len(candidate) == 2 for candidate in rswap_candidates)
 
 
 def test_distributed_dag_routes_nonadjacent_partition_swap(
@@ -1070,8 +1067,9 @@ def test_distributed_dag_routes_nonadjacent_partition_swap(
         and statement.name == "catdisent"
     ]
     assert len(rswaps) == 3
-    assert len(catents) == 3
-    assert len(catdisents) == 3
+    # Routed remote swaps are emitted standalone, without cat-entanglement.
+    assert catents == []
+    assert catdisents == []
     assert [
         (s.qubits[0].register_name, s.qubits[1].register_name) for s in rswaps
     ] == [
@@ -1128,4 +1126,75 @@ def test_distributed_dag_remote_swap_requires_two_disjoint_ebit_pairs(
             comp_qubits_per_qpu=[1, 1],
             comm_qubits_per_qpu=[2, 2],
             network=_SinglePairRswapNetwork(),
+        )
+
+
+def _source_swap_circuit(tmp_path: Path) -> Circuit:
+    qasm_path = tmp_path / "source_swap.qasm"
+    qasm_path.write_text(
+        'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+        "qubit[2] q;\nswap q[0], q[1];\n",
+        encoding="utf-8",
+    )
+    return _build_memq_circuit(qasm_path)
+
+
+def test_source_swap_across_qpus_emits_standalone_two_pair_rswap(
+    tmp_path: Path,
+    eight_comp_four_comm_network_path: Path,
+) -> None:
+    # A `swap` written in the source circuit whose operands land on different
+    # QPUs becomes an rswap, and must be provisioned like every other remote
+    # swap: two disjoint e-bit pairs, no cat-entanglement wrapper.
+    circuit = _source_swap_circuit(tmp_path)
+    network = NetworkGraph(str(eight_comp_four_comm_network_path))
+    schedule = [{QPU(id=1): {0}, QPU(id=2): {1}}]
+
+    distributed = _build_distributed(
+        circuit,
+        remote_statement_ids={circuit.mono.ops[0].statement_id},
+        swaps_schedule=[],
+        windows=[circuit.mono.ops],
+        schedule=schedule,
+        comp_qubits_per_qpu=network.comp_qubits_per_qpu(),
+        comm_qubits_per_qpu=network.comm_qubits_per_qpu(),
+        network=network,
+    )
+
+    gate_names = [op.name for op in distributed.ops]
+    assert "catent" not in gate_names
+    assert "catdisent" not in gate_names
+
+    rswap = next(op for op in distributed.ops if op.name == "rswap")
+    ebit_pairs = rswap.ebit_pairs
+    assert ebit_pairs is not None
+    assert len(ebit_pairs) == 2
+    # The two pairs must be disjoint: four distinct communication qubits.
+    assert len({qubit for pair in ebit_pairs for qubit in pair}) == 4
+
+
+def test_source_swap_across_qpus_requires_two_disjoint_ebit_pairs(
+    tmp_path: Path,
+    three_comp_one_comm_x2_network_path: Path,
+) -> None:
+    # Only one communication pair links the two QPUs, so the teleportation
+    # error must surface rather than a misleading remote-gate routing error.
+    circuit = _source_swap_circuit(tmp_path)
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+    schedule = [{QPU(id=0): {0}, QPU(id=1): {1}}]
+
+    with pytest.raises(
+        ValueError,
+        match="State teleportation not supported - currently requires "
+        "2 e-bit pairs.",
+    ):
+        _build_distributed(
+            circuit,
+            remote_statement_ids={circuit.mono.ops[0].statement_id},
+            swaps_schedule=[],
+            windows=[circuit.mono.ops],
+            schedule=schedule,
+            comp_qubits_per_qpu=network.comp_qubits_per_qpu(),
+            comm_qubits_per_qpu=network.comm_qubits_per_qpu(),
+            network=network,
         )

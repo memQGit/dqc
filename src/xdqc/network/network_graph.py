@@ -21,6 +21,11 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import networkx as nx
 
+#: E-bit pairs consumed by one remote two-qubit gate (one cat-entanglement).
+REMOTE_GATE_EBIT_COST = 1
+#: E-bit pairs consumed by one remote swap (two state teleportations).
+REMOTE_SWAP_EBIT_COST = 2
+
 
 @dataclass(frozen=True, slots=True)
 class PhysicalQubit:
@@ -411,6 +416,10 @@ class NetworkGraph:
     ) -> int:
         """Return minimum raw e-bit pairs for a remote gate between two QPUs.
 
+        The gate itself costs one e-bit pair. Reaching an adjacent QPU first
+        costs a remote swap per intermediary, and a remote swap is two pairs,
+        so a route through ``k`` intermediaries costs ``1 + 2k``.
+
         Args:
             qpu_a: First QPU ID.
             qpu_b: Second QPU ID.
@@ -437,7 +446,11 @@ class NetworkGraph:
                 f"{qpu_a} and {qpu_b}."
             )
 
-        return min(1 + (4 * _route_length(path)) for path in route_options)
+        return min(
+            REMOTE_GATE_EBIT_COST
+            + (REMOTE_SWAP_EBIT_COST * _route_length(path))
+            for path in route_options
+        )
 
     def remote_swap_ebit_cost(
         self,
@@ -445,6 +458,11 @@ class NetworkGraph:
         qpu_b: int,
     ) -> int:
         """Return routed swap cost between two QPUs.
+
+        Every remote swap costs two e-bit pairs. A direct swap is one such
+        swap; a route through intermediaries walks the chain out and back to
+        restore the intermediate placements, which is ``2h - 1`` swaps for
+        ``h`` hops.
 
         Args:
             qpu_a: First QPU ID.
@@ -466,17 +484,51 @@ class NetworkGraph:
             min_pairs=2,
             pair_counts=pair_counts,
         )
-        return 2 * _route_length(path)
+        hops = len(path) - 1
+        return REMOTE_SWAP_EBIT_COST * ((2 * hops) - 1)
 
     def _remote_comm_pair_counts(self) -> dict[tuple[int, int], int]:
-        """Count direct remote communication pairs between QPU pairs."""
-        pair_counts: dict[tuple[int, int], int] = {}
+        """Count simultaneously usable comm pairs between QPU pairs.
+
+        Counts *disjoint* pairs, not raw remote edges: two edges that share
+        a communication qubit cannot carry two e-bits at once, so they
+        count once. Operations that need ``n`` pairs (a remote swap needs
+        two) can only run where this count reaches ``n``, which keeps every
+        path reported as viable actually buildable.
+        """
+        edges_by_qpu_pair: dict[
+            tuple[int, int], list[tuple[PhysicalQubit, PhysicalQubit]]
+        ] = {}
         for qubit_a, qubit_b in self._get_remote_edges():
             if not (qubit_a.is_communication and qubit_b.is_communication):
                 continue
             key = _ordered_qpu_pair(qubit_a.qpu_id, qubit_b.qpu_id)
-            pair_counts[key] = pair_counts.get(key, 0) + 1
-        return pair_counts
+            edges_by_qpu_pair.setdefault(key, []).append((qubit_a, qubit_b))
+
+        return {
+            key: _max_disjoint_pair_count(edges)
+            for key, edges in edges_by_qpu_pair.items()
+        }
+
+    def supports_remote_swap(self, qpu_a: int, qpu_b: int) -> bool:
+        """Return whether two QPUs can perform a direct remote swap.
+
+        A remote swap teleports both states, so it needs two disjoint
+        communication pairs on a direct link between the two QPUs. This is
+        the single validity check for remote swaps: when it returns False
+        no remote swap should be planned or emitted between these QPUs.
+
+        Args:
+            qpu_a: First QPU ID.
+            qpu_b: Second QPU ID.
+
+        Returns:
+            True when a direct remote swap is possible.
+        """
+        if qpu_a == qpu_b:
+            return True
+        pair_counts = self._remote_comm_pair_counts()
+        return pair_counts.get(_ordered_qpu_pair(qpu_a, qpu_b), 0) >= 2
 
     def _qpu_neighbors_with_min_pairs(
         self,
@@ -968,6 +1020,19 @@ def _ordered_qpu_pair(qpu_a: int, qpu_b: int) -> tuple[int, int]:
     if qpu_a <= qpu_b:
         return qpu_a, qpu_b
     return qpu_b, qpu_a
+
+
+def _max_disjoint_pair_count(
+    edges: list[tuple[PhysicalQubit, PhysicalQubit]],
+) -> int:
+    """Return how many of these comm-qubit edges are usable at once.
+
+    Edges sharing a communication qubit compete for it, so the answer is
+    the size of a maximum matching over the edges rather than their count.
+    """
+    matching_graph = nx.Graph()
+    matching_graph.add_edges_from(edges)
+    return len(nx.max_weight_matching(matching_graph, maxcardinality=True))
 
 
 def _reconstruct_qpu_path(
