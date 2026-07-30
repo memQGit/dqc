@@ -16,21 +16,40 @@ entanglement_time_step = 1.0 # microseconds
 1q_gate_time = 1
 2q_gate_time = 0.8
 
+# TODO: epr_lifetime is temporarily set effectively-infinite so generated pairs
+# never expire while scheduling. The real experimental value is 50 us for every
+# profile below, but 50 us is far shorter than the time needed to generate one
+# pair (up to ~285,715 us at 3.5e-6 pairs/us), so any operation needing two
+# pairs alive at once -- e.g. a remote swap, which is two state teleportations
+# -- could never assemble them: the DES schedulers discarded and regenerated
+# forever and never terminated.
+#
+# Restoring the 50 us values needs three things:
+#   1. Decide whether 50 us at these rates is physical for multi-pair
+#      operations at all, or whether remote swaps are simply out of reach on
+#      this hardware.
+#   2. Teach the partitioner cost model about EPR lifetime. It has no notion of
+#      it today, so it will plan swaps no scheduler can run.
+#   3. Reconcile FIFO with DES. FIFO does not model pair lifetime at all, so it
+#      returns a schedule for exactly the cases DES declares infeasible.
+# BaseDESLinkScheduler._validate_multi_pair_feasibility already rejects the
+# hopeless configurations up front rather than hanging; keep that guard.
+
 [entanglement_gen.ion.time_bin] # Saha et al.' (Experimental value)
 entanglement_rate = 3.5e-6 # pairs per microsecond
-epr_lifetime = 50 # microseconds
+epr_lifetime = 1e9 # microseconds (real value: 50)
 
 [entanglement_gen.ion.polarization] # O'Reilly et al. (Experimental value)
 entanglement_rate = 2.5e-3 # pairs per microsecond
-epr_lifetime = 50 # microseconds
+epr_lifetime = 1e9 # microseconds (real value: 50)
 
 [entanglement_gen.neutral_atom.polarization] # Young et al. (Experimental value)
 entanglement_rate = 3.2e-2 # pairs per microsecond
-epr_lifetime = 50 # microseconds
+epr_lifetime = 1e9 # microseconds (real value: 50)
 
 [entanglement_gen.demo.demo] # Illustrative rate for demo purposes
 entanglement_rate = 0.1 # pairs per microsecond
-epr_lifetime = 50 # microseconds
+epr_lifetime = 1e9 # microseconds (real value: 50)
 
 [verification]
 shots = 10000000 # TODO: determine appropriate number or heuristics for this value

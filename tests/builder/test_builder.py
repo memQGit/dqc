@@ -355,10 +355,15 @@ def test_partitioner_group_size_profile_caps_grouping_by_epr_lifetime(
         program,
         algo=_ThreeQubitSharedControlPartitioner(network, program),
     )
-    # The library-default profile's entanglement generation time exceeds the
-    # EPR lifetime, leaving a negative budget so no gate can join the seed and
-    # grouping collapses to one remote gate per cat-entanglement region.
-    partitioner.run(group_size_profile=SchedulerHardwareProfile())
+    # A realistic 50us EPR lifetime is far shorter than this profile's
+    # entanglement generation time, leaving a negative budget so no gate can
+    # join the seed and grouping collapses to one remote gate per
+    # cat-entanglement region. Passed explicitly because the packaged default
+    # lifetime is temporarily effectively-infinite (see the epr_lifetime note
+    # in settings.toml).
+    partitioner.run(
+        group_size_profile=SchedulerHardwareProfile(epr_lifetime=50.0)
+    )
 
     assert _quantum_gate_names(partitioner) == [
         "catent",

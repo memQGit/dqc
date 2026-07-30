@@ -34,7 +34,10 @@ def test_load_settings_resolves_profiles() -> None:
     assert ba_profile.one_qubit_gate_time == pytest.approx(10.0)
     assert ba_profile.two_qubit_gate_time == pytest.approx(500.0)
     assert time_bin_profile.entanglement_rate == pytest.approx(3.5e-6)
-    assert time_bin_profile.epr_lifetime == pytest.approx(50.0)
+    # Temporarily effectively-infinite so pairs never expire while scheduling;
+    # the real experimental value is 50.0. See the epr_lifetime note in
+    # settings.toml.
+    assert time_bin_profile.epr_lifetime == pytest.approx(1e9)
 
 
 def test_default_settings_path_points_to_packaged_file() -> None:
