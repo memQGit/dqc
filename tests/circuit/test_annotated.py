@@ -107,7 +107,7 @@ def test_assign_group_ids() -> None:
         _op(4, "cx", (_q("q0", 0),)),
         _op(5, "rswap", (_q("q0", 0),), is_remote=True),
     ]
-    assert _assign_group_ids(ops) == {0: 0, 1: 0, 2: 0, 3: 0, 4: None, 5: 1}
+    assert _assign_group_ids(ops) == {0: 0, 1: 0, 2: 0, 3: 0, 4: None, 5: None}
 
 
 def test_circuit_qubit_to_dict() -> None:

@@ -330,8 +330,10 @@ def test_remote_gate_ebit_cost_uses_best_direction(
     network_path = simple1_network_path.parent / "nonuniform_1.json"
     network = NetworkGraph(str(network_path))
 
-    # TODO: make sure this makese sense
-    assert network.remote_gate_ebit_cost(1, 3) == 5
+    # QPUs 1 and 3 are not adjacent: route 1 -> 2 -> 3 is one remote swap to
+    # reach QPU 2 (2 pairs) plus the remote gate itself (1 pair).
+    assert network.remote_gate_ebit_cost(1, 3) == 3
+    # Adjacent QPUs need only the gate's own pair.
     assert network.remote_gate_ebit_cost(1, 2) == 1
 
 
@@ -340,7 +342,12 @@ def test_remote_swap_ebit_cost_tracks_route_length(
 ) -> None:
     network = NetworkGraph(str(simple1_network_path))
 
-    assert network.remote_swap_ebit_cost(1, 2) == 0
+    # One swap over a direct link: two teleports, two e-bit pairs.
+    assert network.remote_swap_ebit_cost(1, 2) == 2
+    # A swap never costs less than a remote gate on the same link.
+    assert network.remote_swap_ebit_cost(1, 2) > network.remote_gate_ebit_cost(
+        1, 2
+    )
 
 
 def test_remote_swap_ebit_cost_requires_two_pairs(
@@ -449,3 +456,93 @@ def test_comm_pair_options_keep_data_on_computation_qubits(
         "q_0_2",
         "c_0_1",
     ]
+
+
+def _shared_comm_qubit_network_data() -> dict:
+    """Return a two-QPU topology with two links sharing one comm qubit.
+
+    ``c_0_0`` is remotely connected to both ``c_1_0`` and ``c_1_1``. That is
+    two remote edges but only one usable e-bit at a time, because both
+    compete for ``c_0_0``.
+    """
+
+    def _comp(label: str, qpu: int, local: list[str]) -> dict:
+        return {
+            "id": label,
+            "type": "computation",
+            "processorId": qpu,
+            "localConnections": local,
+            "remoteConnections": [],
+        }
+
+    def _comm(
+        label: str, qpu: int, local: list[str], remote: list[str]
+    ) -> dict:
+        return {
+            "id": label,
+            "type": "communication",
+            "processorId": qpu,
+            "localConnections": local,
+            "remoteConnections": remote,
+        }
+
+    return {
+        "processors": {
+            "0": {
+                "id": 0,
+                "qubits": {
+                    "computation": ["q_0_0"],
+                    "communication": ["c_0_0"],
+                },
+            },
+            "1": {
+                "id": 1,
+                "qubits": {
+                    "computation": ["q_1_0"],
+                    "communication": ["c_1_0", "c_1_1"],
+                },
+            },
+        },
+        "qubits": {
+            "q_0_0": _comp("q_0_0", 0, ["c_0_0"]),
+            "c_0_0": _comm("c_0_0", 0, ["q_0_0"], ["c_1_0", "c_1_1"]),
+            "q_1_0": _comp("q_1_0", 1, ["c_1_0", "c_1_1"]),
+            "c_1_0": _comm("c_1_0", 1, ["q_1_0"], ["c_0_0"]),
+            "c_1_1": _comm("c_1_1", 1, ["q_1_0"], ["c_0_0"]),
+        },
+        "connections": [],
+    }
+
+
+def test_links_sharing_a_comm_qubit_count_once(tmp_path: Path) -> None:
+    # Two remote edges both terminate on c_0_0, so they cannot carry two
+    # e-bits at once and must not read as two usable links.
+    path = tmp_path / "shared_comm.json"
+    path.write_text(
+        json.dumps(_shared_comm_qubit_network_data()), encoding="utf-8"
+    )
+    network = NetworkGraph(str(path))
+
+    assert network._remote_comm_pair_counts() == {(0, 1): 1}
+
+
+def test_supports_remote_swap_requires_two_disjoint_links(
+    tmp_path: Path,
+    simple1_network_path: Path,
+) -> None:
+    path = tmp_path / "shared_comm.json"
+    path.write_text(
+        json.dumps(_shared_comm_qubit_network_data()), encoding="utf-8"
+    )
+    shared = NetworkGraph(str(path))
+    # Two edges, one usable link: no swap.
+    assert shared.supports_remote_swap(0, 1) is False
+    with pytest.raises(ValueError, match="No QPU path found"):
+        shared.remote_swap_ebit_cost(0, 1)
+
+    # Two disjoint links: swap is available.
+    disjoint = NetworkGraph(str(simple1_network_path))
+    assert disjoint.supports_remote_swap(1, 2) is True
+
+    # A QPU with itself never needs a link.
+    assert disjoint.supports_remote_swap(1, 1) is True

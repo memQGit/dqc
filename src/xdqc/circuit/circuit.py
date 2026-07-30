@@ -363,11 +363,8 @@ def _expected_ebit_pair_count(ops: list[Op], op_index: int) -> int:
     """Return the number of EPR pairs consumed by an EPR-backed operation."""
     op = ops[op_index]
     if op.name == "rswap":
+        # A remote swap teleports both states, one e-bit pair each.
         return 2
-    if op.name == "catent" and op_index + 1 < len(ops):
-        next_op = ops[op_index + 1]
-        if next_op.name == "rswap":
-            return 2
     return 1
 
 

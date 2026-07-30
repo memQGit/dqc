@@ -24,7 +24,7 @@ from xdqc.circuit.dag.remap import (
 from xdqc.circuit.dag.swap_builders import (
     PlacementSwap,
     _build_local_swap_gate,
-    _build_wrapped_rswap_statements_from_positions,
+    _build_rswap_statement_from_positions,
     _candidate_comp_slots_for_qpu,
     _validate_local_swap_pair,
 )
@@ -47,6 +47,14 @@ _REMOTE_TWO_QUBIT_GATE_NAME_MAP = {
     "cz": "rcz",
     "swap": "rswap",
 }
+
+
+def _circuit_qubit_position(qubit: CircuitQubit) -> tuple[int, int]:
+    """Return the ``(qpu_id, slot)`` schedule-space position of a qubit."""
+    return (
+        _qpu_id_from_register_name(qubit.register_name),
+        qubit.index,
+    )
 
 
 def _build_remote_gate_statements(
@@ -110,13 +118,6 @@ def _build_remote_gate_statements(
             )
             local_swaps_added += 1
 
-    comm_pair = _order_comm_pair(gate_qubits, raw_comm_pair)
-    remote_gate_qubits.extend(
-        [
-            _physical_to_circuit_qubit(comm_pair[0]),
-            _physical_to_circuit_qubit(comm_pair[1]),
-        ]
-    )
     remote_gate_name = _REMOTE_TWO_QUBIT_GATE_NAME_MAP.get(statement.name)
     if remote_gate_name is None:
         raise ValueError(
@@ -124,6 +125,28 @@ def _build_remote_gate_statements(
             f"{statement.name!r}. Supported gates are: "
             f"{sorted(_REMOTE_TWO_QUBIT_GATE_NAME_MAP)}."
         )
+
+    # A source-level swap across QPUs is a remote swap: two state
+    # teleportations over two disjoint e-bit pairs, emitted standalone
+    # rather than wrapped in cat-entanglement. Build it through the same
+    # helper every other rswap origin uses so the operand payload matches.
+    if remote_gate_name == "rswap":
+        gate_statements.append(
+            _build_rswap_statement_from_positions(
+                pos0=_circuit_qubit_position(remote_gate_qubits[0]),
+                pos1=_circuit_qubit_position(remote_gate_qubits[1]),
+                network=network,
+            )
+        )
+        return gate_statements, local_swaps_added, placement_swaps
+
+    comm_pair = _order_comm_pair(gate_qubits, raw_comm_pair)
+    remote_gate_qubits.extend(
+        [
+            _physical_to_circuit_qubit(comm_pair[0]),
+            _physical_to_circuit_qubit(comm_pair[1]),
+        ]
+    )
     updated_node = rename_quantum_gate(
         cast(ast.QuantumGate, mapped_node),
         remote_gate_name,
@@ -131,21 +154,21 @@ def _build_remote_gate_statements(
     updated_node.qubits = [
         _to_ast_qubit_ref(qubit) for qubit in remote_gate_qubits
     ]
+    remote_gate_statement = CleanedQuantumGate(
+        statement_type=statement.statement_type,
+        node=updated_node,
+        is_op=statement.is_op,
+        name=remote_gate_name,
+        qubits=remote_gate_qubits,
+    )
+
     cat_ent_gate, cat_disent_gate = _build_entanglement_statements(
         remote_gate_qubits[:2],
         (comm_pair,),
     )
 
     gate_statements.append(cat_ent_gate)
-    gate_statements.append(
-        CleanedQuantumGate(
-            statement_type=statement.statement_type,
-            node=updated_node,
-            is_op=statement.is_op,
-            name=remote_gate_name,
-            qubits=remote_gate_qubits,
-        )
-    )
+    gate_statements.append(remote_gate_statement)
     gate_statements.append(cat_disent_gate)
 
     return gate_statements, local_swaps_added, placement_swaps
@@ -206,6 +229,10 @@ def _is_non_routable_direct_remote_gate_error(error: ValueError) -> bool:
         "computation qubits."
         in str(error)
         or "Unsupported remote two-qubit gate " in str(error)
+        # A remote swap needs two disjoint e-bit pairs. Routing the gate
+        # through an intermediary QPU cannot supply them, so surface the
+        # teleportation error rather than a misleading routing failure.
+        or "State teleportation not supported" in str(error)
     )
 
 
@@ -249,7 +276,7 @@ def _build_routed_remote_gate_statements(
     # Stop one QPU before the target. The final interaction is still a
     # remote gate, not another routed hop onto the target QPU.
     for next_qpu_id in route_qpu_ids[1:-1]:
-        rswap_statements, next_pos, placement_swap = (
+        rswap_statement, next_pos, placement_swap = (
             _build_routed_remote_gate_hop(
                 moved_pos=moved_pos,
                 static_pos=static_pos,
@@ -261,7 +288,7 @@ def _build_routed_remote_gate_statements(
                 network=network,
             )
         )
-        routed_statements.extend(rswap_statements)
+        routed_statements.append(rswap_statement)
         placement_swaps.append(placement_swap)
         moved_pos = next_pos
 
@@ -305,7 +332,7 @@ def _build_routed_remote_gate_hop(
     circuit_qubit_to_physical_window: dict[int, tuple[int, int]],
     comp_capacity_by_schedule_qpu: dict[int, int] | None,
     network: NetworkGraph,
-) -> tuple[list[CleanedQuantumGate], tuple[int, int], PlacementSwap]:
+) -> tuple[CleanedQuantumGate, tuple[int, int], PlacementSwap]:
     """Build one routed ``rswap`` hop for a moving remote-gate operand."""
     candidate_slots = _candidate_comp_slots_for_qpu(
         qpu_id=next_qpu_id,
@@ -325,14 +352,14 @@ def _build_routed_remote_gate_hop(
         if next_pos == static_pos:
             continue
         try:
-            rswap_statements = _build_wrapped_rswap_statements_from_positions(
+            rswap_statement = _build_rswap_statement_from_positions(
                 pos0=moved_pos,
                 pos1=next_pos,
                 network=network,
             )
         except ValueError:
             continue
-        return rswap_statements, next_pos, (moved_pos, next_pos)
+        return rswap_statement, next_pos, (moved_pos, next_pos)
 
     raise ValueError(
         "Unable to build routed remote gate hop from "

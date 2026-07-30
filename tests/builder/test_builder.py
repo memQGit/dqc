@@ -355,10 +355,15 @@ def test_partitioner_group_size_profile_caps_grouping_by_epr_lifetime(
         program,
         algo=_ThreeQubitSharedControlPartitioner(network, program),
     )
-    # The library-default profile's entanglement generation time exceeds the
-    # EPR lifetime, leaving a negative budget so no gate can join the seed and
-    # grouping collapses to one remote gate per cat-entanglement region.
-    partitioner.run(group_size_profile=SchedulerHardwareProfile())
+    # A realistic 50us EPR lifetime is far shorter than this profile's
+    # entanglement generation time, leaving a negative budget so no gate can
+    # join the seed and grouping collapses to one remote gate per
+    # cat-entanglement region. Passed explicitly because the packaged default
+    # lifetime is temporarily effectively-infinite (see the epr_lifetime note
+    # in settings.toml).
+    partitioner.run(
+        group_size_profile=SchedulerHardwareProfile(epr_lifetime=50.0)
+    )
 
     assert _quantum_gate_names(partitioner) == [
         "catent",
@@ -571,6 +576,82 @@ def test_extract_distributed_circuit_sets_exact_entanglement_cost(
     assert partitioner.cost == 1.0
 
 
+def _swap_partitioner_case(tmp_path, network_path):
+    class _SplitSwapPartitioner(BasePartitioner):
+        def run(self) -> None:
+            self.windows = [self.circuit.mono.ops]
+            self.schedule = [{QPU(id=0): {0}, QPU(id=1): {1}}]
+            self.cost = 0.0
+
+    qasm_path = tmp_path / "cross_qpu_swap.qasm"
+    qasm_path.write_text(
+        'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+        "qubit[2] q;\nswap q[0], q[1];\n",
+        encoding="utf-8",
+    )
+    program = load_qasm_program(str(qasm_path))
+    network = NetworkGraph(str(network_path))
+    return Partitioner(
+        network,
+        program,
+        algo=_SplitSwapPartitioner(network, program),
+    )
+
+
+def test_cross_qpu_swap_rejected_without_two_disjoint_links(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    # One link between the QPUs cannot carry the two teleports a remote
+    # swap needs, so this placement must be rejected rather than costed as
+    # a cheap single-link remote gate.
+    partitioner = _swap_partitioner_case(
+        tmp_path, three_comp_one_comm_x2_network_path
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="requires two disjoint communication links",
+    ):
+        partitioner.run()
+
+
+def test_cross_qpu_swap_costed_as_remote_swap_with_two_links(
+    tmp_path,
+    simple1_network_path,
+) -> None:
+    # QPUs 1 and 2 have two disjoint links, but this partitioner places the
+    # operands on QPU ids 0 and 1, so remap the schedule onto real QPU ids.
+    class _SplitSwapPartitioner(BasePartitioner):
+        def run(self) -> None:
+            self.windows = [self.circuit.mono.ops]
+            self.schedule = [{QPU(id=1): {0}, QPU(id=2): {1}}]
+            self.cost = 0.0
+
+    qasm_path = tmp_path / "cross_qpu_swap.qasm"
+    qasm_path.write_text(
+        'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+        "qubit[2] q;\nswap q[0], q[1];\n",
+        encoding="utf-8",
+    )
+    program = load_qasm_program(str(qasm_path))
+    network = NetworkGraph(str(simple1_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo=_SplitSwapPartitioner(network, program),
+    )
+
+    partitioner.run()
+
+    # Accepted, and priced as a remote swap rather than a remote gate: the
+    # two costs differ here, so this pins which path was taken.
+    assert network.supports_remote_swap(1, 2) is True
+    assert network.remote_gate_ebit_cost(1, 2) == 1
+    assert partitioner.cost == float(network.remote_swap_ebit_cost(1, 2))
+    assert partitioner.cost != float(network.remote_gate_ebit_cost(1, 2))
+
+
 def test_exact_entanglement_cost_counts_catent_pairs() -> None:
     q0 = CircuitQubit("q0", 0)
     q1 = CircuitQubit("q1", 0)
@@ -578,21 +659,15 @@ def test_exact_entanglement_cost_counts_catent_pairs() -> None:
     c1 = CircuitQubit("c1", 0)
     c0_pair_2 = CircuitQubit("c0", 1)
     c1_pair_2 = CircuitQubit("c1", 1)
+    # A cat-entangled remote gate costs one pair; a standalone remote swap
+    # costs two.
     distributed = SimpleNamespace(
         statements=[
             _cleaned_gate("catent", [q0, q1, c0, c1]),
             _cleaned_gate("rcx", [q0, q1, c0, c1]),
             _cleaned_gate("catdisent", [q0, q1, c0, c1]),
             _cleaned_gate(
-                "catent",
-                [q0, q1, c0, c1, c0_pair_2, c1_pair_2],
-            ),
-            _cleaned_gate(
                 "rswap",
-                [q0, q1, c0, c1, c0_pair_2, c1_pair_2],
-            ),
-            _cleaned_gate(
-                "catdisent",
                 [q0, q1, c0, c1, c0_pair_2, c1_pair_2],
             ),
         ],
@@ -601,18 +676,31 @@ def test_exact_entanglement_cost_counts_catent_pairs() -> None:
     assert _exact_entanglement_cost(cast(Any, distributed)) == 3.0
 
 
-def test_exact_entanglement_cost_counts_deferred_rswap_catent() -> None:
+def test_exact_entanglement_cost_counts_deferred_rswap() -> None:
+    # With e-bit operands stripped for deferred assignment, a remote swap
+    # still costs two pairs.
+    q0 = CircuitQubit("q0", 0)
+    q1 = CircuitQubit("q1", 0)
+    distributed = SimpleNamespace(
+        statements=[_cleaned_gate("rswap", [q0, q1])],
+    )
+
+    assert _exact_entanglement_cost(cast(Any, distributed)) == 2.0
+
+
+def test_exact_entanglement_cost_counts_deferred_remote_gate() -> None:
+    # A cat-entangled remote gate with stripped operands costs one pair.
     q0 = CircuitQubit("q0", 0)
     q1 = CircuitQubit("q1", 0)
     distributed = SimpleNamespace(
         statements=[
             _cleaned_gate("catent", [q0, q1]),
-            _cleaned_gate("rswap", [q0, q1]),
+            _cleaned_gate("rcx", [q0, q1]),
             _cleaned_gate("catdisent", [q0, q1]),
         ],
     )
 
-    assert _exact_entanglement_cost(cast(Any, distributed)) == 2.0
+    assert _exact_entanglement_cost(cast(Any, distributed)) == 1.0
 
 
 def test_exact_entanglement_cost_rejects_unmatched_catent() -> None:

@@ -11,11 +11,15 @@ import math
 from collections.abc import Callable
 
 import pytest
+from openqasm3 import ast
 
 from xdqc import SchedulerHardwareProfile, load_settings
+from xdqc.circuit import Op
+from xdqc.preprocessing.qasm.types import CircuitQubit
 from xdqc.scheduler.schedule import (
     _MEASUREMENT_TIME,
     _load_scheduler_timing_model,
+    _operation_duration,
     _resolve_scheduler_hardware_profile,
 )
 
@@ -125,7 +129,42 @@ def test_gate_time_overrides_flow_into_derived_timings() -> None:
 
     assert timing.catent_time == pytest.approx(100.0 + 4.0 + 1.0)
     assert timing.catdisent_time == pytest.approx((2 * 4.0) + 1.0)
-    assert timing.state_teleport_time == pytest.approx(100.0 + (2 * 4.0) + 1.0)
+    assert timing.state_teleport_time == pytest.approx(
+        100.0 + (3 * 4.0) + (2 * 1.0)
+    )
+
+
+def test_remote_swap_duration_is_two_state_teleports() -> None:
+    profile = SchedulerHardwareProfile(
+        one_qubit_gate_time=4.0,
+        two_qubit_gate_time=100.0,
+        measurement_time=1.0,
+    )
+    timing = _load_scheduler_timing_model(profile)
+    rswap = Op(
+        op_id=0,
+        statement_id=0,
+        name="rswap",
+        is_remote=True,
+        qubits=(
+            CircuitQubit(register_name="q0", index=0),
+            CircuitQubit(register_name="q1", index=0),
+            CircuitQubit(register_name="c0", index=0),
+            CircuitQubit(register_name="c1", index=0),
+            CircuitQubit(register_name="c0", index=1),
+            CircuitQubit(register_name="c1", index=1),
+        ),
+        node=ast.QuantumGate(
+            modifiers=[],
+            name=ast.Identifier("rswap"),
+            arguments=[],
+            qubits=[],
+        ),
+    )
+
+    assert _operation_duration(rswap, timing) == pytest.approx(
+        2 * timing.state_teleport_time
+    )
 
 
 def test_entanglement_rate_override_flows_into_derived_timings() -> None:
