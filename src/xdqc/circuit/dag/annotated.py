@@ -180,8 +180,10 @@ def _assign_group_ids(ops: list[Op]) -> dict[int, int | None]:
 
     Groups are recovered structurally from the emitted operation order: a
     ``catent`` opens a group that its remote data gates and the closing
-    ``catdisent`` share, and each ``rswap`` forms its own singleton group.
-    Operations outside any cat-entanglement region receive ``None``.
+    ``catdisent`` share. An ``rswap`` is teleportation-based rather than
+    cat-entangled, so it never joins a group even when emitted inside an
+    open one. Operations outside any cat-entanglement region receive
+    ``None``.
 
     Args:
         ops: Distributed operations in emitted order.
@@ -202,8 +204,7 @@ def _assign_group_ids(ops: list[Op]) -> dict[int, int | None]:
             group_by_op_id[op.op_id] = current_group
             current_group = None
         elif op.name == "rswap":
-            group_by_op_id[op.op_id] = next_group_id
-            next_group_id += 1
+            group_by_op_id[op.op_id] = None
         elif op.is_remote:
             group_by_op_id[op.op_id] = current_group
         else:

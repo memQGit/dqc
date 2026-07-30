@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, cast
 from openqasm3 import ast
 
 from xdqc.builder.extract_utils import SwapOp
-from xdqc.circuit.dag.entanglement import _build_entanglement_statements
 from xdqc.circuit.dag.remap import (
     _circuit_qubit_to_physical_qubit,
     _physical_to_circuit_qubit,
@@ -63,7 +62,13 @@ def _build_rswap_statement_from_positions(
     pos1: tuple[int, int],
     network: NetworkGraph,
 ) -> CleanedQuantumGate:
-    """Build a routed ``rswap`` statement from two schedule-space positions."""
+    """Build a routed ``rswap`` statement from two schedule-space positions.
+
+    A remote swap is realized by two state teleportations and is emitted
+    standalone: unlike remote data gates it is never wrapped by
+    ``catent`` / ``catdisent`` operations. Its e-bit pairs are carried
+    directly as trailing operands on the ``rswap`` itself.
+    """
     swap_node, swap_qubits, _ = _build_swap_gate(
         SwapOp(q0=-1, q1=-1, pos0=pos0, pos1=pos1),
         network,
@@ -75,30 +80,6 @@ def _build_rswap_statement_from_positions(
         name="rswap",
         qubits=swap_qubits,
     )
-
-
-def _build_wrapped_rswap_statements_from_positions(
-    pos0: tuple[int, int],
-    pos1: tuple[int, int],
-    network: NetworkGraph,
-) -> list[CleanedQuantumGate]:
-    """Build one ``rswap`` wrapped by cat-entangling operations."""
-    swap_node, swap_qubits, comm_pairs = _build_swap_gate(
-        SwapOp(q0=-1, q1=-1, pos0=pos0, pos1=pos1),
-        network,
-    )
-    rswap_statement = CleanedQuantumGate(
-        statement_type=ast.QuantumGate,
-        node=swap_node,
-        is_op=True,
-        name="rswap",
-        qubits=swap_qubits,
-    )
-    cat_ent_gate, cat_disent_gate = _build_entanglement_statements(
-        swap_qubits[:2],
-        comm_pairs,
-    )
-    return [cat_ent_gate, rswap_statement, cat_disent_gate]
 
 
 def _build_rswap_statements_for_swap(
@@ -127,11 +108,13 @@ def _build_rswap_statements_for_swap(
     """
     try:
         return (
-            _build_wrapped_rswap_statements_from_positions(
-                pos0=swap.pos0,
-                pos1=swap.pos1,
-                network=network,
-            ),
+            [
+                _build_rswap_statement_from_positions(
+                    pos0=swap.pos0,
+                    pos1=swap.pos1,
+                    network=network,
+                )
+            ],
             [(swap.pos0, swap.pos1)],
         )
     except ValueError as direct_swap_error:
@@ -155,8 +138,8 @@ def _build_rswap_statements_for_swap(
         for idx in range(len(routed_positions) - 1):
             pos0 = routed_positions[idx]
             pos1 = routed_positions[idx + 1]
-            routed_statements.extend(
-                _build_wrapped_rswap_statements_from_positions(
+            routed_statements.append(
+                _build_rswap_statement_from_positions(
                     pos0=pos0,
                     pos1=pos1,
                     network=network,
@@ -167,8 +150,8 @@ def _build_rswap_statements_for_swap(
         for idx in range(len(routed_positions) - 3, -1, -1):
             pos0 = routed_positions[idx]
             pos1 = routed_positions[idx + 1]
-            routed_statements.extend(
-                _build_wrapped_rswap_statements_from_positions(
+            routed_statements.append(
+                _build_rswap_statement_from_positions(
                     pos0=pos0,
                     pos1=pos1,
                     network=network,
