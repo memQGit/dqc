@@ -40,7 +40,12 @@ DEFAULT_SCHEDULER_MODALITY: SchedulerModality = "trapped_ion.ba"
 DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE: SchedulerEntanglementProfile = (
     "ion.time_bin"
 )
-_DEFAULT_EPR_LIFETIME = 50.0
+# TODO: temporarily effectively-infinite so generated pairs never expire while
+# scheduling. Real hardware is ~50 us, but that is far below the time needed to
+# generate a pair, which makes any two-pair operation (e.g. a remote swap)
+# impossible to assemble. See the epr_lifetime note in settings.toml for what
+# restoring a realistic value requires.
+_DEFAULT_EPR_LIFETIME = 1e9
 _CATENT_OP_NAME = "catent"
 _HARDWARE_OVERRIDE_FIELDS: tuple[str, ...] = (
     "one_qubit_gate_time",

@@ -422,6 +422,94 @@ def test_des_link_fifo_schedule_rejects_invalid_parameters(
         DESLinkFIFOScheduler(distributed_circuit).run()
 
 
+def test_des_link_fifo_rejects_multi_pair_op_when_pairs_cannot_coexist(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    # A pair expires in 50 but takes ~100 to generate, so an rswap's two
+    # pairs can never be alive together. Regeneration would loop forever, so
+    # the scheduler must refuse up front instead of hanging.
+    _patch_scheduler_timing_model(
+        monkeypatch,
+        rate=0.01,
+        epr_lifetime=50.0,
+    )
+    template = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[2] q;\n"
+            "cx q[0], q[1];\n"
+        ),
+    )
+    distributed_circuit = _build_manual_distributed_circuit(
+        template,
+        [
+            _remote_swap_gate(
+                op_id=0,
+                statement_id=0,
+                data_register_a="q0",
+                data_register_b="q1",
+                comm_register_a0="c0",
+                comm_register_b0="c1",
+                comm_register_a1="c0",
+                comm_register_b1="c1",
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="can never coexist"):
+        des_link_fifo_schedule(distributed_circuit, seed=0)
+
+
+def test_des_link_fifo_allows_multi_pair_op_when_lifetime_is_sufficient(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    # Same op, but a pair now outlives its own generation time, so the
+    # feasibility guard must not fire.
+    _patch_scheduler_timing_model(
+        monkeypatch,
+        rate=100.0,
+        epr_lifetime=50.0,
+    )
+    template = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[2] q;\n"
+            "cx q[0], q[1];\n"
+        ),
+    )
+    distributed_circuit = _build_manual_distributed_circuit(
+        template,
+        [
+            _remote_swap_gate(
+                op_id=0,
+                statement_id=0,
+                data_register_a="q0",
+                data_register_b="q1",
+                comm_register_a0="c0",
+                comm_register_b0="c1",
+                comm_register_a1="c0",
+                comm_register_b1="c1",
+            )
+        ],
+    )
+
+    schedule = des_link_fifo_schedule(distributed_circuit, seed=0)
+
+    rswap_ops = [
+        event for event in schedule.operations if event.name == "rswap"
+    ]
+    assert len(rswap_ops) == 1
+    assert rswap_ops[0].duration == 1072.0
+
+
 def test_des_link_fifo_schedule_supports_rswap_with_two_pairs(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
