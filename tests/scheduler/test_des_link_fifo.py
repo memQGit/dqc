@@ -10,6 +10,7 @@ import math
 import pytest
 from openqasm3 import ast
 
+import xdqc.scheduler.des_link_scheduler as des_link_scheduler_module
 import xdqc.scheduler.schedule as schedule_module
 from xdqc.builder import extract_distributed_circuit
 from xdqc.circuit import DistributedCircuit
@@ -422,19 +423,33 @@ def test_des_link_fifo_schedule_rejects_invalid_parameters(
         DESLinkFIFOScheduler(distributed_circuit).run()
 
 
-def test_des_link_fifo_rejects_multi_pair_op_when_pairs_cannot_coexist(
+def test_des_link_fifo_schedules_multi_pair_op_below_mean_generation_time(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
 ) -> None:
-    # A pair expires in 50 but takes ~100 to generate, so an rswap's two
-    # pairs can never be alive together. Regeneration would loop forever, so
-    # the scheduler must refuse up front instead of hanging.
+    # Regression: an EPR lifetime below the *mean* generation time is not
+    # proof of infeasibility. Here a pair lives 50 while the mean generation
+    # time is ~100, but each link still has a material chance of succeeding
+    # early enough to coincide, so the simulator must be allowed to try
+    # rather than rejecting the request up front.
     _patch_scheduler_timing_model(
         monkeypatch,
         rate=0.01,
         epr_lifetime=50.0,
     )
+    timing = schedule_module.SchedulerTimingModel(
+        hardware_profile=SchedulerHardwareProfile(),
+        local_one_qubit_gate_time=10.0,
+        local_two_qubit_gate_time=500.0,
+        entanglement_generation_rate=0.01,
+        des_entanglement_time_step=1.0,
+        epr_lifetime=50.0,
+    )
+    assert timing.epr_lifetime < timing.des_t_cycle / (
+        timing.des_success_probability
+    )
+
     template = _build_distributed_circuit(
         tmp_path,
         three_comp_one_comm_x2_network_path,
@@ -460,8 +475,13 @@ def test_des_link_fifo_rejects_multi_pair_op_when_pairs_cannot_coexist(
         ],
     )
 
-    with pytest.raises(ValueError, match="can never coexist"):
-        des_link_fifo_schedule(distributed_circuit, seed=0)
+    schedule = des_link_fifo_schedule(distributed_circuit, seed=0)
+
+    rswap_ops = [
+        event for event in schedule.operations if event.name == "rswap"
+    ]
+    assert len(rswap_ops) == 1
+    assert rswap_ops[0].duration == 1072.0
 
 
 def test_des_link_fifo_allows_multi_pair_op_when_lifetime_is_sufficient(
@@ -508,6 +528,53 @@ def test_des_link_fifo_allows_multi_pair_op_when_lifetime_is_sufficient(
     ]
     assert len(rswap_ops) == 1
     assert rswap_ops[0].duration == 1072.0
+
+
+def test_des_link_fifo_multi_pair_expiry_safeguard_terminates(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    # A configuration whose pairs in practice never coincide must terminate
+    # with an error rather than regenerating forever. The cap is lowered here
+    # so the safeguard is reachable within a test's runtime.
+    _patch_scheduler_timing_model(
+        monkeypatch,
+        rate=0.001,
+        epr_lifetime=1.0,
+    )
+    monkeypatch.setattr(
+        des_link_scheduler_module,
+        "_MAX_EXPIRED_PAIRS_PER_REQUEST",
+        5,
+    )
+    template = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[2] q;\n"
+            "cx q[0], q[1];\n"
+        ),
+    )
+    distributed_circuit = _build_manual_distributed_circuit(
+        template,
+        [
+            _remote_swap_gate(
+                op_id=0,
+                statement_id=0,
+                data_register_a="q0",
+                data_register_b="q1",
+                comm_register_a0="c0",
+                comm_register_b0="c1",
+                comm_register_a1="c0",
+                comm_register_b1="c1",
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="pairs expired before they all"):
+        des_link_fifo_schedule(distributed_circuit, seed=0)
 
 
 def test_des_link_fifo_schedule_supports_rswap_with_two_pairs(
