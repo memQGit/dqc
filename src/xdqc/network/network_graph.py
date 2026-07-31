@@ -514,9 +514,10 @@ class NetworkGraph:
         """Return whether two QPUs can perform a direct remote swap.
 
         A remote swap teleports both states, so it needs two disjoint
-        communication pairs on a direct link between the two QPUs. This is
-        the single validity check for remote swaps: when it returns False
-        no remote swap should be planned or emitted between these QPUs.
+        communication pairs on a direct link between the two QPUs. A False
+        result rules out a *single* remote swap only; the two QPUs may still
+        be swappable as a routed chain of adjacent remote swaps, which
+        :meth:`remote_swap_ebit_cost` prices and rejects when unroutable.
 
         Args:
             qpu_a: First QPU ID.

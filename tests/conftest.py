@@ -24,6 +24,18 @@ def three_comp_one_comm_x2_network_path() -> Path:
 
 
 @pytest.fixture()
+def chain_3qpu_2pairs_network_path() -> Path:
+    # 0-1 and 1-2 each carry two disjoint pairs; 0 and 2 are not directly
+    # linked, so a swap between them is only reachable by routing.
+    return (
+        Path(__file__).parent
+        / "fixtures"
+        / "networks"
+        / "chain_3qpu_2pairs.json"
+    )
+
+
+@pytest.fixture()
 def hundred_qubit_network_path() -> Path:
     return Path(__file__).parent / "fixtures" / "networks" / "50x2.json"
 
