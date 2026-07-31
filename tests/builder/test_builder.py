@@ -603,8 +603,8 @@ def test_cross_qpu_swap_rejected_without_two_disjoint_links(
     three_comp_one_comm_x2_network_path,
 ) -> None:
     # One link between the QPUs cannot carry the two teleports a remote
-    # swap needs, so this placement must be rejected rather than costed as
-    # a cheap single-link remote gate.
+    # swap needs, and no alternate route exists, so this placement must be
+    # rejected rather than costed as a cheap single-link remote gate.
     partitioner = _swap_partitioner_case(
         tmp_path, three_comp_one_comm_x2_network_path
     )
@@ -614,6 +614,52 @@ def test_cross_qpu_swap_rejected_without_two_disjoint_links(
         match="requires two disjoint communication links",
     ):
         partitioner.run()
+
+
+def test_cross_qpu_swap_routed_between_non_adjacent_qpus(
+    tmp_path,
+    chain_3qpu_2pairs_network_path,
+) -> None:
+    # Regression: a source swap landing on QPUs with no direct link used to
+    # be rejected outright, even though the builder routes it as a chain of
+    # adjacent remote swaps. Price the routed cost instead.
+    class _SplitSwapPartitioner(BasePartitioner):
+        def run(self) -> None:
+            self.windows = [self.circuit.mono.ops]
+            # QPU 1 is the empty intermediary the routed swap hops through.
+            self.schedule = [
+                {QPU(id=0): {0}, QPU(id=1): set(), QPU(id=2): {1}}
+            ]
+            self.cost = 0.0
+
+    qasm_path = tmp_path / "cross_qpu_swap.qasm"
+    qasm_path.write_text(
+        'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+        "qubit[2] q;\nswap q[0], q[1];\n",
+        encoding="utf-8",
+    )
+    program = load_qasm_program(str(qasm_path))
+    network = NetworkGraph(str(chain_3qpu_2pairs_network_path))
+    partitioner = Partitioner(
+        network,
+        program,
+        algo=_SplitSwapPartitioner(network, program),
+    )
+
+    partitioner.run()
+
+    # No direct link, so a single remote swap is impossible, but the routed
+    # chain through QPU 1 is, and that is what the cost must reflect.
+    assert network.supports_remote_swap(0, 2) is False
+    assert partitioner.cost == float(network.remote_swap_ebit_cost(0, 2))
+
+    # And the routed swap is actually buildable, not just priceable: the
+    # single source swap lowers to more than one adjacent remote swap.
+    distributed_program = extract_distributed_circuit(partitioner)
+    output = io.StringIO()
+    openqasm3.dump(distributed_program, output)
+
+    assert output.getvalue().count("rswap") > 1
 
 
 def test_cross_qpu_swap_costed_as_remote_swap_with_two_links(

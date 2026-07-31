@@ -560,8 +560,8 @@ def _total_schedule_ebit_cost(
 
     Raises:
         ValueError: If the schedule needs a remote operation the network
-            cannot carry, including a swap across QPUs without two
-            disjoint links.
+            cannot carry, including a swap across QPUs with no route whose
+            every hop has two disjoint links.
     """
     total_cost = 0.0
     previous_assignment: dict[int, int] | None = None
@@ -598,21 +598,26 @@ def _total_schedule_ebit_cost(
             if left_qpu_id == right_qpu_id:
                 continue
             # A swap in the source circuit lowers to a remote swap, which
-            # needs two disjoint links on a direct connection rather than
-            # the single link a remote gate uses. Cost it as the swap it
-            # becomes so the price matches what will actually be built.
+            # needs two disjoint links per hop rather than the single link a
+            # remote gate uses. Directly linked QPUs use one remote swap;
+            # others are built as a routed chain of adjacent remote swaps,
+            # so price the routed cost and reject only when no such route
+            # exists. Cost it as the swap it becomes so the price matches
+            # what will actually be built.
             if op.name == "swap":
-                if not network.supports_remote_swap(left_qpu_id, right_qpu_id):
+                try:
+                    swap_cost = remote_swap_ebit_cost(
+                        left_qpu_id, right_qpu_id
+                    )
+                except ValueError as missing_swap_route:
                     raise ValueError(
                         "Swap across QPUs "
                         f"{left_qpu_id} and {right_qpu_id} requires two "
-                        "disjoint communication links; this network does "
-                        "not provide them, so the swap cannot be placed "
-                        "across these QPUs."
-                    )
-                total_cost += float(
-                    remote_swap_ebit_cost(left_qpu_id, right_qpu_id)
-                )
+                        "disjoint communication links on every hop; this "
+                        "network provides no such route, so the swap "
+                        "cannot be placed across these QPUs."
+                    ) from missing_swap_route
+                total_cost += float(swap_cost)
                 continue
             total_cost += float(
                 remote_gate_ebit_cost(left_qpu_id, right_qpu_id)
