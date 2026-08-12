@@ -6,7 +6,7 @@
         <img src="https://github.com/memQGit/xdqc/actions/workflows/ci.yml/badge.svg" alt="CI Status">
     </a>
     <a href="https://github.com/memQGit/xdqc/blob/main/LICENSE">
-      <img src="https://img.shields.io/badge/license-MIT-blue" alt="License">
+      <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License">
     </a>
 </p>
 
