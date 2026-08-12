@@ -6,6 +6,7 @@
 # ============================================================================
 
 import math
+import random
 
 import pytest
 from openqasm3 import ast
@@ -200,7 +201,7 @@ def test_des_link_fifo_schedule_single_cycle_success(
     assert schedule.makespan == 1037.0
 
 
-def test_des_link_fifo_schedule_retries_until_seeded_success(
+def test_des_link_fifo_schedule_samples_geometric_success_cycle(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
     three_comp_one_comm_x2_network_path,
@@ -227,6 +228,85 @@ def test_des_link_fifo_schedule_retries_until_seeded_success(
     assert catdisent_event.start_time == 1017.0
     assert catdisent_event.duration == 23.0
     assert schedule.makespan == 1040.0
+
+
+@pytest.mark.parametrize(
+    ("uniform_sample", "expected_attempt_count"),
+    [
+        (0.0, 1),
+        (0.249, 1),
+        (0.25, 2),
+        (0.4374, 2),
+        (0.4375, 3),
+        (0.999, 25),
+    ],
+)
+def test_geometric_attempt_count_matches_inverse_cdf(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+    uniform_sample: float,
+    expected_attempt_count: int,
+) -> None:
+    distributed_circuit = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[2] q;\n"
+            "cx q[0], q[1];\n"
+        ),
+    )
+    scheduler = DESLinkFIFOScheduler(distributed_circuit)
+
+    def _fixed_random(rng: random.Random) -> float:
+        del rng
+        return uniform_sample
+
+    monkeypatch.setattr(
+        random.Random,
+        "random",
+        _fixed_random,
+    )
+
+    attempt_count = scheduler._sample_geometric_attempt_count(0.25)
+
+    assert attempt_count == expected_attempt_count
+
+
+def test_des_link_fifo_low_rate_does_not_enqueue_each_failed_cycle(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    _patch_scheduler_timing_model(monkeypatch, rate=3.5e-6)
+    distributed_circuit = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+        (
+            'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
+            "qubit[2] q;\n"
+            "cx q[0], q[1];\n"
+        ),
+    )
+    scheduler = DESLinkFIFOScheduler(distributed_circuit, seed=0)
+    draw_count = 0
+
+    def _counted_random(rng: random.Random) -> float:
+        del rng
+        nonlocal draw_count
+        draw_count += 1
+        return 0.5
+
+    monkeypatch.setattr(random.Random, "random", _counted_random)
+
+    scheduler.run()
+
+    assert scheduler.schedule is not None
+    epr_event = scheduler.schedule.operations[0]
+    assert epr_event.name == "epr"
+    assert epr_event.duration > 100_000.0
+    assert draw_count == 1
 
 
 def test_des_link_fifo_schedule_waits_for_data_qubits_before_request(
@@ -573,6 +653,21 @@ def test_des_link_fifo_multi_pair_expiry_safeguard_terminates(
         ],
     )
 
+    def _resolve_link_parameters(
+        self: DESLinkFIFOScheduler,
+        link_key: tuple[str, str],
+    ) -> tuple[float, float]:
+        del self
+        if link_key == ("c0[0]", "c1[0]"):
+            return 1.0, 1.0
+        return 60.0, 1.0
+
+    monkeypatch.setattr(
+        DESLinkFIFOScheduler,
+        "_resolve_link_parameters",
+        _resolve_link_parameters,
+    )
+
     with pytest.raises(ValueError, match="pairs expired before they all"):
         des_link_fifo_schedule(distributed_circuit, seed=0)
 
@@ -657,11 +752,11 @@ def test_des_link_fifo_schedule_waits_for_both_rswap_pairs(
     schedule = des_link_fifo_schedule(distributed_circuit, seed=1)
 
     first_epr, second_epr, rswap_op = schedule.operations
-    assert first_epr.duration == 3.0
-    assert second_epr.duration == 3.0
-    assert rswap_op.start_time == 3.0
+    assert first_epr.duration == 4.0
+    assert second_epr.duration == 4.0
+    assert rswap_op.start_time == 4.0
     assert rswap_op.duration == 1072.0
-    assert schedule.makespan == 1075.0
+    assert schedule.makespan == 1076.0
 
 
 def test_des_link_fifo_schedule_regenerates_expired_pairs(

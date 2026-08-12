@@ -35,6 +35,23 @@ OpenQASM circuit + network topology
    timeline, respecting data dependencies, communication-qubit availability,
    and per-operation durations, aiming to minimize the **makespan**.
 
+### Discrete-event entanglement timing
+
+The DES link schedulers model independent entanglement attempts in fixed
+cycles. If one cycle succeeds with probability `p`, the successful cycle
+number is geometrically distributed:
+
+```
+P(N = n) = (1 - p)^(n - 1) p
+```
+
+The scheduler samples `N` directly and schedules one EPR-ready event at
+`current_time + N * cycle_time`. This is distributionally identical to
+processing failed attempts one at a time, but its host runtime does not grow
+with the potentially very large number of failed cycles. A seed still makes a
+run deterministic; exact seeded schedules may differ across xdqc versions if
+the random-sampling implementation changes.
+
 The main workflow APIs can emit progress, timing, and debug diagnostics via the
 `verbosity` controls on partitioning, extraction, and verification — see
 [Logging & Verbosity](logging.md).
