@@ -105,6 +105,22 @@ from xdqc.visualization import (
 )
 ```
 
+### Animated execution playback
+
+`animate_circuit_execution` plays a schedule back over the network graph,
+highlighting the physical qubits and links carrying each operation as the
+distributed circuit executes:
+
+```python
+from xdqc.visualization import animate_circuit_execution
+
+animation = animate_circuit_execution(network, scheduler.schedule)
+animation.show()          # interactive window with play/pause and a scrubber
+animation.save("run.gif")  # or export to .gif / .mp4 / .html
+```
+
+In a notebook, displaying the returned object renders an inline player.
+
 ---
 
 ## Logging and verbosity
