@@ -6,12 +6,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; [[ \"$f\" == *.py ]] && cd /Users/lukeandreesen/dev/memq-dqc && uv run ruff format \"$f\"; } 2>/dev/null || true",
+            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; [[ \"$f\" == *.py ]] && cd /Users/lukeandreesen/dev/xdqc && uv run ruff format \"$f\"; } 2>/dev/null || true",
             "statusMessage": "Formatting Python file..."
           },
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; [[ \"$f\" == *.py ]] && cd /Users/lukeandreesen/dev/memq-dqc && uv run tox -e lint; } 2>/dev/null || true",
+            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; [[ \"$f\" == *.py ]] && cd /Users/lukeandreesen/dev/xdqc && uv run tox -e lint; } 2>/dev/null || true",
             "timeout": 120,
             "statusMessage": "Linting..."
           }
@@ -25,7 +25,7 @@
           {
             "type": "command",
             "if": "Bash(git commit*)",
-            "command": "cd /Users/lukeandreesen/dev/memq-dqc && uv run pyright",
+            "command": "cd /Users/lukeandreesen/dev/xdqc && uv run pyright",
             "timeout": 120,
             "statusMessage": "Running Pyright type check..."
           }

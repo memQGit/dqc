@@ -17,7 +17,7 @@ Otherwise run:
 uv run python benchmarking/compiler_benchmarking/run_compiler_benchmark.py $ARGUMENTS 2>&1
 ```
 
-Run from the repo root (`/Users/lukeandreesen/dev/memq-dqc`). This may take several minutes — report progress as it streams.
+Run from the repo root (`/Users/lukeandreesen/dev/xdqc`). This may take several minutes — report progress as it streams.
 
 ## Step 3 — high-signal summary
 
