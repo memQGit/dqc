@@ -19,6 +19,12 @@ from xdqc.visualization.dag_visualizer import (
     plot_dag,
     plot_distributed_dag,
 )
+from xdqc.visualization.execution_animator import (
+    ExecutionFrame,
+    NetworkExecutionAnimation,
+    animate_circuit_execution,
+    qpu_clustered_layout,
+)
 from xdqc.visualization.partition_visualizer import (
     plot_migration_timeline,
     plot_partition_heatmap,
@@ -32,9 +38,12 @@ from xdqc.visualization.svg_document import (
 )
 
 __all__ = [
+    "ExecutionFrame",
+    "NetworkExecutionAnimation",
     "SvgDashboardPanel",
     "SvgDashboardSection",
     "SvgDocument",
+    "animate_circuit_execution",
     "build_svg_dashboard_html",
     "build_dag_networkx_graph",
     "plot_circuit_dag",
@@ -46,5 +55,6 @@ __all__ = [
     "plot_partition_flow",
     "plot_partition_heatmap",
     "plot_window_activity",
+    "qpu_clustered_layout",
     "write_svg_dashboard_html",
 ]
