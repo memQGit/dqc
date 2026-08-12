@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import heapq
 import logging
+import math
 import random
 from dataclasses import dataclass, field
 from typing import TypeAlias
@@ -36,7 +37,6 @@ from xdqc.scheduler.schedule import (
 logger = logging.getLogger(__name__)
 
 _START_EPR_REQUEST = "START_EPR_REQUEST"
-_EPR_ATTEMPT = "EPR_ATTEMPT"
 _EPR_READY = "EPR_READY"
 _EPR_EXPIRE = "EPR_EXPIRE"
 _REMOTE_OP_START = "REMOTE_OP_START"
@@ -68,7 +68,6 @@ _EventType: TypeAlias = str
 _EVENT_PRIORITY: dict[_EventType, int] = {
     _OP_COMPLETE: 0,
     _START_EPR_REQUEST: 1,
-    _EPR_ATTEMPT: 2,
     _EPR_READY: 3,
     _REMOTE_OP_START: 4,
     _EPR_EXPIRE: 5,
@@ -521,7 +520,7 @@ class BaseDESLinkScheduler(BaseScheduler):
         link_key: tuple[str, str],
         time: float,
     ) -> None:
-        """Start entanglement attempts for one remote request."""
+        """Start entanglement generation for one remote request."""
         request = self._remote_requests[op_id]
         link_request = request.link_requests[link_key]
         link_request.process_start_time = time
@@ -532,12 +531,45 @@ class BaseDESLinkScheduler(BaseScheduler):
             self._reserved_link_counts[link_key] = reserved_count - 1
         link_state = self._link_states.setdefault(link_key, _LinkState())
         link_state.active_request_id = op_id
-        cycle_time, _ = self._resolve_link_parameters(link_key)
+        cycle_time, success_probability = self._resolve_link_parameters(
+            link_key
+        )
+        attempt_count = self._sample_geometric_attempt_count(
+            success_probability
+        )
         self._enqueue_event(
-            time + cycle_time,
-            _EPR_ATTEMPT,
+            time + (attempt_count * cycle_time),
+            _EPR_READY,
             op_id,
             link_key=link_key,
+        )
+
+    def _sample_geometric_attempt_count(
+        self,
+        success_probability: float,
+    ) -> int:
+        """Return the cycle number of the first successful EPR attempt.
+
+        Repeated independent attempts with per-cycle success probability
+        ``p`` have ``P(N = n) = (1 - p) ** (n - 1) * p``. Inverse-transform
+        sampling draws that geometric random variable directly, avoiding one
+        DES event per failed cycle while preserving the exact discrete waiting
+        time distribution of the former attempt-by-attempt loop.
+
+        Args:
+            success_probability: Probability that one attempt cycle succeeds.
+
+        Returns:
+            The one-indexed cycle number of the first success.
+        """
+        if success_probability == 1.0:
+            return 1
+        uniform_sample = self._rng.random()
+        return (
+            math.floor(
+                math.log1p(-uniform_sample) / math.log1p(-success_probability)
+            )
+            + 1
         )
 
     def _resolve_link_parameters(
@@ -700,9 +732,6 @@ class BaseDESLinkScheduler(BaseScheduler):
         if event.event_type == _START_EPR_REQUEST:
             self._handle_start_epr_request(event)
             return
-        if event.event_type == _EPR_ATTEMPT:
-            self._handle_epr_attempt(event)
-            return
         if event.event_type == _EPR_READY:
             self._handle_epr_ready(event)
             return
@@ -736,32 +765,6 @@ class BaseDESLinkScheduler(BaseScheduler):
         if next_request_id is None:
             return
         self._activate_request_links(next_request_id, event.time)
-
-    def _handle_epr_attempt(self, event: _QueueEvent) -> None:
-        """Sample one entanglement attempt and queue the next step."""
-        if event.link_key is None:
-            raise RuntimeError("EPR_ATTEMPT requires a link key.")
-        link_state = self._link_states.setdefault(event.link_key, _LinkState())
-        if link_state.active_request_id != event.op_id:
-            return
-
-        _, success_probability = self._resolve_link_parameters(event.link_key)
-        if self._rng.random() < success_probability:
-            self._enqueue_event(
-                event.time,
-                _EPR_READY,
-                event.op_id,
-                link_key=event.link_key,
-            )
-            return
-
-        cycle_time, _ = self._resolve_link_parameters(event.link_key)
-        self._enqueue_event(
-            time=event.time + cycle_time,
-            event_type=_EPR_ATTEMPT,
-            op_id=event.op_id,
-            link_key=event.link_key,
-        )
 
     def _handle_epr_ready(self, event: _QueueEvent) -> None:
         """Mark one request ready and hand control to the remote op."""
