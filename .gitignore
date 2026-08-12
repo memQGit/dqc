@@ -69,3 +69,6 @@ ml_demo/
 
 # MkDocs build output
 site/
+
+# Local web app (xdqc studio)
+studio/
