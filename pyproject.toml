@@ -3,7 +3,7 @@ name = "xdqc"
 version = "0.1.0"
 description = "memQ Distributed Quantum Compiler"
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
     { name = "memQ Inc.", email = "luke.andreesen@memq.tech" }
