@@ -1,7 +1,9 @@
 version: 2
 updates:
-  # Python dependencies (pyproject.toml / requirements*.txt)
-  - package-ecosystem: "pip"
+  # Python dependencies. This project is uv-managed: the resolved versions
+  # live in uv.lock, which the "pip" ecosystem does not maintain. Using the
+  # native "uv" ecosystem keeps pyproject.toml and uv.lock updated together.
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
