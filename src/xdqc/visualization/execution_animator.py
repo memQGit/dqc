@@ -42,8 +42,8 @@ Example:
         from xdqc.network import NetworkGraph
         from xdqc.visualization import animate_circuit_execution
 
-        network = NetworkGraph("examples/networks/simple1.json")
-        compiler = Compiler("examples/circuits/qft_n4.qasm", network)
+        network = NetworkGraph("demo/inputs/demo_network.json")
+        compiler = Compiler("demo/inputs/qft_n4.qasm", network)
         compiler.compile(ebit_assignment=True)
 
         scheduler = Scheduler(compiler, algo="des_link_fifo")

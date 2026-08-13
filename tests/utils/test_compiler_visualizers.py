@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from pathlib import Path
+
 import pytest
 
 from xdqc.circuit import Circuit
@@ -71,9 +73,12 @@ def test_plot_distributed_circuit_marks_remote_gates(
 
 
 def test_plot_distributed_circuit_renders_measurement_subscript() -> None:
-    program = load_qasm_program("examples/circuits/simple1.qasm")
+    fixtures = Path(__file__).parent.parent / "fixtures"
+    program = load_qasm_program(
+        str(fixtures / "circuits" / "simple1_measured.qasm")
+    )
     circuit = Circuit(program)
-    network = NetworkGraph("examples/networks/3comp_1comm_x2.json")
+    network = NetworkGraph(str(fixtures / "networks" / "3comp_1comm_x2.json"))
     partitioner = Partitioner(
         network,
         program,
