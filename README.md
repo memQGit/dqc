@@ -1,4 +1,4 @@
-# xDQC — Distributed Quantum Compiler
+# xDQC — Extensible Distributed Quantum Compiler
 
 
 <p align="center">
@@ -22,7 +22,9 @@
     </a>
 </p>
 
-xDQC is an open-source Python library for distributed quantum compilation. Given a quantum circuit and a network topology, it partitions the circuit across QPUs, routes inter-QPU gates, and reconstructs a distributed circuit ready for execution or further analysis.
+**xDQC** (*Extensible Distributed Quantum Compiler*) is an open-source Python library for distributed quantum compilation. Given a quantum circuit and a network topology, it partitions the circuit across QPUs, routes inter-QPU gates, and reconstructs a distributed circuit ready for execution or further analysis.
+
+The name reflects the design goal: every stage of the pipeline — partitioning, routing, scheduling, visualization — is a swappable component, so researchers can extend the compiler with their own algorithms rather than work around it.
 
 The library is designed to be modular and plug-and-play: researchers can run the full compilation workflow in a few lines of code, swap in different partitioning algorithms, and benchmark them against each other across circuits and network topologies.
 
