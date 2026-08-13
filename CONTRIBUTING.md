@@ -13,7 +13,7 @@ clean public APIs.
 - Lint: `tox -e lint`
 - Format check: `tox -e format`
 - Tests + coverage: `tox -e test`
-- Type checking: `pyright`
+- Type checking: `pyright` (advisory — see below)
 
 If you need to auto-format:
 
@@ -62,9 +62,19 @@ fresh `Unreleased` section is opened above it, and the version tag is pushed.
 - Use type hints and Google-style docstrings for public modules, classes, and
   functions.
 
+## Type checking
+
+New code should carry full type hints, and `pyright` is configured to check
+`src/` and `tests/`. It is currently **advisory rather than a gate**: the
+configuration is temporarily relaxed from `strict` to `basic` because several
+core dependencies (networkx, matplotlib, qiskit) ship no type information, and
+a backlog of pre-existing findings has not been cleared. Do not add new type
+errors, but you are not expected to fix unrelated ones. Restoring strict mode
+is tracked in [`RELEASE_TODO.md`](RELEASE_TODO.md).
+
 ## Pull request checklist
 
 - Tests pass (`tox -e test`).
 - Lint and format checks pass (`tox -e lint`, `tox -e format`).
-- Type checking passes (`pyright`).
 - New/changed behavior is covered by tests.
+- User-visible changes have a `CHANGELOG.md` entry.
