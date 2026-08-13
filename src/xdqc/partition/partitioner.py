@@ -247,7 +247,31 @@ class Partitioner:
 
     @property
     def cost(self) -> float | None:
-        """Return the latest entanglement cost, if available."""
+        """Return the exact entanglement cost, if available.
+
+        The true e-bit usage is only known once the distributed circuit has
+        been extracted, because that is where routing, link selection, and
+        state-teleportation swaps are actually resolved. This property
+        therefore extracts the distributed circuit on first access rather
+        than reporting the cheaper partition-time approximation, so the
+        reported cost does not depend on whether the caller happened to
+        touch the distributed circuit first.
+
+        If the distributed circuit cannot be extracted at all -- for example
+        on a network whose computation qubits cannot reach any communication
+        qubit -- there is no measured cost to report, so the partition-time
+        approximation is returned and a warning is logged.
+        """
+        if self._algorithm.schedule is not None:
+            try:
+                self._ensure_distributed_circuit()
+            except Exception as exc:
+                logger.warning(
+                    "Could not extract the distributed circuit (%s); "
+                    "reporting the partition-time cost approximation "
+                    "instead of measured e-bit usage.",
+                    exc,
+                )
         return self._algorithm.cost
 
     @property
