@@ -29,7 +29,7 @@ from xdqc.circuit.dag.distributed import (
 )
 from xdqc.circuit.dag.remap import _circuit_qubit_to_physical_qubit
 from xdqc.circuit.op import Op
-from xdqc.preprocessing.qasm import extract_cleaned_statements
+from xdqc.preprocessing.qasm.cleaning import extract_cleaned_statements
 from xdqc.preprocessing.qasm.io import load_qasm_program
 from xdqc.preprocessing.qasm.types import (
     CircuitQubit,

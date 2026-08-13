@@ -28,7 +28,7 @@ from xdqc.circuit.dag.remap import (
     _to_ast_qubit_ref,
 )
 from xdqc.network import PhysicalQubit
-from xdqc.preprocessing.qasm import clone_statement_node
+from xdqc.preprocessing.qasm.ast_utils import clone_statement_node
 from xdqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
 
 if TYPE_CHECKING:

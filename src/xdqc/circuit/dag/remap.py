@@ -22,10 +22,8 @@ from typing import TYPE_CHECKING
 from openqasm3 import ast
 
 from xdqc.network import PhysicalQubit
-from xdqc.preprocessing.qasm import (
-    clone_statement_node,
-    extract_qubit_index,
-)
+from xdqc.preprocessing.qasm.analysis import extract_qubit_index
+from xdqc.preprocessing.qasm.ast_utils import clone_statement_node
 from xdqc.preprocessing.qasm.types import (
     CircuitQubit,
     CleanedIncludeStatement,

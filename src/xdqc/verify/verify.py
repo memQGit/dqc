@@ -33,11 +33,13 @@ from xdqc.network.network_graph import (
 )
 from xdqc.preprocessing.qasm import (
     dump_qasm_program,
+    parse_qasm_file,
+    parse_qasm_source,
+)
+from xdqc.preprocessing.qasm.ast_utils import (
     is_comm_qubit_declaration,
     is_comm_qubit_reference,
     non_comm_qubits,
-    parse_qasm_file,
-    parse_qasm_source,
     rename_quantum_gate,
 )
 

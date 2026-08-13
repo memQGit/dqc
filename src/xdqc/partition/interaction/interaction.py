@@ -27,14 +27,14 @@ from xdqc.network import NetworkGraph
 from xdqc.partition.partitioner import QPU, BasePartitioner
 from xdqc.partition.subroutines import kl_partition
 from xdqc.partition.utils import partition_cost
-from xdqc.preprocessing.qasm import count_total_qubits
-from xdqc.utils import (
+from xdqc.preprocessing.qasm.analysis import count_total_qubits
+from xdqc.utils.circuit_utils import (
+    build_window_interaction_graph,
     create_initial_subcircuit_graph,
     get_windows,
     movement_cost,
-    qubit_partition_map,
 )
-from xdqc.utils.circuit_utils import build_window_interaction_graph
+from xdqc.utils.common import qubit_partition_map
 
 logger = logging.getLogger(__name__)
 

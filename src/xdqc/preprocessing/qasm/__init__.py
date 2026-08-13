@@ -12,68 +12,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""OpenQASM 3 preprocessing utilities."""
+"""OpenQASM 3 preprocessing.
 
-from xdqc.preprocessing.qasm.analysis import (
-    count_total_qubits,
-    extract_qubit_index,
-    extract_qubit_register_sizes,
-    extract_two_qubit_gates,
-)
-from xdqc.preprocessing.qasm.ast_utils import (
-    clone_statement_node,
-    indexed_qubit_reference,
-    is_comm_qubit_declaration,
-    is_comm_qubit_reference,
-    non_comm_qubits,
-    rename_quantum_gate,
-)
-from xdqc.preprocessing.qasm.cleaning import (
-    clean_statement,
-    extract_cleaned_statements,
-)
+The public surface here is the set of entry points for getting an OpenQASM 3
+program in and out of xdqc, plus :class:`CircuitQubit`, the qubit reference
+those programs are expressed in terms of.
+
+The statement-cleaning helpers and the ``Cleaned*`` node types are
+implementation details of the circuit builders. They remain importable from
+their defining modules (``xdqc.preprocessing.qasm.analysis``, ``.ast_utils``,
+``.cleaning``, ``.types``) but are not part of the supported API and may
+change without notice.
+"""
+
 from xdqc.preprocessing.qasm.io import (
     dump_qasm_program,
     load_qasm_program,
     parse_qasm_file,
     parse_qasm_source,
 )
-from xdqc.preprocessing.qasm.types import (
-    Cbit,
-    CircuitQubit,
-    CleanedClassicalDeclaration,
-    CleanedIncludeStatement,
-    CleanedQuantumGate,
-    CleanedQuantumGateDefinition,
-    CleanedQuantumMeasurementStatement,
-    CleanedQubitDeclaration,
-    CleanedStatement,
-)
+from xdqc.preprocessing.qasm.types import CircuitQubit
 
 __all__ = [
-    "Cbit",
     "CircuitQubit",
-    "CleanedClassicalDeclaration",
-    "CleanedIncludeStatement",
-    "CleanedQuantumGate",
-    "CleanedQuantumGateDefinition",
-    "CleanedQuantumMeasurementStatement",
-    "CleanedQubitDeclaration",
-    "CleanedStatement",
-    "clean_statement",
-    "clone_statement_node",
-    "count_total_qubits",
     "dump_qasm_program",
-    "extract_cleaned_statements",
-    "extract_qubit_register_sizes",
-    "extract_qubit_index",
-    "extract_two_qubit_gates",
-    "indexed_qubit_reference",
-    "is_comm_qubit_declaration",
-    "is_comm_qubit_reference",
     "load_qasm_program",
-    "non_comm_qubits",
     "parse_qasm_file",
     "parse_qasm_source",
-    "rename_quantum_gate",
 ]

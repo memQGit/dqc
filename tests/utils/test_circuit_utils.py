@@ -20,21 +20,21 @@ from openqasm3 import ast
 from xdqc.circuit import Circuit
 from xdqc.network import NetworkGraph
 from xdqc.partition.partitioner import QPU
-from xdqc.preprocessing.qasm import (
+from xdqc.preprocessing.qasm.analysis import (
     count_total_qubits,
     extract_qubit_index,
     extract_two_qubit_gates,
 )
 from xdqc.preprocessing.qasm.io import load_qasm_program
-from xdqc.utils import (
+from xdqc.utils.circuit_utils import (
+    build_window_interaction_graph,
     count_two_qubit_pairs,
     create_initial_subcircuit_graph,
     distribute,
     get_windows,
     movement_cost,
-    qubit_partition_map,
 )
-from xdqc.utils.circuit_utils import build_window_interaction_graph
+from xdqc.utils.common import qubit_partition_map
 
 
 @pytest.mark.parametrize(

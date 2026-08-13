@@ -29,7 +29,7 @@ from xdqc.partition.partitioner import QPU, BasePartitioner
 from xdqc.preprocessing.qasm.io import load_qasm_program
 from xdqc.preprocessing.qasm.types import CircuitQubit, CleanedQuantumGate
 from xdqc.scheduler import SchedulerHardwareProfile
-from xdqc.utils import get_windows
+from xdqc.utils.circuit_utils import get_windows
 
 
 class _CustomQpuIdPartitioner(BasePartitioner):

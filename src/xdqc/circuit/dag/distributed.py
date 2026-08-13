@@ -51,7 +51,7 @@ from xdqc.circuit.dag.swap_builders import (
     _validate_local_swap_pair,
 )
 from xdqc.circuit.op import Op
-from xdqc.preprocessing.qasm import clone_statement_node
+from xdqc.preprocessing.qasm.ast_utils import clone_statement_node
 from xdqc.preprocessing.qasm.types import (
     CircuitQubit,
     CleanedIncludeStatement,
