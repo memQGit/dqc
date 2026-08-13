@@ -56,7 +56,7 @@ tests/test_scheduler_makespan_benchmarking.py
 AGENTS.md
 CLAUDE.md
 local_only/
-.claude/settings.json
+.claude/
 
 # xdqc walkthrough demo (local hand-off only, not for GitHub)
 ml_demo/

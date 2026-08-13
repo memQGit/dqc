@@ -1,7 +1,7 @@
 [project]
 name = "xdqc"
 version = "0.1.0"
-description = "memQ Distributed Quantum Compiler"
+description = "xDQC — Extensible Distributed Quantum Compiler"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -42,6 +42,7 @@ build-backend = "uv_build"
 [dependency-groups]
 docs = [
     "mkdocs-gen-files>=0.5.0",
+    "mkdocs-jupyter>=0.26.3",
     "mkdocs-literate-nav>=0.6.1",
     "mkdocs-material>=9.5.0",
     "mkdocstrings[python]>=0.26.0",
@@ -51,7 +52,7 @@ dev = [
     "notebook>=7.5.3",
     "pre-commit>=4.5.1",
     "pydoclint>=0.8.3",
-    "pyright>=1.1.408",
+    "pyright[nodejs]>=1.1.408",
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "qiskit>=1.0",
@@ -60,9 +61,15 @@ dev = [
     "tox>=4.25.0",
 ]
 
+[tool.pytest.ini_options]
+# Collect only the library's own suite. `studio/` is a local, experimental
+# application that is not part of the released package.
+testpaths = ["tests"]
+
 [tool.ruff]
 line-length = 79
 target-version = "py311"
+extend-exclude = ["studio"]
 
 [tool.ruff.lint]
 ignore = ["E501"]
