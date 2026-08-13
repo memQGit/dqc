@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 from xdqc.builder import synthesize_state_teleportation_swaps
 from xdqc.circuit.dag import CircuitDAG
-from xdqc.preprocessing.qasm import (
+from xdqc.preprocessing.qasm.types import (
     CleanedClassicalDeclaration,
     CleanedQuantumMeasurementStatement,
 )

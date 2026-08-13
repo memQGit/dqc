@@ -24,7 +24,7 @@ from xdqc.partition import Partitioner
 from xdqc.partition.partitioner import QPU, BasePartitioner
 from xdqc.partition.utils import partition_cost
 from xdqc.preprocessing.qasm.io import load_qasm_program
-from xdqc.utils import get_windows
+from xdqc.utils.circuit_utils import get_windows
 
 
 def test_partitioner_interaction_default(

@@ -30,8 +30,8 @@ from xdqc._logging import StepTimer
 from xdqc.circuit.op import Op
 from xdqc.network import NetworkGraph
 from xdqc.partition.partitioner import QPU, BasePartitioner
-from xdqc.preprocessing.qasm import count_total_qubits
-from xdqc.utils import get_windows
+from xdqc.preprocessing.qasm.analysis import count_total_qubits
+from xdqc.utils.circuit_utils import get_windows
 
 logger = logging.getLogger(__name__)
 

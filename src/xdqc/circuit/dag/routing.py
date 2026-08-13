@@ -35,7 +35,7 @@ from xdqc.circuit.dag.swap_builders import (
     _candidate_comp_slots_for_qpu,
     _validate_local_swap_pair,
 )
-from xdqc.preprocessing.qasm import rename_quantum_gate
+from xdqc.preprocessing.qasm.ast_utils import rename_quantum_gate
 from xdqc.preprocessing.qasm.types import (
     CircuitQubit,
     CleanedQuantumGate,

@@ -422,7 +422,7 @@ class Compiler:
             ValueError: If the placement is structurally invalid or references
                 resources outside the network.
         """
-        from xdqc.preprocessing.qasm import count_total_qubits
+        from xdqc.preprocessing.qasm.analysis import count_total_qubits
 
         if not schedule:
             raise ValueError(

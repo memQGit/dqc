@@ -30,8 +30,11 @@ from xdqc.partition.interaction.interaction import (
 from xdqc.partition.partitioner import QPU, BasePartitioner
 from xdqc.partition.subroutines import kl_partition
 from xdqc.partition.utils import partition_cost
-from xdqc.preprocessing.qasm import count_total_qubits
-from xdqc.utils import create_initial_subcircuit_graph, get_windows
+from xdqc.preprocessing.qasm.analysis import count_total_qubits
+from xdqc.utils.circuit_utils import (
+    create_initial_subcircuit_graph,
+    get_windows,
+)
 
 logger = logging.getLogger(__name__)
 

@@ -12,28 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Utility functions for xdqc.
+"""Internal helpers shared across xdqc.
 
-This module provides utility functions for working with quantum circuits,
-graph partitioning, and other common operations throughout the library.
+This subpackage is **not** part of the public API. Its contents are
+implementation details of the partitioners and circuit builders, and may
+change without notice. Import them from their defining modules
+(``xdqc.utils.circuit_utils``, ``xdqc.utils.common``) rather than from this
+package, and prefer the documented entry points in :mod:`xdqc` for anything
+user-facing.
 """
-
-# Circuit utilities
-from xdqc.utils.circuit_utils import (
-    count_two_qubit_pairs,
-    create_initial_subcircuit_graph,
-    distribute,
-    get_windows,
-    movement_cost,
-)
-from xdqc.utils.common import qubit_partition_map, window_op_map
-
-__all__ = [
-    "count_two_qubit_pairs",
-    "create_initial_subcircuit_graph",
-    "distribute",
-    "get_windows",
-    "movement_cost",
-    "qubit_partition_map",
-    "window_op_map",
-]
