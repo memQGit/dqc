@@ -23,6 +23,17 @@ changes are always listed under **Changed** or **Removed**.
 
 ### Changed
 
+- `Partitioner.cost` (and `Compiler.cost`, which delegates to it) now always
+  report the **measured** e-bit usage of the extracted distributed circuit.
+  Previously the value was a partition-time approximation that silently
+  switched to the measured figure once anything touched
+  `distributed_circuit` — so the same compile could report different costs
+  depending on call order. If a network cannot produce a distributed circuit
+  at all, the approximation is returned and a warning is logged.
+- Dependabot now uses the `uv` ecosystem instead of `pip`, so `uv.lock` is
+  kept in step with `pyproject.toml`.
+- `pyright` is temporarily relaxed from `strict` to `basic` and is advisory
+  rather than a merge gate; see `CONTRIBUTING.md`.
 - Narrowed the public API of `xdqc.preprocessing.qasm` to the OpenQASM entry
   points (`load_qasm_program`, `dump_qasm_program`, `parse_qasm_file`,
   `parse_qasm_source`) and `CircuitQubit`. The statement-cleaning helpers and
