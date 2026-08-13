@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1016" height="396" viewBox="0 0 1016 396">
+<rect class="svg-document__background" x="0" y="0" width="1016" height="396" fill="#fffdfc"/>
+<text x="46" y="40" fill="#102a43" font-size="26.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="start">qft_n4 distributed across 2 QPUs</text>
+<text x="46" y="64" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">Windows 0-2 of 2</text>
+<rect x="724" y="24" width="268" height="52" fill="#ffffff" stroke="#d8deea" stroke-width="0.9" rx="10" opacity="0.96"/>
+<rect x="736" y="34" width="16" height="10" fill="#f8fbff" stroke="#6b7a90" stroke-width="0.9" rx="3" opacity="1"/>
+<text x="760" y="42" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">Local gate</text>
+<rect x="836" y="34" width="16" height="10" fill="#faedff" stroke="#d702fe" stroke-width="0.9" rx="3" opacity="1"/>
+<text x="860" y="42" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">Remote gate</text>
+<path d="M 736.00 58.00 C 744.00 54.00, 752.00 64.00, 762.00 58.00" fill="none" stroke="#4801b0" stroke-width="1.7" opacity="1" linecap="round" linejoin="round"/>
+<circle cx="736" cy="58" r="2.2" fill="#4801b0" stroke="none"/>
+<circle cx="762" cy="58" r="2.2" fill="#4801b0" stroke="none"/>
+<text x="772" y="62" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">State teleportation</text>
+<line x1="890" y1="55.5" x2="916" y2="55.5" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<line x1="890" y1="60.5" x2="916" y2="60.5" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<text x="926" y="62" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="start">CBIT</text>
+<rect x="128" y="90" width="314" height="260" fill="#f8f5ff" stroke="none" rx="10" opacity="0.58"/>
+<rect x="500" y="90" width="188" height="260" fill="#f8f5ff" stroke="none" rx="10" opacity="0.58"/>
+<rect x="746" y="90" width="230" height="260" fill="#f8f5ff" stroke="none" rx="10" opacity="0.58"/>
+<text x="44" y="130" fill="#102a43" font-size="13.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="start">QPU 0</text>
+<text x="44" y="206" fill="#102a43" font-size="13.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="start">QPU 1</text>
+<text x="110" y="115" fill="#52606d" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">0</text>
+<text x="110" y="145" fill="#52606d" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">1</text>
+<text x="110" y="191" fill="#52606d" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">0</text>
+<text x="110" y="221" fill="#52606d" font-size="11.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">1</text>
+<line x1="56" y1="163" x2="990" y2="163" stroke="#4801b0" stroke-width="1" opacity="0.42" dasharray="2.5 7.5" linecap="round"/>
+<line x1="138" y1="110" x2="990" y2="110" stroke="#d3dae6" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="140" x2="990" y2="140" stroke="#d3dae6" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="186" x2="990" y2="186" stroke="#d3dae6" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="216" x2="990" y2="216" stroke="#d3dae6" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="128" y1="254" x2="990" y2="254" stroke="#4801b0" stroke-width="1.1" opacity="0.36" dasharray="5 6" linecap="round"/>
+<text x="22" y="306" fill="#102a43" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="start">CBITS</text>
+<text x="122" y="272" fill="#52606d" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">c[0]</text>
+<text x="122" y="294" fill="#52606d" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">c[1]</text>
+<text x="122" y="316" fill="#52606d" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">c[2]</text>
+<text x="122" y="338" fill="#52606d" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="400" text-anchor="end">c[3]</text>
+<line x1="138" y1="265.5" x2="990" y2="265.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="270.5" x2="990" y2="270.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="287.5" x2="990" y2="287.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="292.5" x2="990" y2="292.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="309.5" x2="990" y2="309.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="314.5" x2="990" y2="314.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="331.5" x2="990" y2="331.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<line x1="138" y1="336.5" x2="990" y2="336.5" stroke="#6b7a90" stroke-width="0.9" opacity="1" linecap="round"/>
+<text x="285" y="82" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">W0</text>
+<text x="594" y="82" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">W1</text>
+<text x="861" y="82" fill="#52606d" font-size="12.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">W2</text>
+<rect x="143" y="175" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="159" y="190" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">X</text>
+<rect x="185" y="129" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="201" y="144" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">X</text>
+<rect x="227" y="175" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="243" y="190" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">H</text>
+<line x1="285" y1="110" x2="285" y2="186" stroke="#d702fe" stroke-width="1" opacity="1" dasharray="4 4" linecap="round"/>
+<circle cx="285" cy="110" r="3.4" fill="#d702fe" stroke="none"/>
+<circle cx="285" cy="186" r="3.4" fill="#d702fe" stroke="none"/>
+<rect x="267" y="137" width="36" height="22" fill="#faedff" stroke="#d702fe" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="285" y="152" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">RCP</text>
+<rect x="311" y="99" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="327" y="114" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">H</text>
+<line x1="369" y1="140" x2="369" y2="186" stroke="#d702fe" stroke-width="1" opacity="1" dasharray="4 4" linecap="round"/>
+<circle cx="369" cy="140" r="3.4" fill="#d702fe" stroke="none"/>
+<circle cx="369" cy="186" r="3.4" fill="#d702fe" stroke="none"/>
+<rect x="351" y="152" width="36" height="22" fill="#faedff" stroke="#d702fe" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="369" y="167" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">RCP</text>
+<line x1="411" y1="110" x2="411" y2="140" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<circle cx="411" cy="140" r="3.4" fill="#6b7a90" stroke="none"/>
+<circle cx="411" cy="110" r="3.4" fill="#6b7a90" stroke="none"/>
+<rect x="393" y="114" width="36" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="411" y="129" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">CP</text>
+<rect x="515" y="129" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="531" y="144" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">H</text>
+<line x1="573" y1="186" x2="573" y2="216" stroke="#6b7a90" stroke-width="1" opacity="1" linecap="round"/>
+<circle cx="573" cy="216" r="3.4" fill="#6b7a90" stroke="none"/>
+<circle cx="573" cy="186" r="3.4" fill="#6b7a90" stroke="none"/>
+<rect x="555" y="190" width="36" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="573" y="205" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">CP</text>
+<line x1="615" y1="110" x2="615" y2="216" stroke="#d702fe" stroke-width="1" opacity="1" dasharray="4 4" linecap="round"/>
+<circle cx="615" cy="216" r="3.4" fill="#d702fe" stroke="none"/>
+<circle cx="615" cy="110" r="3.4" fill="#d702fe" stroke="none"/>
+<rect x="597" y="152" width="36" height="22" fill="#faedff" stroke="#d702fe" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="615" y="167" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">RCP</text>
+<line x1="657" y1="140" x2="657" y2="216" stroke="#d702fe" stroke-width="1" opacity="1" dasharray="4 4" linecap="round"/>
+<circle cx="657" cy="216" r="3.4" fill="#d702fe" stroke="none"/>
+<circle cx="657" cy="140" r="3.4" fill="#d702fe" stroke="none"/>
+<rect x="639" y="167" width="36" height="22" fill="#faedff" stroke="#d702fe" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="657" y="182" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">RCP</text>
+<rect x="761" y="205" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="777" y="220" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle">H</text>
+<rect x="803" y="175" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="819" y="190" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle"><tspan>M</tspan><tspan baseline-shift="sub" font-size="7.5">z</tspan></text>
+<rect x="845" y="99" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="861" y="114" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle"><tspan>M</tspan><tspan baseline-shift="sub" font-size="7.5">z</tspan></text>
+<rect x="887" y="129" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="903" y="144" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle"><tspan>M</tspan><tspan baseline-shift="sub" font-size="7.5">z</tspan></text>
+<rect x="929" y="205" width="32" height="22" fill="#f8fbff" stroke="#6b7a90" stroke-width="1" rx="5.5" opacity="1"/>
+<text x="945" y="220" fill="#102a43" font-size="10.0" font-family="'IBM Plex Sans', 'Helvetica Neue', sans-serif" font-weight="600" text-anchor="middle"><tspan>M</tspan><tspan baseline-shift="sub" font-size="7.5">z</tspan></text>
+<line x1="819" y1="197" x2="819" y2="261" stroke="#4801b0" stroke-width="1" opacity="1" dasharray="3 5" linecap="round"/>
+<path d="M 815.00 260.50 L 819.00 268.00 L 823.00 260.50 Z" fill="#4801b0" stroke="none" opacity="1" linecap="round" linejoin="round"/>
+<line x1="861" y1="121" x2="861" y2="283" stroke="#4801b0" stroke-width="1" opacity="1" dasharray="3 5" linecap="round"/>
+<path d="M 857.00 282.50 L 861.00 290.00 L 865.00 282.50 Z" fill="#4801b0" stroke="none" opacity="1" linecap="round" linejoin="round"/>
+<line x1="903" y1="151" x2="903" y2="305" stroke="#4801b0" stroke-width="1" opacity="1" dasharray="3 5" linecap="round"/>
+<path d="M 899.00 304.50 L 903.00 312.00 L 907.00 304.50 Z" fill="#4801b0" stroke="none" opacity="1" linecap="round" linejoin="round"/>
+<line x1="945" y1="227" x2="945" y2="327" stroke="#4801b0" stroke-width="1" opacity="1" dasharray="3 5" linecap="round"/>
+<path d="M 941.00 326.50 L 945.00 334.00 L 949.00 326.50 Z" fill="#4801b0" stroke="none" opacity="1" linecap="round" linejoin="round"/>
+</svg>
