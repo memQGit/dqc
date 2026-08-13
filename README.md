@@ -5,6 +5,18 @@
     <a href="https://github.com/memQGit/xdqc/actions/workflows/ci.yml">
         <img src="https://github.com/memQGit/xdqc/actions/workflows/ci.yml/badge.svg" alt="CI Status">
     </a>
+    <a href="https://xdqc.readthedocs.io/en/latest/">
+        <img src="https://readthedocs.org/projects/xdqc/badge/?version=latest" alt="Documentation Status">
+    </a>
+    <a href="https://codecov.io/gh/memQGit/xdqc">
+        <img src="https://codecov.io/gh/memQGit/xdqc/branch/main/graph/badge.svg" alt="Coverage">
+    </a>
+    <a href="https://github.com/memQGit/xdqc/blob/main/pyproject.toml">
+        <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue" alt="Python versions">
+    </a>
+    <a href="https://github.com/astral-sh/ruff">
+        <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff">
+    </a>
     <a href="https://github.com/memQGit/xdqc/blob/main/LICENSE">
       <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License">
     </a>
