@@ -1,8 +1,9 @@
 site_name: xDQC
 site_description: >-
-  xDQC — an open-source Python library for distributed quantum
-  compilation: partition circuits across QPUs, route inter-QPU gates,
-  reconstruct distributed circuits, and build execution schedules.
+  xDQC (Extensible Distributed Quantum Compiler) — an open-source Python
+  library for distributed quantum compilation: partition circuits across
+  QPUs, route inter-QPU gates, reconstruct distributed circuits, and build
+  execution schedules.
 site_author: memQ Inc.
 repo_name: memQGit/xdqc
 repo_url: https://github.com/memQGit/xdqc
@@ -48,6 +49,11 @@ plugins:
   - gen-files:
       scripts:
         - gen_ref_pages.py
+        - gen_demo_pages.py
+  - mkdocs-jupyter:
+      execute: false
+      include_source: true
+      ignore_h1_titles: false
   - literate-nav:
       nav_file: SUMMARY.md
   - mkdocstrings:
@@ -96,5 +102,11 @@ nav:
       - Visualization: guide/visualization.md
       - Logging & Verbosity: guide/logging.md
       - Scheduling-Instance API: guide/scheduling-instance-api.md
-  - Demo Walkthrough: demo.md
+  - Demos:
+      - Overview: demo.md
+      - Basic Workflow: demos/demo.ipynb
+      - Defining Networks: demos/networks.ipynb
+      - Comparing Partitioners: demos/comparing_partitioners.ipynb
+      - Scheduling & Hardware: demos/scheduling_and_hardware.ipynb
+      - Visualization: demos/visualization.ipynb
   - API Reference: reference/
