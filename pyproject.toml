@@ -67,7 +67,7 @@ target-version = "py311"
 [tool.ruff.lint]
 ignore = ["E501"]
 select = ["E", "F", "I", "D", "ANN", "UP", "B"]
-per-file-ignores = { "tests/**" = ["D", "ANN"], "scripts/**" = ["D", "ANN"] }
+per-file-ignores = { "tests/**" = ["D", "ANN"], "scripts/**" = ["D", "ANN"], "demo/**" = ["ANN"] }
 
 [tool.ruff.format]
 docstring-code-format = true
