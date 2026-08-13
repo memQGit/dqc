@@ -1,4 +1,4 @@
-# memQ Distributed Quantum Compiler
+# xDQC — Extensible Distributed Quantum Compiler
 
 <div class="memq-hero" markdown>
 
@@ -9,10 +9,12 @@ execution or further analysis.
 
 </div>
 
-xDQC is designed to be **modular and plug-and-play**: researchers can run
-the full compilation workflow in a few lines of code, swap in different
-partitioning algorithms, and benchmark them against each other across circuits
-and network topologies.
+**xDQC** stands for *Extensible Distributed Quantum Compiler*, and the name
+states the design goal: every stage of the pipeline — partitioning, routing,
+scheduling, visualization — is a swappable component. Researchers can run the
+full compilation workflow in a few lines of code, drop in their own
+partitioning algorithm, and benchmark it against the built-in strategies
+across circuits and network topologies.
 
 ## The workflow
 

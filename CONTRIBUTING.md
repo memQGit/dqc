@@ -26,6 +26,32 @@ If you need to auto-format:
 - Tests: `tests/`
 - Scripts: `scripts/`
 - Docs: `docs/`
+- Runnable demo notebooks: `demo/`
+
+## Changelog
+
+We keep a human-written changelog in [`CHANGELOG.md`](CHANGELOG.md), following
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+**Any user-visible change needs a changelog entry in the same pull request.**
+Add it under `## [Unreleased]`, in whichever of these applies:
+
+| Section | Use for |
+| --- | --- |
+| `Added` | New features |
+| `Changed` | Changes to existing behavior, including breaking ones |
+| `Deprecated` | Features that still work but will be removed |
+| `Removed` | Features taken out |
+| `Fixed` | Bug fixes |
+| `Security` | Vulnerability fixes |
+
+Write entries for the person upgrading, not the person who wrote the patch:
+say what changed and what a user must now do differently. Internal
+refactors, test-only changes, and CI tweaks do not need an entry.
+
+On release, `## [Unreleased]` is renamed to the new version with a date, a
+fresh `Unreleased` section is opened above it, and the version tag is pushed.
 
 ## Contribution guidelines
 
