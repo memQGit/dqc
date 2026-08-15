@@ -62,7 +62,7 @@ docs = [
 ]
 dev = [
     { include-group = "docs" },
-    "notebook>=7.5.3",
+    "notebook>=7.5.6",
     "pre-commit>=4.5.1",
     "pydoclint>=0.8.3",
     "pyright[nodejs]>=1.1.408",
