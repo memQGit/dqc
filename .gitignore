@@ -68,6 +68,11 @@ ml_demo/
 .ipynb_checkpoints/
 *-checkpoint.ipynb
 
+# Internal positioning document. NOTE: ignoring it only keeps it out of git.
+# MkDocs copies every file under docs/ into the built site, so it still needs
+# to live outside docs/ to stay unpublished -- see RELEASE_TODO.md.
+docs/library-overview.txt
+
 # MkDocs build output
 site/
 
