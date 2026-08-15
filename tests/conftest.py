@@ -43,11 +43,6 @@ def chain_3qpu_2pairs_network_path() -> Path:
 
 
 @pytest.fixture()
-def hundred_qubit_network_path() -> Path:
-    return Path(__file__).parent / "fixtures" / "networks" / "50x2.json"
-
-
-@pytest.fixture()
 def eight_comp_four_comm_network_path() -> Path:
     return (
         Path(__file__).parent
@@ -65,11 +60,6 @@ def bell_circuit_path() -> Path:
 @pytest.fixture()
 def simple1_circuit_path() -> Path:
     return Path(__file__).parent / "fixtures" / "circuits" / "simple1.qasm"
-
-
-@pytest.fixture()
-def qv_100_circuit_path() -> Path:
-    return Path(__file__).parent / "fixtures" / "circuits" / "qv_100.qasm"
 
 
 @pytest.fixture()

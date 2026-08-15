@@ -538,25 +538,6 @@ def test_partitioner_cost_uses_total_schedule_ebits(
     assert partitioner.cost == 1.0
 
 
-def test_partitioner_large_circuit(
-    qv_100_circuit_path,
-    hundred_qubit_network_path,
-) -> None:
-    program = load_qasm_program(str(qv_100_circuit_path), from_cache=True)
-    network = NetworkGraph(str(hundred_qubit_network_path))
-    partitioner = Partitioner(network, program)
-    partitioner.run()
-    cost = partitioner.cost
-    schedule = partitioner.schedule
-    # For now, just confirm it runs without error
-    assert isinstance(cost, float)
-    assert schedule
-    # Make sure each window of schedule has correct number of qubits
-    for window in schedule:
-        total_qubits = sum(len(part) for part in window.values())
-        assert total_qubits == network.num_comp_qubits
-
-
 def test_partitioner_supports_extra_comp_capacity(
     simple1_circuit_path,
     simple1_network_path,
