@@ -214,6 +214,30 @@ def _sample_packet_counter() -> hypergraph_module.PacketCounter:
     return Counter({("0", "1", "2"): 2, ("3", "4"): 1})
 
 
+def test_partition_hypergraph_import_error_explains_windows(
+    monkeypatch,
+) -> None:
+    real_import = importlib.import_module
+
+    def failing_import(name, *args, **kwargs):
+        if name == "kahypar":
+            raise ImportError("No module named 'kahypar'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(
+        hypergraph_module.importlib, "import_module", failing_import
+    )
+
+    # KaHyPar is intentionally absent on Windows, so this is a supported
+    # configuration rather than a broken install: the message has to say so.
+    with pytest.raises(ImportError, match="Windows"):
+        hypergraph_module.partition_hypergraph(
+            _sample_packet_counter(),
+            k=2,
+            config_path=hypergraph_module.resolve_kahypar_config_path(),
+        )
+
+
 def test_partition_hypergraph_sets_custom_block_weights_in_order(
     monkeypatch,
 ) -> None:

@@ -12,6 +12,10 @@ changes are always listed under **Changed** or **Removed**.
 
 ### Added
 
+- Windows support. KaHyPar publishes no Windows wheels, so it is now skipped
+  there via a platform marker instead of failing the whole install. Four of
+  the five partitioners are unaffected; `HypergraphPartitioner` raises an
+  `ImportError` explaining the situation and pointing at the alternatives.
 - Four runnable demo notebooks in `demo/`, covering network definition,
   partitioner benchmarking, scheduling and hardware models, and the full
   visualization suite, plus a `demo/README.md` index.
