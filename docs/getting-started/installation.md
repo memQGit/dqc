@@ -14,9 +14,9 @@ uv sync
 ```
 
 `uv sync` installs the library and its runtime dependencies (Qiskit,
-NetworkX, KaHyPar, OpenQASM 3, and matplotlib) into a project virtual
-environment. Run any command inside that environment with `uv run`, for
-example:
+NetworkX, OpenQASM 3, matplotlib, and — on every platform except Windows —
+KaHyPar) into a project virtual environment. Run any command inside that
+environment with `uv run`, for example:
 
 ```bash
 uv run python -c "import xdqc; print(xdqc.__all__)"
