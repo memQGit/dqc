@@ -5,6 +5,18 @@ repository visibility, publish to PyPI, or announce while any box is unchecked.
 
 ## Blocking
 
+- [ ] **Get `docs/library-overview.txt` out of `docs/`.** It is an internal
+      positioning document — competitive analysis of Quantinuum, Cisco and
+      Welinq, the unreleased roadmap (ML partitioning layer, AI co-design),
+      and the business argument for open-sourcing, including the sentence
+      that the library "does not contain a substantial body of uniquely
+      proprietary algorithms or other core intellectual property".
+      MkDocs copies every file in `docs/` into the built site, so this
+      publishes verbatim at `xdqc.readthedocs.io/library-overview.txt`
+      (verified against a local `mkdocs build`). It is currently untracked,
+      so a stray `git add .` would also commit it. Move it to `local_only/`
+      or elsewhere outside `docs/`.
+
 - [ ] **Decide whether to scrub git history, then act on the decision.**
       `benchmarking/`, `.cache/`, and the two paper-review docs are gone from
       `HEAD` but remain fully recoverable from history, and making the repo
