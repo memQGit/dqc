@@ -35,8 +35,9 @@ def load_qasm_program(filename: str, from_cache: bool = False) -> ast.Program:
         The parsed OpenQASM 3 program.
 
     Notes:
-        The qv_100.qasm fixture is cached to disk under .cache/qasm to keep
-        repeated test runs fast.
+        Cached programs are read from .cache/qasm, which keeps repeated runs
+        over large circuits fast. Nothing in the test suite exercises this
+        path at present.
     """
     qasm_path = Path(filename)
     if not qasm_path.is_file():
