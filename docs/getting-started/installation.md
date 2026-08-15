@@ -32,6 +32,15 @@ uv add xdqc
 pip install xdqc
 ```
 
+## Windows support
+
+KaHyPar publishes no Windows wheels, so it is skipped automatically when
+installing on Windows. Everything else installs and runs normally, and four
+of the five partitioners are unaffected — only
+[`HypergraphPartitioner`][xdqc.partition.HypergraphPartitioner] needs
+KaHyPar, and it raises an `ImportError` explaining the situation if called.
+On Linux and macOS all five partitioners are available by default.
+
 ## Development dependencies
 
 The `dev` dependency group adds the tooling used for linting, type checking,

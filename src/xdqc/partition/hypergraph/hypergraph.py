@@ -246,7 +246,9 @@ def partition_hypergraph(
         Mapping from logical qubit string IDs to partition block IDs.
 
     Raises:
-        ImportError: If KahyPar is not installed.
+        ImportError: If KahyPar is not installed. This is the expected
+            state on Windows, where KahyPar publishes no wheels and is
+            therefore omitted from the dependency set.
         ValueError: If ``block_capacities`` is given and its length is not k.
     """
     if not packet_counter:
@@ -256,7 +258,10 @@ def partition_hypergraph(
         kahypar: Any = importlib.import_module("kahypar")
     except ImportError as exc:
         raise ImportError(
-            "The hypergraph partitioner requires the 'kahypar' package to run."
+            "The hypergraph partitioner requires the 'kahypar' package. "
+            "KaHyPar publishes no Windows wheels, so it is not installed "
+            "on Windows; use one of the other partitioners there, or "
+            "install it with 'pip install kahypar' on Linux or macOS."
         ) from exc
 
     edges, edge_weights = zip(*packet_counter.items(), strict=True)
