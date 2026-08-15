@@ -59,3 +59,25 @@
   color: #fff;
   margin: 0.25rem 0;
 }
+
+/* ==========================================================================
+   Demo notebooks (mkdocs-jupyter)
+   ========================================================================== */
+
+/* Rendered notebooks lose ~76px of every row to the `In [n]:` prompt
+   gutter, so code cells end up noticeably narrower than the code blocks on
+   the hand-written pages. Widen the content grid on notebook pages only —
+   `:has()` keeps every other page at Material's default 61rem. The header,
+   tabs, and footer share `.md-grid`, so they widen with the content column
+   and stay aligned with it. */
+@media screen and (min-width: 76.25em) {
+  body:has(.jupyter-wrapper) .md-grid {
+    max-width: 76rem;
+  }
+
+  /* The extra width is for code and outputs, not prose: hold the narrative
+     cells near the measure the hand-written pages use. */
+  body:has(.jupyter-wrapper) .jp-MarkdownCell .jp-RenderedMarkdown {
+    max-width: 36rem;
+  }
+}
