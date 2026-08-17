@@ -40,6 +40,11 @@ jobs:
           - os: windows-latest
             python-version: "3.13"
 
+    # Hoisted so the upload step can test for the token: the `secrets`
+    # context is not readable from a step-level `if`, but `env` is.
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -66,13 +71,17 @@ jobs:
       - name: Pytest with coverage
         run: uv run pytest -q --cov=xdqc --cov-report=xml
       
+      # Dependabot and fork pull requests run without access to repository
+      # secrets, so the token arrives empty and Codecov rejects the upload.
+      # Skip the step in that case rather than failing an otherwise green
+      # run; `fail_ci_if_error` still applies wherever the token exists.
       - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v6
         with:
           files: coverage.xml
           fail_ci_if_error: true
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ env.CODECOV_TOKEN }}
 
       - name: Build package
         run: uv build
