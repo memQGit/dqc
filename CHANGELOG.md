@@ -27,6 +27,10 @@ changes are always listed under **Changed** or **Removed**.
 
 ### Changed
 
+- Renamed the project from `xDQC` to **DQC**. The PyPI distribution is now
+  `memq-dqc` (`pip install memq-dqc`) and the import name is `memq_dqc`
+  (`import memq_dqc as dqc`). The GitHub repository moved to
+  `memQGit/dqc`.
 - `Partitioner.cost` (and `Compiler.cost`, which delegates to it) now always
   report the **measured** e-bit usage of the extracted distributed circuit.
   Previously the value was a partition-time approximation that silently
@@ -38,13 +42,13 @@ changes are always listed under **Changed** or **Removed**.
   kept in step with `pyproject.toml`.
 - `pyright` is temporarily relaxed from `strict` to `basic` and is advisory
   rather than a merge gate; see `CONTRIBUTING.md`.
-- Narrowed the public API of `xdqc.preprocessing.qasm` to the OpenQASM entry
+- Narrowed the public API of `memq_dqc.preprocessing.qasm` to the OpenQASM entry
   points (`load_qasm_program`, `dump_qasm_program`, `parse_qasm_file`,
   `parse_qasm_source`) and `CircuitQubit`. The statement-cleaning helpers and
   `Cleaned*` node types remain importable from their defining modules but are
   no longer part of the supported API.
-- `xdqc.utils` is now documented as internal. Import its helpers from
-  `xdqc.utils.circuit_utils` or `xdqc.utils.common`.
+- `memq_dqc.utils` is now documented as internal. Import its helpers from
+  `memq_dqc.utils.circuit_utils` or `memq_dqc.utils.common`.
 - `pytest` now collects only `tests/`, so a bare `pytest` run no longer fails
   on unrelated local directories.
 
@@ -62,4 +66,4 @@ changes are always listed under **Changed** or **Removed**.
 
 Initial development version. Not yet published.
 
-[Unreleased]: https://github.com/memQGit/xdqc/compare/main...HEAD
+[Unreleased]: https://github.com/memQGit/dqc/compare/main...HEAD

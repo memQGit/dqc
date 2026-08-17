@@ -23,15 +23,15 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import pytest
 
-from xdqc.network import NetworkGraph, PhysicalQubit
-from xdqc.scheduler.schedule import (
+from memq_dqc.network import NetworkGraph, PhysicalQubit
+from memq_dqc.scheduler.schedule import (
     EntanglementGeneration,
     OperationSchedule,
     ScheduledOperation,
     ScheduledQubitTimeline,
 )
-from xdqc.scheduler.schedule_visualizer import _pretty_role
-from xdqc.visualization.execution_animator import (
+from memq_dqc.scheduler.schedule_visualizer import _pretty_role
+from memq_dqc.visualization.execution_animator import (
     _ROLE_COLOR,
     _ROLE_PRIORITY,
     _build_frames,

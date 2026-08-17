@@ -13,7 +13,7 @@ gates — the expensive, entanglement-consuming operations — are minimized. Pa
 | `benchmark_random` | Random baseline — stochastic reference. |
 
 ```python
-from xdqc import Compiler
+from memq_dqc import Compiler
 
 compiler = Compiler("circuit.qasm", "network.json", algo="hypergraph")
 compiler.compile()
@@ -22,7 +22,7 @@ compiler.compile()
 Or with the lower-level `Partitioner`:
 
 ```python
-from xdqc.partition import Partitioner
+from memq_dqc.partition import Partitioner
 
 partitioner = Partitioner("network.json", "circuit.qasm", algo="hypergraph")
 partitioner.run()
@@ -36,8 +36,8 @@ stochastic (seed it for reproducibility). A typical comparison compiles the
 same circuit/network pair under several strategies and compares the resulting
 inter-QPU communication cost or schedule makespan.
 
-Each strategy is a class under `xdqc.partition` — `InteractionPartitioner`,
+Each strategy is a class under `memq_dqc.partition` — `InteractionPartitioner`,
 `HypergraphPartitioner`, `BenchmarkStaticPartitioner`,
 and `BenchmarkRandomPartitioner`. See the
-[`xdqc.partition` API reference](../reference/xdqc/partition/index.md) for their
+[`memq_dqc.partition` API reference](../reference/memq_dqc/partition/index.md) for their
 constructors and options.

@@ -1,12 +1,12 @@
-site_name: xDQC
+site_name: DQC
 site_description: >-
-  xDQC (Extensible Distributed Quantum Compiler) — an open-source Python
+  DQC (Distributed Quantum Compiler) — an open-source Python
   library for distributed quantum compilation: partition circuits across
   QPUs, route inter-QPU gates, reconstruct distributed circuits, and build
   execution schedules.
 site_author: memQ Inc.
-repo_name: memQGit/xdqc
-repo_url: https://github.com/memQGit/xdqc
+repo_name: memQGit/dqc
+repo_url: https://github.com/memQGit/dqc
 copyright: Copyright &copy; 2026 memQ Inc.
 
 # mkdocs.yml now lives alongside the doc content it configures (docs/),

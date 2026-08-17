@@ -18,7 +18,7 @@ from pathlib import Path
 import networkx as nx
 import pytest
 
-from xdqc.network import NetworkGraph, PhysicalQubit
+from memq_dqc.network import NetworkGraph, PhysicalQubit
 
 
 def _node_by_label(network: NetworkGraph, label: str):
@@ -55,7 +55,7 @@ def test_display_network_graph(
 
     # Patch plt.show to prevent actual rendering during tests
     monkeypatch.setattr(
-        "xdqc.network.network_graph.plt.show",
+        "memq_dqc.network.network_graph.plt.show",
         lambda: None,
     )
 

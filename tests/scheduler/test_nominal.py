@@ -18,18 +18,18 @@ from pathlib import Path
 
 import pytest
 
-from xdqc import (
+from memq_dqc import (
     SchedulerHardwareProfile,
     compile_scheduling_instance,
     compute_scheduling_source_fingerprint,
     load_settings,
 )
-from xdqc.scheduler import scheduling_instance_to_json
-from xdqc.scheduler.instance import (
+from memq_dqc.scheduler import scheduling_instance_to_json
+from memq_dqc.scheduler.instance import (
     SchedulingCompileOptions,
     SchedulingInstance,
 )
-from xdqc.scheduler.nominal import TIME_UNIT
+from memq_dqc.scheduler.nominal import TIME_UNIT
 
 _CONSUMER_OP_TYPES = {"epr_generation", "remote_swap", "remote_gate"}
 

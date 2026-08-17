@@ -1,6 +1,6 @@
 # Installation
 
-xDQC uses the [uv](https://docs.astral.sh/uv/) package manager and requires
+DQC uses the [uv](https://docs.astral.sh/uv/) package manager and requires
 **Python 3.11 or newer**.
 
 ## From a clone
@@ -8,8 +8,8 @@ xDQC uses the [uv](https://docs.astral.sh/uv/) package manager and requires
 Clone the repository and sync the environment:
 
 ```bash
-git clone https://github.com/memQGit/xdqc.git
-cd xdqc
+git clone https://github.com/memQGit/dqc.git
+cd dqc
 uv sync
 ```
 
@@ -19,17 +19,17 @@ KaHyPar) into a project virtual environment. Run any command inside that
 environment with `uv run`, for example:
 
 ```bash
-uv run python -c "import xdqc; print(xdqc.__all__)"
+uv run python -c "import memq_dqc; print(memq_dqc.__all__)"
 ```
 
 ## As a dependency
 
-To use xDQC inside another project:
+To use DQC inside another project:
 
 ```bash
-uv add xdqc
+uv add memq-dqc
 # or, with pip:
-pip install xdqc
+pip install memq-dqc
 ```
 
 ## Windows support
@@ -37,7 +37,7 @@ pip install xdqc
 KaHyPar publishes no Windows wheels, so it is skipped automatically when
 installing on Windows. Everything else installs and runs normally, and four
 of the five partitioners are unaffected — only
-[`HypergraphPartitioner`][xdqc.partition.HypergraphPartitioner] needs
+[`HypergraphPartitioner`][memq_dqc.partition.HypergraphPartitioner] needs
 KaHyPar, and it raises an `ImportError` explaining the situation if called.
 On Linux and macOS all five partitioners are available by default.
 
@@ -46,5 +46,5 @@ On Linux and macOS all five partitioners are available by default.
 The `dev` dependency group adds the tooling used for linting, type checking,
 tests, and building this documentation site (Ruff, pyright, pytest, tox, and
 MkDocs). It is installed by default with `uv sync`. See the
-[Contributing](https://github.com/memQGit/xdqc/blob/main/CONTRIBUTING.md)
+[Contributing](https://github.com/memQGit/dqc/blob/main/CONTRIBUTING.md)
 guide for the full check suite.

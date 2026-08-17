@@ -1,7 +1,7 @@
-# xdqc scheduling-instance API (for external schedulers)
+# memq_dqc scheduling-instance API (for external schedulers)
 
 ## Purpose
-`xdqc` compiles a quantum circuit + network topology into a **distributed**
+`memq_dqc` compiles a quantum circuit + network topology into a **distributed**
 circuit. This API exposes the result as a single, versioned, JSON-persistable
 **scheduling instance** containing everything an external discrete-event
 simulator or RL scheduler needs: the distributed operation DAG, a deterministic
@@ -12,14 +12,14 @@ compiler state — it round-trips through JSON losslessly.
 The API is in-process Python. There are no HTTP endpoints. It imports no RL
 framework (no Gymnasium/PyTorch).
 
-Install `xdqc` (`pip install xdqc` / `uv add xdqc`); import as
-`xdqc`.
+Install `memq_dqc` (`pip install memq-dqc` / `uv add memq_dqc`); import as
+`memq_dqc`.
 
 ## Import surface
 Everything below is importable from the top-level package:
 
 ```python
-from xdqc import (
+from memq_dqc import (
     compile_scheduling_instance,
     compute_scheduling_source_fingerprint,
     compile_scheduling_batch,
@@ -34,7 +34,7 @@ from xdqc import (
 )
 
 # Record types + constant live under the scheduler subpackage:
-from xdqc.scheduler import (
+from memq_dqc.scheduler import (
     SchedulingOperation,
     SchedulingDependency,
     SchedulingResource,
@@ -49,7 +49,7 @@ from xdqc.scheduler import (
 - **`circuit`** (`ProgramInput`): a parsed `openqasm3.ast.Program`, **or** a path
   to a `.qasm`/`.qasm3` file (`str`/`os.PathLike`), **or** inline OpenQASM 3
   source text.
-- **`topology`** (`NetworkInput`): a `xdqc.network.NetworkGraph`, **or** a
+- **`topology`** (`NetworkInput`): a `memq_dqc.network.NetworkGraph`, **or** a
   path to its `.json` description.
 
 ---
@@ -112,7 +112,7 @@ profile's, or leave it `None` to keep it:
 | `epr_lifetime` | `entanglement_gen.<sel>.epr_lifetime` | 50.0 µs |
 
 ```python
-from xdqc import (
+from memq_dqc import (
     SchedulerHardwareProfile,
     SchedulingCompileOptions,
     compile_scheduling_instance,
@@ -154,7 +154,7 @@ Immutable dataclass. Fields:
 - `schema_version: int` — currently `1` (== `SCHEDULING_INSTANCE_SCHEMA_VERSION`)
 - `instance_id: str` — deterministic, derived from the fingerprint
   (`"inst-<16 hex>"`)
-- `compiler_version: str` — xdqc version that produced it
+- `compiler_version: str` — memq_dqc version that produced it
 - `source_fingerprint: str` — SHA-256 of normalized inputs+options+profile+schema
   version
 - `time_unit: str` — `"microseconds"`
@@ -342,7 +342,7 @@ inst = c.to_scheduling_instance(hardware_profile=None)
 ## 9. Minimal RL-loop usage sketch
 
 ```python
-from xdqc import compile_scheduling_instance
+from memq_dqc import compile_scheduling_instance
 
 inst = compile_scheduling_instance("qft.qasm", "net.json")
 

@@ -20,22 +20,22 @@ import networkx as nx
 import pytest
 from openqasm3 import ast
 
-from xdqc import Partitioner
-from xdqc.circuit.dag import (
+from memq_dqc import Partitioner
+from memq_dqc.circuit.dag import (
     DistributedCircuitDAG,
     annotated_dag_to_json,
     build_annotated_dag,
 )
-from xdqc.circuit.dag.annotated import (
+from memq_dqc.circuit.dag.annotated import (
     _assign_group_ids,
     _circuit_qubit_to_dict,
     _op_type,
     _physical_qubit_to_dict,
     _split_register,
 )
-from xdqc.circuit.op import Op
-from xdqc.network import PhysicalQubit
-from xdqc.preprocessing.qasm.types import CircuitQubit
+from memq_dqc.circuit.op import Op
+from memq_dqc.network import PhysicalQubit
+from memq_dqc.preprocessing.qasm.types import CircuitQubit
 
 
 def _q(register_name: str, index: int) -> CircuitQubit:
@@ -432,7 +432,7 @@ def test_end_to_end_local_only(
 def test_compiler_forwarding_matches_partitioner(
     simple1_circuit_path, three_comp_one_comm_x2_network_path
 ) -> None:
-    from xdqc import Compiler
+    from memq_dqc import Compiler
 
     compiler = Compiler(
         simple1_circuit_path,

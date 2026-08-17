@@ -20,19 +20,19 @@ import networkx as nx
 import pytest
 from openqasm3 import ast
 
-import xdqc.scheduler.schedule as schedule_module
-from xdqc.circuit import DistributedCircuit
-from xdqc.circuit.dag import DistributedCircuitDAG
-from xdqc.circuit.op import Op
-from xdqc.preprocessing.qasm.types import CircuitQubit
-from xdqc.scheduler import (
+import memq_dqc.scheduler.schedule as schedule_module
+from memq_dqc.circuit import DistributedCircuit
+from memq_dqc.circuit.dag import DistributedCircuitDAG
+from memq_dqc.circuit.op import Op
+from memq_dqc.preprocessing.qasm.types import CircuitQubit
+from memq_dqc.scheduler import (
     DESLinkFIFOScheduler,
     SchedulerHardwareProfile,
     des_link_critical_path_schedule,
     des_link_fifo_schedule,
     des_link_shortest_duration_schedule,
 )
-from xdqc.scheduler.des_link_scheduler import (
+from memq_dqc.scheduler.des_link_scheduler import (
     _build_catent_groups,
     _canonical_link_key,
     _LinkState,

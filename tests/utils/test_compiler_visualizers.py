@@ -16,12 +16,12 @@ from pathlib import Path
 
 import pytest
 
-from xdqc.circuit import Circuit
-from xdqc.network import NetworkGraph
-from xdqc.partition import Partitioner
-from xdqc.partition.partitioner import QPU
-from xdqc.preprocessing.qasm.io import load_qasm_program
-from xdqc.visualization import (
+from memq_dqc.circuit import Circuit
+from memq_dqc.network import NetworkGraph
+from memq_dqc.partition import Partitioner
+from memq_dqc.partition.partitioner import QPU
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
+from memq_dqc.visualization import (
     SvgDashboardPanel,
     SvgDashboardSection,
     SvgDocument,

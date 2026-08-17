@@ -16,28 +16,28 @@ import networkx as nx
 import pytest
 from openqasm3 import ast
 
-import xdqc.scheduler.schedule as schedule_module
-from xdqc.builder import extract_distributed_circuit
-from xdqc.circuit import DistributedCircuit
-from xdqc.circuit.op import Op
-from xdqc.network import NetworkGraph
-from xdqc.partition import Partitioner
-from xdqc.partition.partitioner import QPU, BasePartitioner
-from xdqc.preprocessing.qasm.io import load_qasm_program
-from xdqc.preprocessing.qasm.types import CircuitQubit
-from xdqc.scheduler import (
+import memq_dqc.scheduler.schedule as schedule_module
+from memq_dqc.builder import extract_distributed_circuit
+from memq_dqc.circuit import DistributedCircuit
+from memq_dqc.circuit.op import Op
+from memq_dqc.network import NetworkGraph
+from memq_dqc.partition import Partitioner
+from memq_dqc.partition.partitioner import QPU, BasePartitioner
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
+from memq_dqc.preprocessing.qasm.types import CircuitQubit
+from memq_dqc.scheduler import (
     DESLinkCriticalPathScheduler,
     DESLinkShortestDurationScheduler,
     OperationSchedule,
     Scheduler,
 )
-from xdqc.scheduler.des_link_scheduler import (
+from memq_dqc.scheduler.des_link_scheduler import (
     _LinkState,
     _PendingLinkRequest,
     _RemoteLinkRequest,
     _RemoteRequest,
 )
-from xdqc.scheduler.schedule import (
+from memq_dqc.scheduler.schedule import (
     SchedulerHardwareProfile,
     SchedulerTimingModel,
 )

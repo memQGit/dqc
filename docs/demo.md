@@ -3,14 +3,14 @@
 This walkthrough covers the **entire** memQ distributed-compilation workflow —
 compile, verify, schedule — and shows just how little code it takes. It mirrors
 the runnable notebook at
-[`demo/demo.ipynb`](https://github.com/memQGit/xdqc/blob/main/demo/demo.ipynb);
+[`demo/demo.ipynb`](https://github.com/memQGit/dqc/blob/main/demo/demo.ipynb);
 run that notebook to reproduce the outputs interactively.
 
 The whole workflow is driven by two objects — and they are the only things we
 import:
 
 ```python
-from xdqc import Compiler, Scheduler
+from memq_dqc import Compiler, Scheduler
 ```
 
 ## 1. Inputs

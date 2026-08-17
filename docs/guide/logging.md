@@ -8,9 +8,9 @@ The main workflow APIs support per-call verbosity control:
   summaries, and mapping details.
 
 ```python
-from xdqc.partition import Partitioner
-from xdqc.builder import extract_distributed_circuit
-from xdqc.verify import verify_distributed_circuit
+from memq_dqc.partition import Partitioner
+from memq_dqc.builder import extract_distributed_circuit
+from memq_dqc.verify import verify_distributed_circuit
 
 partitioner = Partitioner("network.json", "circuit.qasm")
 partitioner.run(verbosity="info")
@@ -26,14 +26,14 @@ is_valid = verify_distributed_circuit(
 
 ## Advanced control
 
-For finer control, configure the standard Python logger named `xdqc`:
+For finer control, configure the standard Python logger named `memq_dqc`:
 
 ```python
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
-logging.getLogger("xdqc").setLevel(logging.DEBUG)
+logging.getLogger("memq_dqc").setLevel(logging.DEBUG)
 ```
 
-This integrates xDQC's output with any logging setup your own application
+This integrates DQC's output with any logging setup your own application
 already uses.

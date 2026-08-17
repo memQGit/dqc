@@ -1,6 +1,6 @@
 # Workflow & Architecture
 
-xDQC turns a circuit and a network into a distributed, schedulable program.
+DQC turns a circuit and a network into a distributed, schedulable program.
 This page describes the pipeline and the module layout behind it.
 
 ## The pipeline
@@ -16,21 +16,21 @@ OpenQASM circuit + network topology
 ```
 
 1. **Load** — OpenQASM is loaded from disk
-   (`xdqc.preprocessing.qasm.io.load_qasm_program`).
+   (`memq_dqc.preprocessing.qasm.io.load_qasm_program`).
 2. **Clean** — statements are cleaned into lightweight structures
-   (`xdqc.preprocessing.qasm`).
+   (`memq_dqc.preprocessing.qasm`).
 3. **Build the DAG** — circuit operations are assembled into a circuit DAG
-   (`xdqc.circuit.CircuitDAG`, built from `xdqc.circuit.Op` and
-   `xdqc.circuit.Layer`).
+   (`memq_dqc.circuit.CircuitDAG`, built from `memq_dqc.circuit.Op` and
+   `memq_dqc.circuit.Layer`).
 4. **Partition** — the `Partitioner` assigns logical qubits to QPUs; the
    `Compiler` front end drives this for you (see
    [Partitioning Algorithms](partitioning.md)).
 5. **Reconstruct** — inter-QPU gates are routed and the distributed circuit is
-   extracted (`xdqc.builder.extract_distributed_circuit`), inserting the
+   extracted (`memq_dqc.builder.extract_distributed_circuit`), inserting the
    network primitives (cat-entanglement and remote gates).
 6. **Verify** — the distributed circuit is rewritten to an equivalent
    monolithic circuit and both are simulated and compared
-   (`xdqc.verify.verify_distributed_circuit`).
+   (`memq_dqc.verify.verify_distributed_circuit`).
 7. **Schedule** — the `Scheduler` lays the distributed operations on a hardware
    timeline, respecting data dependencies, communication-qubit availability,
    and per-operation durations, aiming to minimize the **makespan**.
@@ -49,7 +49,7 @@ The scheduler samples `N` directly and schedules one EPR-ready event at
 `current_time + N * cycle_time`. This is distributionally identical to
 processing failed attempts one at a time, but its host runtime does not grow
 with the potentially very large number of failed cycles. A seed still makes a
-run deterministic; exact seeded schedules may differ across xdqc versions if
+run deterministic; exact seeded schedules may differ across memq_dqc versions if
 the random-sampling implementation changes.
 
 The main workflow APIs can emit progress, timing, and debug diagnostics via the
@@ -60,27 +60,27 @@ The main workflow APIs can emit progress, timing, and debug diagnostics via the
 
 | Package | Responsibility |
 | --- | --- |
-| `xdqc.preprocessing.qasm` | Load and clean OpenQASM; extraction and IO helpers. |
-| `xdqc.circuit` | Circuit representation: `Op` (`op.py`), `Layer` (`layer.py`), `Circuit` (`circuit.py`), and the DAG builders in the `dag/` subpackage (`mono`, `distributed`, `annotated`, `routing`, `remap`, `entanglement`, `swap_builders`). |
-| `xdqc.network` | Network topology: `NetworkGraph`, `PhysicalQubit`, and config builders/validators. |
-| `xdqc.partition` | Partitioning strategies and the `Partitioner` façade. |
-| `xdqc.builder` | Distributed-circuit extraction (`circuit_extractor.py`, `extract_utils.py`). |
-| `xdqc.verify` | Correctness checking of distributed circuits. |
-| `xdqc.scheduler` | Schedulers (FIFO, discrete-event link schedulers) and scheduling-instance record types. |
-| `xdqc.visualization` | SVG/matplotlib views of circuits, partitions, and schedules. |
-| `xdqc.utils` | Shared circuit and partition helpers. |
+| `memq_dqc.preprocessing.qasm` | Load and clean OpenQASM; extraction and IO helpers. |
+| `memq_dqc.circuit` | Circuit representation: `Op` (`op.py`), `Layer` (`layer.py`), `Circuit` (`circuit.py`), and the DAG builders in the `dag/` subpackage (`mono`, `distributed`, `annotated`, `routing`, `remap`, `entanglement`, `swap_builders`). |
+| `memq_dqc.network` | Network topology: `NetworkGraph`, `PhysicalQubit`, and config builders/validators. |
+| `memq_dqc.partition` | Partitioning strategies and the `Partitioner` façade. |
+| `memq_dqc.builder` | Distributed-circuit extraction (`circuit_extractor.py`, `extract_utils.py`). |
+| `memq_dqc.verify` | Correctness checking of distributed circuits. |
+| `memq_dqc.scheduler` | Schedulers (FIFO, discrete-event link schedulers) and scheduling-instance record types. |
+| `memq_dqc.visualization` | SVG/matplotlib views of circuits, partitions, and schedules. |
+| `memq_dqc.utils` | Shared circuit and partition helpers. |
 
 ## Public entry points
 
-- `xdqc.Compiler` — recommended front end (compile → verify).
-- `xdqc.Scheduler` — build an execution schedule from a compiler or a
+- `memq_dqc.Compiler` — recommended front end (compile → verify).
+- `memq_dqc.Scheduler` — build an execution schedule from a compiler or a
   scheduling instance.
-- `xdqc.Partitioner` — direct control over the partitioning step.
-- `xdqc.get_verification_artifacts` — one call returning both circuits and
+- `memq_dqc.Partitioner` — direct control over the partitioning step.
+- `memq_dqc.get_verification_artifacts` — one call returning both circuits and
   their DAGs.
-- `xdqc.compile_scheduling_instance` — a versioned, JSON-persistable
+- `memq_dqc.compile_scheduling_instance` — a versioned, JSON-persistable
   scheduling instance for external schedulers (see the
   [Scheduling-Instance API](scheduling-instance-api.md)).
 
 For the full symbol-level reference, see the
-[API Reference](../reference/xdqc/index.md).
+[API Reference](../reference/memq_dqc/index.md).

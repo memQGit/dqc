@@ -19,16 +19,16 @@ import networkx as nx
 import pytest
 from openqasm3 import ast
 
-from xdqc import (
+from memq_dqc import (
     Compiler,
     Scheduler,
     SchedulingCompileOptions,
     VerificationArtifacts,
     get_verification_artifacts,
 )
-from xdqc.circuit import DistributedCircuit
-from xdqc.network import NetworkGraph
-from xdqc.partition import Partitioner
+from memq_dqc.circuit import DistributedCircuit
+from memq_dqc.network import NetworkGraph
+from memq_dqc.partition import Partitioner
 
 
 def test_compiler_compiles_and_exposes_distributed_circuit(
@@ -131,7 +131,7 @@ def test_compiler_verify_forwards_to_partitioner(
     three_comp_one_comm_x2_network_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import xdqc.verify as verify_pkg
+    import memq_dqc.verify as verify_pkg
 
     compiler = Compiler(
         simple1_circuit_path,

@@ -1,11 +1,11 @@
 # Visualization
 
-`xdqc.visualization` provides SVG- and matplotlib-based views of the
+`memq_dqc.visualization` provides SVG- and matplotlib-based views of the
 compilation output — useful for inspecting how a circuit was partitioned and
 scheduled.
 
 ```python
-from xdqc.visualization import (
+from memq_dqc.visualization import (
     plot_distributed_circuit,   # gate layout across QPUs
     plot_partition_flow,        # qubit migration across QPUs
     plot_partition_heatmap,     # QPU assignment heatmap per window
@@ -38,5 +38,5 @@ data qubits (`q…`) carry the local gates and measurements.
 `write_svg_dashboard_html` bundles multiple panels into a single standalone
 HTML viewer — a convenient artifact to share a full compilation result without
 running any code. See the
-[`xdqc.visualization` API reference](../reference/xdqc/visualization/index.md) for the
+[`memq_dqc.visualization` API reference](../reference/memq_dqc/visualization/index.md) for the
 full list of plotting functions and the `SvgDocument` primitives.

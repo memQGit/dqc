@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from xdqc import (
+from memq_dqc import (
     SchedulingCompileRequest,
     compile_scheduling_batch,
     scheduling_instance_to_json,
