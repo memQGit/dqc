@@ -33,6 +33,17 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Physics",
 ]
 
+[project.optional-dependencies]
+# The network builder is an optional local web tool, not part of the
+# compiler. Flask stays out of the base install so that importing xdqc
+# never pulls in a web stack.
+builder = [
+    "flask>=3.0,<4",
+]
+
+[project.scripts]
+network-builder = "xdqc.network_builder.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/memQGit/xdqc"
 Repository = "https://github.com/memQGit/xdqc"
@@ -62,6 +73,9 @@ docs = [
 ]
 dev = [
     { include-group = "docs" },
+    # Mirrors the `builder` extra so `uv run network-builder` works from a
+    # checkout without asking for extras explicitly.
+    "flask>=3.0,<4",
     "notebook>=7.5.3",
     "pre-commit>=4.5.1",
     "pydoclint>=0.8.3",
