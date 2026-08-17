@@ -44,6 +44,7 @@ Genesis/
 genesis/
 .agents/
 examples/
+RELEASE_TODO.md
 
 # Benchmarking suite — kept local-only, not shipped to GitHub
 benchmarking/

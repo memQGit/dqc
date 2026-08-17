@@ -18,7 +18,7 @@ from pathlib import Path
 
 import mkdocs_gen_files
 
-root = Path(__file__).parent
+root = Path(__file__).parent.parent
 demo_dir = root / "demo"
 
 # Reading order shown in the site nav, mirroring demo/README.md.
