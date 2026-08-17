@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from xdqc import (
+from memq_dqc import (
     default_settings_path,
     load_settings,
     load_settings_file,

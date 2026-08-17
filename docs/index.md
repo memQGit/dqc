@@ -1,4 +1,4 @@
-# xDQC — Extensible Distributed Quantum Compiler
+# DQC — Distributed Quantum Compiler
 
 <div class="memq-hero" markdown>
 
@@ -9,9 +9,9 @@ execution or further analysis.
 
 </div>
 
-**xDQC** stands for *Extensible Distributed Quantum Compiler*, and the name
-states the design goal: every stage of the pipeline — partitioning, routing,
-scheduling, visualization — is a swappable component. Researchers can run the
+**DQC** (*Distributed Quantum Compiler*) is built around one design goal:
+every stage of the pipeline — partitioning, routing, scheduling,
+visualization — is a swappable component. Researchers can run the
 full compilation workflow in a few lines of code, drop in their own
 partitioning algorithm, and benchmark it against the built-in strategies
 across circuits and network topologies.
@@ -31,7 +31,7 @@ OpenQASM circuit + network topology
 The whole pipeline is driven by two objects — `Compiler` and `Scheduler`:
 
 ```python
-from xdqc import Compiler, Scheduler
+from memq_dqc import Compiler, Scheduler
 
 # Compile: partition across QPUs and reconstruct a distributed circuit.
 compiler = Compiler("circuit.qasm", "network.json", algo="interaction")
@@ -56,7 +56,7 @@ print("makespan:", scheduler.schedule.makespan)
   compile and verify your first circuit.
 - :material-sitemap: **[Workflow & Architecture](guide/workflow.md)** — how the
   compile → verify → schedule pipeline fits together.
-- :material-book-open-variant: **[API Reference](reference/xdqc/index.md)** —
+- :material-book-open-variant: **[API Reference](reference/memq_dqc/index.md)** —
   auto-generated from the source docstrings.
 
 </div>

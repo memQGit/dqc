@@ -21,8 +21,8 @@ from pathlib import Path
 
 import pytest
 
-from xdqc import compile_scheduling_instance
-from xdqc.scheduler import (
+from memq_dqc import compile_scheduling_instance
+from memq_dqc.scheduler import (
     scheduling_instance_from_json,
     scheduling_instance_to_json,
 )

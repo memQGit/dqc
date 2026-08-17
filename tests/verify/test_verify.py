@@ -20,12 +20,12 @@ import openqasm3
 import pytest
 from qiskit import QuantumCircuit
 
-from xdqc.verify import (
+from memq_dqc.verify import (
     manual_cost_verification,
     verify_distributed_circuit,
 )
-from xdqc.verify import verify as verify_module
-from xdqc.verify.verify import dist_to_mono_circuit
+from memq_dqc.verify import verify as verify_module
+from memq_dqc.verify.verify import dist_to_mono_circuit
 
 # TODO: need more tests!
 
@@ -208,13 +208,15 @@ def test_verify_distributed_circuit_quiet_emits_no_logs(
         verify_module, "hellinger_fidelity", lambda _orig, _mono: 1.0
     )
 
-    caplog.set_level(logging.DEBUG, logger="xdqc")
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
     assert verify_distributed_circuit(
         "orig.qasm", "dist.qasm", method="sampling", shots=10
     )
 
     records = [
-        record for record in caplog.records if record.name.startswith("xdqc")
+        record
+        for record in caplog.records
+        if record.name.startswith("memq_dqc")
     ]
     assert records == []
 
@@ -240,7 +242,7 @@ def test_verify_distributed_circuit_info_logs_success(
         verify_module, "hellinger_fidelity", lambda _orig, _mono: 0.95
     )
 
-    caplog.set_level(logging.DEBUG, logger="xdqc")
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
     assert verify_distributed_circuit(
         "orig.qasm",
         "dist.qasm",
@@ -253,7 +255,7 @@ def test_verify_distributed_circuit_info_logs_success(
     messages = [
         record.getMessage()
         for record in caplog.records
-        if record.name.startswith("xdqc")
+        if record.name.startswith("memq_dqc")
     ]
     assert any(
         "Starting distributed circuit verification: method=sampling "
@@ -284,7 +286,7 @@ def test_verify_distributed_circuit_debug_logs_failure_details(
         verify_module, "hellinger_fidelity", lambda _orig, _mono: 0.5
     )
 
-    caplog.set_level(logging.DEBUG, logger="xdqc")
+    caplog.set_level(logging.DEBUG, logger="memq_dqc")
     assert not verify_distributed_circuit(
         "orig.qasm",
         "dist.qasm",
@@ -297,7 +299,7 @@ def test_verify_distributed_circuit_debug_logs_failure_details(
     messages = [
         record.getMessage()
         for record in caplog.records
-        if record.name.startswith("xdqc")
+        if record.name.startswith("memq_dqc")
     ]
     assert any("Loaded original circuit in" in msg for msg in messages)
     assert any("Computed fidelity in" in msg for msg in messages)

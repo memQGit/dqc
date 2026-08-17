@@ -14,7 +14,7 @@
 
 from types import SimpleNamespace
 
-from xdqc.circuit.dag.link_selector import LinkSelector
+from memq_dqc.circuit.dag.link_selector import LinkSelector
 
 
 def _qubit(label):

@@ -41,11 +41,11 @@ $t_c$ and per-attempt success probability $p$.
 $t_{1q}$, $t_{2q}$, $t_{\mathrm{meas}}$, $r$, and the EPR lifetime are the
 primitive parameters; every duration above is derived from them. They default
 to the modality and entanglement profile selected in
-`src/xdqc/settings.toml`, and each can be overridden per compile or per
+`src/memq_dqc/settings.toml`, and each can be overridden per compile or per
 scheduler run on `SchedulerHardwareProfile`:
 
 ```python
-from xdqc import SchedulerHardwareProfile
+from memq_dqc import SchedulerHardwareProfile
 
 profile = SchedulerHardwareProfile.sr_trapped_ion(
     two_qubit_gate_time=120.0,
@@ -62,7 +62,7 @@ $t_c$ (`des_entanglement_time_step`) remains global to `settings.toml`.
 ## FIFO
 
 File:
-`src/xdqc/scheduler/fifo.py`
+`src/memq_dqc/scheduler/fifo.py`
 
 Class:
 `FIFOScheduler`
@@ -99,7 +99,7 @@ retries or expiration.
 ## DES Link FIFO
 
 File:
-`src/xdqc/scheduler/des_link_fifo.py`
+`src/memq_dqc/scheduler/des_link_fifo.py`
 
 Class:
 `DESLinkFIFOScheduler`
@@ -133,7 +133,7 @@ regeneration, but it resolves link contention using pure FIFO order.
 ## DES Link Shortest Duration
 
 File:
-`src/xdqc/scheduler/des_link_shortest_duration.py`
+`src/memq_dqc/scheduler/des_link_shortest_duration.py`
 
 Class:
 `DESLinkShortestDurationScheduler`
@@ -164,7 +164,7 @@ reduce head-of-line blocking on busy links.
 ## DES Link Critical Path
 
 File:
-`src/xdqc/scheduler/des_link_critical_path.py`
+`src/memq_dqc/scheduler/des_link_critical_path.py`
 
 Class:
 `DESLinkCriticalPathScheduler`

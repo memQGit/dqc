@@ -1,7 +1,7 @@
 [project]
-name = "xdqc"
+name = "memq-dqc"
 version = "0.1.0"
-description = "xDQC — Extensible Distributed Quantum Compiler"
+description = "DQC — Distributed Quantum Compiler"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -35,19 +35,19 @@ classifiers = [
 
 [project.optional-dependencies]
 # The network builder is an optional local web tool, not part of the
-# compiler. Flask stays out of the base install so that importing xdqc
+# compiler. Flask stays out of the base install so that importing memq_dqc
 # never pulls in a web stack.
 builder = [
     "flask>=3.0,<4",
 ]
 
 [project.scripts]
-network-builder = "xdqc.network_builder.cli:main"
+network-builder = "memq_dqc.network_builder.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/memQGit/xdqc"
-Repository = "https://github.com/memQGit/xdqc"
-Issues = "https://github.com/memQGit/xdqc/issues"
+Homepage = "https://github.com/memQGit/dqc"
+Repository = "https://github.com/memQGit/dqc"
+Issues = "https://github.com/memQGit/dqc/issues"
 
 [build-system]
 requires = ["uv_build>=0.9.24,<0.12.0"]

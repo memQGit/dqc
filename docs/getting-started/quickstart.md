@@ -11,7 +11,7 @@ working examples.
 accepts file paths (as here), in-memory objects, or inline QASM source.
 
 ```python
-from xdqc import Compiler
+from memq_dqc import Compiler
 
 # Partition the circuit across QPUs and reconstruct a distributed circuit.
 compiler = Compiler("circuit.qasm", "network.json", algo="interaction")
@@ -32,9 +32,9 @@ print("verified:", compiler.verify(shots=20000))
 control over the partitioning step, use it on its own:
 
 ```python
-from xdqc.partition import Partitioner
-from xdqc.builder import extract_distributed_circuit
-from xdqc.verify import verify_distributed_circuit
+from memq_dqc.partition import Partitioner
+from memq_dqc.builder import extract_distributed_circuit
+from memq_dqc.verify import verify_distributed_circuit
 
 partitioner = Partitioner("network.json", "circuit.qasm")
 partitioner.run()
@@ -46,8 +46,8 @@ is_valid = verify_distributed_circuit("circuit.qasm", "distributed.qasm")
 `Partitioner` accepts either file paths or pre-loaded objects:
 
 ```python
-from xdqc.network import NetworkGraph
-from xdqc.preprocessing.qasm.io import load_qasm_program
+from memq_dqc.network import NetworkGraph
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
 
 network = NetworkGraph("network.json")
 program = load_qasm_program("circuit.qasm")
@@ -60,8 +60,8 @@ For one call that returns both circuits and their DAGs — handy for analysis an
 verification — use `get_verification_artifacts`:
 
 ```python
-from xdqc import get_verification_artifacts
-from xdqc.verify import verify_distributed_circuit
+from memq_dqc import get_verification_artifacts
+from memq_dqc.verify import verify_distributed_circuit
 
 artifacts = get_verification_artifacts("circuit.qasm", "network.json")
 

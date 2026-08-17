@@ -17,12 +17,12 @@ import dataclasses
 
 import pytest
 
-from xdqc import (
+from memq_dqc import (
     Compiler,
     SchedulingInstance,
     validate_scheduling_instance,
 )
-from xdqc.partition.partitioner import QPU
+from memq_dqc.partition.partitioner import QPU
 
 
 def _copy_schedule(
@@ -230,12 +230,12 @@ def test_recompile_leaves_plain_fingerprint_unchanged(
     # Regression guard: folding a placement in must not alter the fingerprint
     # of the normal (no-injection) compile path, i.e. passing ``placement``
     # as ``None`` is byte-identical to omitting it entirely.
-    from xdqc.compiler import _fingerprint_from_parts
-    from xdqc.partition.partitioner import (
+    from memq_dqc.compiler import _fingerprint_from_parts
+    from memq_dqc.partition.partitioner import (
         _resolve_network_input,
         _resolve_program_input,
     )
-    from xdqc.scheduler.instance import SchedulingCompileOptions
+    from memq_dqc.scheduler.instance import SchedulingCompileOptions
 
     network = _resolve_network_input(three_comp_one_comm_x2_network_path)
     program = _resolve_program_input(simple1_circuit_path)

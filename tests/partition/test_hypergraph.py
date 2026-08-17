@@ -19,12 +19,12 @@ from pathlib import Path
 import pytest
 from openqasm3 import ast
 
-from xdqc.circuit.op import Op
-from xdqc.network import NetworkGraph
-from xdqc.partition import Partitioner
-from xdqc.partition.hypergraph import hypergraph as hypergraph_module
-from xdqc.preprocessing.qasm.io import load_qasm_program
-from xdqc.preprocessing.qasm.types import CircuitQubit
+from memq_dqc.circuit.op import Op
+from memq_dqc.network import NetworkGraph
+from memq_dqc.partition import Partitioner
+from memq_dqc.partition.hypergraph import hypergraph as hypergraph_module
+from memq_dqc.preprocessing.qasm.io import load_qasm_program
+from memq_dqc.preprocessing.qasm.types import CircuitQubit
 
 
 def _op(op_id: int, name: str, *qubit_indices: int) -> Op:

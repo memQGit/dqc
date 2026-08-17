@@ -20,10 +20,10 @@ from collections.abc import Callable
 import pytest
 from openqasm3 import ast
 
-from xdqc import SchedulerHardwareProfile, load_settings
-from xdqc.circuit import Op
-from xdqc.preprocessing.qasm.types import CircuitQubit
-from xdqc.scheduler.schedule import (
+from memq_dqc import SchedulerHardwareProfile, load_settings
+from memq_dqc.circuit import Op
+from memq_dqc.preprocessing.qasm.types import CircuitQubit
+from memq_dqc.scheduler.schedule import (
     _MEASUREMENT_TIME,
     _load_scheduler_timing_model,
     _operation_duration,

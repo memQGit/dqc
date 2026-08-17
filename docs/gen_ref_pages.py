@@ -15,7 +15,7 @@
 """Generate per-module API reference pages for the docs site.
 
 This script is run by ``mkdocs-gen-files`` at build time. It walks the
-``src/xdqc`` package, writes one Markdown stub per module containing a
+``src/memq_dqc`` package, writes one Markdown stub per module containing a
 single ``mkdocstrings`` autodoc directive, and emits a ``SUMMARY.md`` nav
 consumed by ``mkdocs-literate-nav``. The generated files live in a virtual
 ``reference/`` tree and are never written to disk.

@@ -17,8 +17,8 @@ import json
 
 import pytest
 
-from xdqc import Partitioner, Scheduler
-from xdqc.scheduler import (
+from memq_dqc import Partitioner, Scheduler
+from memq_dqc.scheduler import (
     EntanglementGeneration,
     OperationSchedule,
     ScheduledOperation,

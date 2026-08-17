@@ -15,8 +15,8 @@
 import networkx as nx
 import pytest
 
-from xdqc.circuit import Circuit
-from xdqc.visualization import (
+from memq_dqc.circuit import Circuit
+from memq_dqc.visualization import (
     build_dag_networkx_graph,
     plot_distributed_dag,
 )

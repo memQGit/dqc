@@ -1498,6 +1498,92 @@ wheels = [
 ]
 
 [[package]]
+name = "memq-dqc"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "kahypar", marker = "sys_platform != 'win32'" },
+    { name = "matplotlib" },
+    { name = "networkx" },
+    { name = "openqasm3", extra = ["parser"] },
+    { name = "pylatexenc" },
+    { name = "qiskit" },
+    { name = "qiskit-aer" },
+]
+
+[package.optional-dependencies]
+builder = [
+    { name = "flask" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "flask" },
+    { name = "mkdocs-gen-files" },
+    { name = "mkdocs-jupyter" },
+    { name = "mkdocs-literate-nav" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extra = ["python"] },
+    { name = "notebook" },
+    { name = "pre-commit" },
+    { name = "pydoclint" },
+    { name = "pyright", extra = ["nodejs"] },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "qiskit" },
+    { name = "qiskit-qasm3-import" },
+    { name = "ruff" },
+    { name = "tox" },
+]
+docs = [
+    { name = "mkdocs-gen-files" },
+    { name = "mkdocs-jupyter" },
+    { name = "mkdocs-literate-nav" },
+    { name = "mkdocs-material" },
+    { name = "mkdocstrings", extra = ["python"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "flask", marker = "extra == 'builder'", specifier = ">=3.0,<4" },
+    { name = "kahypar", marker = "sys_platform != 'win32'", specifier = ">=1.3.7" },
+    { name = "matplotlib", specifier = ">=3.10.8" },
+    { name = "networkx", specifier = ">=3.6.1" },
+    { name = "openqasm3", extras = ["parser"], specifier = ">=1.0.1" },
+    { name = "pylatexenc", specifier = ">=2.10" },
+    { name = "qiskit", specifier = ">=2.3.0" },
+    { name = "qiskit-aer", specifier = ">=0.17.2" },
+]
+provides-extras = ["builder"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "flask", specifier = ">=3.0,<4" },
+    { name = "mkdocs-gen-files", specifier = ">=0.5.0" },
+    { name = "mkdocs-jupyter", specifier = ">=0.26.3" },
+    { name = "mkdocs-literate-nav", specifier = ">=0.6.1" },
+    { name = "mkdocs-material", specifier = ">=9.5.0" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.26.0" },
+    { name = "notebook", specifier = ">=7.5.3" },
+    { name = "pre-commit", specifier = ">=4.5.1" },
+    { name = "pydoclint", specifier = ">=0.8.3" },
+    { name = "pyright", extras = ["nodejs"], specifier = ">=1.1.408" },
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-cov", specifier = ">=7.0.0" },
+    { name = "qiskit", specifier = ">=1.0" },
+    { name = "qiskit-qasm3-import", specifier = ">=0.5" },
+    { name = "ruff", specifier = ">=0.14.11" },
+    { name = "tox", specifier = ">=4.25.0" },
+]
+docs = [
+    { name = "mkdocs-gen-files", specifier = ">=0.5.0" },
+    { name = "mkdocs-jupyter", specifier = ">=0.26.3" },
+    { name = "mkdocs-literate-nav", specifier = ">=0.6.1" },
+    { name = "mkdocs-material", specifier = ">=9.5.0" },
+    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.26.0" },
+]
+
+[[package]]
 name = "mergedeep"
 version = "1.3.4"
 source = { registry = "https://pypi.org/simple" }
@@ -3123,90 +3209,4 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/dd/b2/381be8cfdee792dd117872481b6e378f85c957dd7c5bca38897b08f765fd/werkzeug-3.1.8.tar.gz", hash = "sha256:9bad61a4268dac112f1c5cd4630a56ede601b6ed420300677a869083d70a4c44", size = 875852, upload-time = "2026-04-02T18:49:14.268Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/93/8c/2e650f2afeb7ee576912636c23ddb621c91ac6a98e66dc8d29c3c69446e1/werkzeug-3.1.8-py3-none-any.whl", hash = "sha256:63a77fb8892bf28ebc3178683445222aa500e48ebad5ec77b0ad80f8726b1f50", size = 226459, upload-time = "2026-04-02T18:49:12.72Z" },
-]
-
-[[package]]
-name = "xdqc"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "kahypar", marker = "sys_platform != 'win32'" },
-    { name = "matplotlib" },
-    { name = "networkx" },
-    { name = "openqasm3", extra = ["parser"] },
-    { name = "pylatexenc" },
-    { name = "qiskit" },
-    { name = "qiskit-aer" },
-]
-
-[package.optional-dependencies]
-builder = [
-    { name = "flask" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "flask" },
-    { name = "mkdocs-gen-files" },
-    { name = "mkdocs-jupyter" },
-    { name = "mkdocs-literate-nav" },
-    { name = "mkdocs-material" },
-    { name = "mkdocstrings", extra = ["python"] },
-    { name = "notebook" },
-    { name = "pre-commit" },
-    { name = "pydoclint" },
-    { name = "pyright", extra = ["nodejs"] },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "qiskit" },
-    { name = "qiskit-qasm3-import" },
-    { name = "ruff" },
-    { name = "tox" },
-]
-docs = [
-    { name = "mkdocs-gen-files" },
-    { name = "mkdocs-jupyter" },
-    { name = "mkdocs-literate-nav" },
-    { name = "mkdocs-material" },
-    { name = "mkdocstrings", extra = ["python"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "flask", marker = "extra == 'builder'", specifier = ">=3.0,<4" },
-    { name = "kahypar", marker = "sys_platform != 'win32'", specifier = ">=1.3.7" },
-    { name = "matplotlib", specifier = ">=3.10.8" },
-    { name = "networkx", specifier = ">=3.6.1" },
-    { name = "openqasm3", extras = ["parser"], specifier = ">=1.0.1" },
-    { name = "pylatexenc", specifier = ">=2.10" },
-    { name = "qiskit", specifier = ">=2.3.0" },
-    { name = "qiskit-aer", specifier = ">=0.17.2" },
-]
-provides-extras = ["builder"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "flask", specifier = ">=3.0,<4" },
-    { name = "mkdocs-gen-files", specifier = ">=0.5.0" },
-    { name = "mkdocs-jupyter", specifier = ">=0.26.3" },
-    { name = "mkdocs-literate-nav", specifier = ">=0.6.1" },
-    { name = "mkdocs-material", specifier = ">=9.5.0" },
-    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.26.0" },
-    { name = "notebook", specifier = ">=7.5.3" },
-    { name = "pre-commit", specifier = ">=4.5.1" },
-    { name = "pydoclint", specifier = ">=0.8.3" },
-    { name = "pyright", extras = ["nodejs"], specifier = ">=1.1.408" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-cov", specifier = ">=7.0.0" },
-    { name = "qiskit", specifier = ">=1.0" },
-    { name = "qiskit-qasm3-import", specifier = ">=0.5" },
-    { name = "ruff", specifier = ">=0.14.11" },
-    { name = "tox", specifier = ">=4.25.0" },
-]
-docs = [
-    { name = "mkdocs-gen-files", specifier = ">=0.5.0" },
-    { name = "mkdocs-jupyter", specifier = ">=0.26.3" },
-    { name = "mkdocs-literate-nav", specifier = ">=0.6.1" },
-    { name = "mkdocs-material", specifier = ">=9.5.0" },
-    { name = "mkdocstrings", extras = ["python"], specifier = ">=0.26.0" },
 ]

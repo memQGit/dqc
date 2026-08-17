@@ -1,7 +1,7 @@
 # Network Builder
 
 Writing a topology JSON file by hand gets tedious past a few QPUs. The
-**network builder** is a small local web app, shipped with xDQC, for drawing
+**network builder** is a small local web app, shipped with DQC, for drawing
 a network in the browser and exporting it as a topology file the compiler can
 load directly.
 
@@ -15,7 +15,7 @@ topology JSON of the kind described in
 The builder needs Flask, which ships as the optional `builder` extra:
 
 ```bash
-pip install "xdqc[builder]"
+pip install "memq-dqc[builder]"
 ```
 
 From a clone, `uv sync` already installs it. Either way, one command starts
@@ -63,7 +63,7 @@ a dozen topologies.
 
 *Generate Graph* renders a NetworkX preview of the current design. The preview
 is validated by the same
-[`NetworkGraph`][xdqc.network.NetworkGraph] the compiler uses, so if a network
+[`NetworkGraph`][memq_dqc.network.NetworkGraph] the compiler uses, so if a network
 renders here, it loads there — and if it is malformed, the error you see is
 the one the library would raise.
 
@@ -72,8 +72,8 @@ the one the library would raise.
 The exported file drops straight into the standard workflow:
 
 ```python
-from xdqc.compiler import Compiler
-from xdqc.network import NetworkGraph
+from memq_dqc.compiler import Compiler
+from memq_dqc.network import NetworkGraph
 
 network = NetworkGraph("my_network.json")
 compiler = Compiler("circuit.qasm", network)
@@ -83,7 +83,7 @@ See [Workflow & Architecture](workflow.md) for what happens next.
 
 ## Metadata reserved for future use
 
-The builder writes two fields that no xDQC algorithm reads today:
+The builder writes two fields that no DQC algorithm reads today:
 
 - **`coherenceTime`** (per qubit, microseconds) — set with the *Qubit
   Coherence* sliders.

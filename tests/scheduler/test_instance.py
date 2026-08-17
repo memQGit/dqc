@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from xdqc import compile_scheduling_instance
-from xdqc.scheduler.instance import (
+from memq_dqc import compile_scheduling_instance
+from memq_dqc.scheduler.instance import (
     SCHEDULING_INSTANCE_SCHEMA_VERSION,
     EPRDemand,
     EPRLinkAssignment,

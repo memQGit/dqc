@@ -18,7 +18,7 @@ from typing import cast
 
 import pytest
 
-from xdqc.network import (
+from memq_dqc.network import (
     CanonicalNetworkConfigBuilder,
     CanonicalNetworkConfigError,
     build_canonical_network_config,
@@ -27,7 +27,7 @@ from xdqc.network import (
 
 
 def test_canonical_config_submodule_is_importable() -> None:
-    module = import_module("xdqc.network.canonical_config")
+    module = import_module("memq_dqc.network.canonical_config")
 
     assert (
         module.CanonicalNetworkConfigBuilder is CanonicalNetworkConfigBuilder
