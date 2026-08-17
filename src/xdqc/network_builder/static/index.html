@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<!--
+Copyright 2026 memQ Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantum Network Builder</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="topbar">
+            <div class="brand">
+                <span class="brand-mark" aria-hidden="true"></span>
+                <span>Quantum Network Builder</span>
+            </div>
+            <div class="status" aria-live="polite">
+                <span id="mode-status">Click "Add Processor" to start</span>
+                <span id="selected-processor"></span>
+            </div>
+        </header>
+
+        <div class="workspace">
+            <aside class="tool-panel" aria-label="Network controls">
+                <section class="panel-section">
+                    <div class="section-title">Build</div>
+                    <div class="control-group">
+                        <label for="qpu-size">QPU size</label>
+                        <input type="number" id="qpu-size" min="1" max="64" value="4">
+                    </div>
+
+                    <div class="button-group action-grid">
+                        <button id="add-processor" class="btn primary">Add Processor</button>
+                        <button id="add-qubit" class="btn primary" disabled>Add Qubit</button>
+                        <button id="local-connect" class="btn">Local Connect</button>
+                        <button id="remote-connect" class="btn">Remote Connect</button>
+                        <button id="undo" class="btn">Undo</button>
+                        <button id="clear-all" class="btn danger">Clear All</button>
+                        <button id="export-network" class="btn success">Save As</button>
+                    </div>
+                </section>
+
+                <section class="panel-section bulk-generator">
+                    <div class="section-title">Generator</div>
+                    <div class="bulk-grid">
+                        <div class="control-group">
+                            <label for="bulk-comp-qubits">Computational qubits per QPU</label>
+                            <input type="number" id="bulk-comp-qubits" min="1" value="16">
+                        </div>
+                        <div class="control-group">
+                            <label for="bulk-qpu-count">Number of QPUs</label>
+                            <input type="number" id="bulk-qpu-count" min="1" value="4">
+                        </div>
+                        <div class="control-group">
+                            <label for="bulk-comm-qubits">Communication qubits per link</label>
+                            <input type="number" id="bulk-comm-qubits" min="0" value="2">
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button id="generate-homogeneous" class="btn success">Generate Homogeneous</button>
+                    </div>
+
+                    <div class="bulk-grid">
+                        <div class="control-group">
+                            <label for="preset-network-type">Preset topology</label>
+                            <select id="preset-network-type">
+                                <option value="ring-large">Ring Large</option>
+                                <option value="ring-small">Ring Small</option>
+                                <option value="ring-tiny">Ring Tiny</option>
+                                <option value="hub-large">Hub Large</option>
+                                <option value="hub-small">Hub Small</option>
+                                <option value="hub-tiny">Hub Tiny</option>
+                                <option value="all-to-all-large">All to All Large</option>
+                                <option value="all-to-all-small">All to All Small</option>
+                                <option value="all-to-all-tiny">All to All Tiny</option>
+                                <option value="grid-large">Grid Large</option>
+                                <option value="grid-small">Grid Small</option>
+                                <option value="grid-tiny">Grid Tiny</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="preset-grid-columns">Grid columns</label>
+                            <input type="number" id="preset-grid-columns" min="1" value="2">
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button id="generate-preset" class="btn success">Generate Preset Network</button>
+                    </div>
+
+                    <div class="helper-list">
+                        <p class="helper-text">Homogeneous export builds a line of identical QPUs.</p>
+                        <p class="helper-text">Preset exports use QPU count and grid columns when needed.</p>
+                        <p class="helper-text">Large 24/8, small 12/4, tiny 4/4 comp/comm per QPU.</p>
+                    </div>
+                </section>
+            </aside>
+
+            <main class="canvas-stage">
+                <div class="canvas-container" aria-label="Interactive network canvas">
+                    <svg id="network-canvas" width="1000" height="600" viewBox="0 0 1000 600">
+                        <defs>
+                            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#24212c" stroke-width="1"/>
+                            </pattern>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#grid)" />
+                    </svg>
+                </div>
+            </main>
+
+            <aside class="inspect-panel" aria-label="Network output">
+                <section class="graph-visualization">
+                    <div class="section-title">Graph</div>
+                    <div id="graph-container">
+                        <p>Generate a NetworkX view from the current topology.</p>
+                        <button id="generate-graph" class="btn">Generate Graph</button>
+                        <div id="graph-image" style="display: none;">
+                            <img id="graph-img" src="" alt="Network Graph">
+                        </div>
+                        <div id="graph-loading" style="display: none;">
+                            <p>Generating graph...</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="remote-link-panel">
+                    <div class="section-title">Remote Link Fidelity</div>
+                    <div id="remote-link-controls">
+                        <p>No inter-QPU links yet</p>
+                    </div>
+                </section>
+
+                <section class="qubit-coherence-panel">
+                    <div class="section-title">Qubit Coherence</div>
+                    <div class="coherence-legend" aria-hidden="true">
+                        <span>Low T2</span>
+                        <span class="coherence-ramp"></span>
+                        <span>High T2</span>
+                    </div>
+                    <div id="qubit-coherence-controls">
+                        <p>Add qubits to edit coherence time</p>
+                    </div>
+                </section>
+
+                <section class="network-info">
+                    <div class="section-title">Structure</div>
+                    <div id="network-details">
+                        <p>No network created yet</p>
+                    </div>
+                </section>
+            </aside>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
