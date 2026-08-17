@@ -1,7 +1,7 @@
 <p align="center">
     <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/memq-logo-white.png">
-        <img src="docs/assets/memq-logo.png" alt="memQ" width="200">
+        <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/memQGit/xdqc/main/docs/assets/memq-logo-white.png">
+        <img src="https://raw.githubusercontent.com/memQGit/xdqc/main/docs/assets/memq-logo.png" alt="memQ" width="200">
     </picture>
 </p>
 
@@ -191,3 +191,11 @@ This repository uses **Ruff** for linting and formatting and **pytest** for test
     uv run ruff format --check . # format check (no modifications)
     uv run ruff format .          # auto-format
     uv run pytest -q              # tests
+
+### Docs
+
+The docs site (config, API reference generation, demo notebooks) lives under `docs/`.
+
+    uv sync --group docs                              # install docs dependencies
+    uv run mkdocs serve -f docs/mkdocs.yml             # live preview at http://127.0.0.1:8000
+    uv run mkdocs build -f docs/mkdocs.yml --strict    # build to ./site (fails on warnings)

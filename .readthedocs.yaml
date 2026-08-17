@@ -9,7 +9,7 @@ build:
     python: "3.12"
 
 mkdocs:
-  configuration: mkdocs.yml
+  configuration: docs/mkdocs.yml
   # Match the local `mkdocs build --strict` gate: broken links or bad
   # mkdocstrings references fail the build instead of shipping silently.
   fail_on_warning: true

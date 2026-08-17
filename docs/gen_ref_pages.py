@@ -27,7 +27,7 @@ import mkdocs_gen_files
 
 nav = mkdocs_gen_files.Nav()
 
-root = Path(__file__).parent
+root = Path(__file__).parent.parent
 src = root / "src"
 
 for path in sorted(src.rglob("*.py")):
