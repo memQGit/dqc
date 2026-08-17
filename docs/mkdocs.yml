@@ -113,6 +113,7 @@ nav:
       - Quickstart: getting-started/quickstart.md
   - Guide:
       - Workflow & Architecture: guide/workflow.md
+      - Network Builder: guide/network-builder.md
       - Partitioning Algorithms: guide/partitioning.md
       - Visualization: guide/visualization.md
       - Logging & Verbosity: guide/logging.md
