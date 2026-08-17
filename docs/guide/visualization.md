@@ -6,14 +6,14 @@ scheduled.
 
 ```python
 from memq_dqc.visualization import (
-    plot_distributed_circuit,   # gate layout across QPUs
-    plot_partition_flow,        # qubit migration across QPUs
-    plot_partition_heatmap,     # QPU assignment heatmap per window
-    plot_migration_timeline,    # qubit movement timeline with EPR cost
-    plot_circuit_dag,           # circuit DAG
-    plot_operation_gantt,       # operation Gantt chart
-    plot_schedule_gantt,        # schedule Gantt chart
-    write_svg_dashboard_html,   # bundle panels into an HTML viewer
+    plot_distributed_circuit,  # gate layout across QPUs
+    plot_partition_flow,  # qubit migration across QPUs
+    plot_partition_heatmap,  # QPU assignment heatmap per window
+    plot_migration_timeline,  # qubit movement timeline with EPR cost
+    plot_circuit_dag,  # circuit DAG
+    plot_operation_gantt,  # operation Gantt chart
+    plot_schedule_gantt,  # schedule Gantt chart
+    write_svg_dashboard_html,  # bundle panels into an HTML viewer
 )
 ```
 
