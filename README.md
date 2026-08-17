@@ -1,3 +1,10 @@
+<p align="center">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="docs/assets/memq-logo-white.png">
+        <img src="docs/assets/memq-logo.png" alt="memQ" width="200">
+    </picture>
+</p>
+
 # xDQC — Extensible Distributed Quantum Compiler
 
 
