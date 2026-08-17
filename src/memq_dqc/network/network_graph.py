@@ -28,10 +28,11 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt
 import networkx as nx
 
-#: E-bit pairs consumed by one remote two-qubit gate (one cat-entanglement).
 REMOTE_GATE_EBIT_COST = 1
-#: E-bit pairs consumed by one remote swap (two state teleportations).
+"""E-bit pairs consumed by one remote two-qubit gate (one cat-entanglement)."""
+
 REMOTE_SWAP_EBIT_COST = 2
+"""E-bit pairs consumed by one remote swap (two state teleportations)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +68,7 @@ class NetworkGraph:
     """Represents a quantum network constructed from a JSON specification.
 
     This class parses a network description JSON file and builds a
-    :class:`networkx.Graph` instance whose nodes represent qubits and whose
+    `networkx.Graph` instance whose nodes represent qubits and whose
     edges represent local and remote connections between those qubits.
 
     The resulting graph and associated metadata can be accessed via
@@ -524,7 +525,7 @@ class NetworkGraph:
         communication pairs on a direct link between the two QPUs. A False
         result rules out a *single* remote swap only; the two QPUs may still
         be swappable as a routed chain of adjacent remote swaps, which
-        :meth:`remote_swap_ebit_cost` prices and rejects when unroutable.
+        [remote_swap_ebit_cost][memq_dqc.network.network_graph.NetworkGraph.remote_swap_ebit_cost] prices and rejects when unroutable.
 
         Args:
             qpu_a: First QPU ID.

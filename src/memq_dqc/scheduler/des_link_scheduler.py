@@ -1221,7 +1221,7 @@ def _build_catent_groups(
 
     Returns:
         A ``(groups, group_by_op_id)`` pair, where ``groups`` maps each
-        block's ``catent`` op id to its :class:`_CatentGroup`, and
+        block's ``catent`` op id to its `_CatentGroup`, and
         ``group_by_op_id`` maps every op id in a block (catent, inner ops,
         and catdisent) to its block's ``catent`` op id.
     """

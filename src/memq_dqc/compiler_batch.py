@@ -15,7 +15,7 @@
 """Batch compilation of scheduling instances with fingerprint caching.
 
 Compiles many (circuit, network, options) requests into
-:class:`~memq_dqc.scheduler.instance.SchedulingInstance` artifacts, preserving
+[SchedulingInstance][memq_dqc.scheduler.instance.SchedulingInstance] artifacts, preserving
 input order, caching by ``source_fingerprint`` with atomic writes, and
 optionally using process-based parallelism. The result artifacts are identical
 regardless of worker count because compilation is deterministic. This module
@@ -113,7 +113,7 @@ def compile_scheduling_batch(
             returning a per-request error.
 
     Returns:
-        One :class:`SchedulingCompileResult` per request, in input order.
+        One [SchedulingCompileResult][memq_dqc.compiler_batch.SchedulingCompileResult] per request, in input order.
 
     Raises:
         ValueError: If ``workers`` is less than 1.

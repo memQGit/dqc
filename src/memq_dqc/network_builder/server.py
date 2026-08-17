@@ -16,7 +16,7 @@
 
 The app serves the builder's static frontend and exposes a single endpoint,
 ``POST /generate_graph``, which validates a posted network through
-:class:`memq_dqc.network.NetworkGraph` and returns a rendered preview image.
+[memq_dqc.network.NetworkGraph][memq_dqc.network.network_graph.NetworkGraph] and returns a rendered preview image.
 Parsing and validation are delegated entirely to ``NetworkGraph`` so the
 builder cannot accept a network the library would reject.
 

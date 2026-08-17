@@ -15,9 +15,9 @@
 """User-facing distributed-compilation entry point.
 
 ``Compiler`` is the high-level interface for the distributed compiler: give it
-a circuit and a network topology, call :meth:`Compiler.compile`, and read back
+a circuit and a network topology, call [Compiler.compile][memq_dqc.compiler.Compiler.compile], and read back
 the distributed circuit (and verify or schedule it). It wraps the lower-level
-:class:`~memq_dqc.partition.Partitioner`, which remains available directly for
+[Partitioner][memq_dqc.partition.partitioner.Partitioner], which remains available directly for
 callers who need control over the partitioning step itself.
 """
 
@@ -96,9 +96,9 @@ class Compiler:
     """Compile a circuit for a distributed quantum network.
 
     This is the recommended entry point for end users. Construct it with a
-    circuit and a network topology, then call :meth:`compile`; the distributed
+    circuit and a network topology, then call [compile][memq_dqc.compiler.Compiler.compile]; the distributed
     circuit and its derived artifacts are then available as properties. Under
-    the hood it drives a :class:`~memq_dqc.partition.Partitioner`, which can
+    the hood it drives a [Partitioner][memq_dqc.partition.partitioner.Partitioner], which can
     also be used directly for finer control over partitioning.
     """
 
@@ -141,7 +141,7 @@ class Compiler:
         """Compile the circuit for the configured network.
 
         Runs partitioning and reconstructs the distributed circuit. After this
-        call, :attr:`distributed_circuit`, :attr:`distributed_qasm`, and the
+        call, [distributed_circuit][memq_dqc.compiler.Compiler.distributed_circuit], [distributed_qasm][memq_dqc.compiler.Compiler.distributed_qasm], and the
         other result properties are available.
 
         Args:
@@ -222,12 +222,12 @@ class Compiler:
         """Return the compiled program as an annotated distributed DAG.
 
         Opt-in export; compiling never builds this automatically. A fresh
-        annotated :class:`networkx.DiGraph` is constructed on each call. See
-        :func:`memq_dqc.circuit.dag.build_annotated_dag` for the node and edge
+        annotated `networkx.DiGraph` is constructed on each call. See
+        [memq_dqc.circuit.dag.build_annotated_dag][memq_dqc.circuit.dag.annotated.build_annotated_dag] for the node and edge
         attributes.
 
         Returns:
-            An annotated :class:`networkx.DiGraph` of the distributed circuit.
+            An annotated `networkx.DiGraph` of the distributed circuit.
         """
         return self._partitioner.annotated_dag()
 
@@ -240,7 +240,7 @@ class Compiler:
         """Serialize the annotated distributed DAG to a JSON document.
 
         Opt-in export; compiling never serializes automatically. See
-        :func:`memq_dqc.circuit.dag.annotated_dag_to_json` for the document
+        [memq_dqc.circuit.dag.annotated_dag_to_json][memq_dqc.circuit.dag.annotated.annotated_dag_to_json] for the document
         layout.
 
         Args:
@@ -258,7 +258,7 @@ class Compiler:
         """Return original and distributed circuit verification inputs.
 
         The returned OpenQASM programs can be passed directly to
-        :func:`memq_dqc.verify.verify_distributed_circuit`. The DAGs are
+        [memq_dqc.verify.verify_distributed_circuit][memq_dqc.verify.verify.verify_distributed_circuit]. The DAGs are
         independent NetworkX graph objects suitable for structural checks.
 
         Returns:
@@ -288,7 +288,7 @@ class Compiler:
     ) -> bool:
         """Verify the distributed circuit against the original circuit.
 
-        See :meth:`memq_dqc.partition.Partitioner.verify` for details.
+        See [memq_dqc.partition.Partitioner.verify][memq_dqc.partition.partitioner.Partitioner.verify] for details.
 
         Args:
             shots: Number of shots to execute each circuit for.
@@ -323,7 +323,7 @@ class Compiler:
                 profile.
 
         Returns:
-            A validated :class:`~memq_dqc.scheduler.instance.SchedulingInstance`.
+            A validated [SchedulingInstance][memq_dqc.scheduler.instance.SchedulingInstance].
         """
         from memq_dqc.scheduler.instance import SchedulingCompileOptions
         from memq_dqc.scheduler.nominal import build_scheduling_instance
@@ -368,7 +368,7 @@ class Compiler:
         (unless overridden) the windows from the prior compile; only the
         placement -> distributed derivation re-runs. Partitioning is *not*
         re-run, so the compiler must already have produced windows (call
-        :meth:`compile` first) or ``windows`` must be supplied explicitly.
+        [compile][memq_dqc.compiler.Compiler.compile] first) or ``windows`` must be supplied explicitly.
 
         The existing distributed flags held on the partitioner
         (``ebit_assignment``, ``group_gates``, ``max_group_size``) are
@@ -385,7 +385,7 @@ class Compiler:
                 profile.
 
         Returns:
-            A validated :class:`~memq_dqc.scheduler.instance.SchedulingInstance`
+            A validated [SchedulingInstance][memq_dqc.scheduler.instance.SchedulingInstance]
             derived from the injected placement.
 
         Raises:
@@ -561,7 +561,7 @@ def compile_scheduling_instance(
 
     High-level entry point for external RL schedulers: partitions, extracts the
     distributed circuit, and assembles a versioned, JSON-persistable
-    :class:`~memq_dqc.scheduler.instance.SchedulingInstance` (distributed DAG,
+    [SchedulingInstance][memq_dqc.scheduler.instance.SchedulingInstance] (distributed DAG,
     zero-EPR-wait nominal schedule, physical resources and links, and EPR
     demands).
 
@@ -579,7 +579,7 @@ def compile_scheduling_instance(
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
-        A validated :class:`~memq_dqc.scheduler.instance.SchedulingInstance`.
+        A validated [SchedulingInstance][memq_dqc.scheduler.instance.SchedulingInstance].
     """
     from memq_dqc.scheduler.instance import SchedulingCompileOptions
     from memq_dqc.scheduler.nominal import build_scheduling_instance
@@ -624,11 +624,11 @@ def recompile_scheduling_instance(
 ) -> SchedulingInstance:
     """Compile a circuit and re-derive its instance from an injected placement.
 
-    Convenience wrapper mirroring :func:`compile_scheduling_instance`: it builds
-    a :class:`Compiler`, runs a full compile to establish the reusable program,
+    Convenience wrapper mirroring [compile_scheduling_instance][memq_dqc.compiler.compile_scheduling_instance]: it builds
+    a [Compiler][memq_dqc.compiler.Compiler], runs a full compile to establish the reusable program,
     monolithic DAG, windows, and distributed flags, then re-derives the
     scheduling instance from ``schedule`` (and ``windows`` when provided) via
-    :meth:`Compiler.recompile_with_placement`.
+    [Compiler.recompile_with_placement][memq_dqc.compiler.Compiler.recompile_with_placement].
 
     Args:
         circuit: The input circuit, as a parsed OpenQASM 3 program, a path to a
@@ -643,7 +643,7 @@ def recompile_scheduling_instance(
         verbosity: Logging verbosity for this workflow call.
 
     Returns:
-        A validated :class:`~memq_dqc.scheduler.instance.SchedulingInstance`
+        A validated [SchedulingInstance][memq_dqc.scheduler.instance.SchedulingInstance]
         derived from the injected placement.
     """
     from memq_dqc.scheduler.instance import SchedulingCompileOptions
@@ -681,7 +681,7 @@ def compute_scheduling_source_fingerprint(
 
     Parses and normalizes the inputs and hashes them together with the
     compilation options, hardware profile, and schema version. This is the same
-    value :func:`compile_scheduling_instance` records, enabling a cache lookup
+    value [compile_scheduling_instance][memq_dqc.compiler.compile_scheduling_instance] records, enabling a cache lookup
     before the (much more expensive) compilation runs.
 
     Args:
@@ -713,7 +713,7 @@ def _fingerprint_from_parts(
         network: The network graph.
         options: Compilation options.
         placement: Optional deterministic signature of a caller-injected
-            placement (see :func:`_placement_signature`). When ``None`` the
+            placement (see `_placement_signature`). When ``None`` the
             payload is identical to the normal compile path, keeping that
             path's fingerprint unchanged.
 

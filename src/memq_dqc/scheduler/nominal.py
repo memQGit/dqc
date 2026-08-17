@@ -14,9 +14,9 @@
 
 """Deterministic zero-EPR-wait nominal schedule and instance assembly.
 
-Builds a :class:`~memq_dqc.scheduler.instance.SchedulingInstance` from a
-compiled :class:`~memq_dqc.circuit.circuit.DistributedCircuit` and its
-:class:`~memq_dqc.network.NetworkGraph`. The nominal schedule is a deterministic
+Builds a [SchedulingInstance][memq_dqc.scheduler.instance.SchedulingInstance] from a
+compiled [DistributedCircuit][memq_dqc.circuit.circuit.DistributedCircuit] and its
+[NetworkGraph][memq_dqc.network.network_graph.NetworkGraph]. The nominal schedule is a deterministic
 *prediction*, not an executable final schedule: every distributed operation is
 placed as early as possible subject to DAG precedence and per-qubit exclusivity,
 using deterministic operation durations and *zero* EPR-generation time. The
@@ -25,7 +25,7 @@ and enforces the DAG dynamically; the nominal times are observations and
 readiness estimates only.
 
 The builder reuses the annotated distributed DAG
-(:func:`memq_dqc.circuit.dag.build_annotated_dag`) for operation classification,
+([memq_dqc.circuit.dag.build_annotated_dag][memq_dqc.circuit.dag.annotated.build_annotated_dag]) for operation classification,
 physical/communication qubits, e-bit pairs, and cat-entanglement groups, and the
 scheduler timing model for deterministic durations.
 """
@@ -88,7 +88,7 @@ def build_scheduling_instance(
             and options; also used to derive ``instance_id``.
 
     Returns:
-        A validated :class:`SchedulingInstance`.
+        A validated [SchedulingInstance][memq_dqc.scheduler.instance.SchedulingInstance].
     """
     profile = _resolve_scheduler_hardware_profile(
         profile=options.hardware_profile,
@@ -415,7 +415,7 @@ def _assignment_from_pairs(
         link_registry: Mutable link resource registry to extend.
 
     Returns:
-        The corresponding :class:`EPRLinkAssignment`.
+        The corresponding [EPRLinkAssignment][memq_dqc.scheduler.instance.EPRLinkAssignment].
     """
     link_ids: list[str] = []
     comm_qubit_ids: list[str] = []

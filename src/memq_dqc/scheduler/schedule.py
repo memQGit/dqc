@@ -103,12 +103,14 @@ class SchedulerHardwareProfile:
 
     Example:
         A Sr+ trapped-ion device with a faster two-qubit gate and a longer EPR
-        lifetime than the packaged profile assumes::
+        lifetime than the packaged profile assumes:
 
-            profile = SchedulerHardwareProfile.sr_trapped_ion(
-                two_qubit_gate_time=120.0,
-                epr_lifetime=80.0,
-            )
+        ```python
+        profile = SchedulerHardwareProfile.sr_trapped_ion(
+            two_qubit_gate_time=120.0,
+            epr_lifetime=80.0,
+        )
+        ```
 
     Attributes:
         modality: Modality profile used for local gate times.
@@ -648,7 +650,7 @@ class Scheduler:
         """Serialize this scheduler's result to a JSON document.
 
         Opt-in export; scheduling never serializes automatically. See
-        :func:`memq_dqc.scheduler.serialize.schedule_to_json` for the document
+        [memq_dqc.scheduler.serialize.schedule_to_json][memq_dqc.scheduler.serialize.schedule_to_json] for the document
         layout.
 
         Args:

@@ -14,8 +14,8 @@
 
 """Off-screen PNG rendering of a network graph for the builder preview.
 
-Unlike :meth:`memq_dqc.network.NetworkGraph.display`, which opens a blocking
-interactive window, :func:`render_png` draws onto an Agg canvas and returns
+Unlike [memq_dqc.network.NetworkGraph.display][memq_dqc.network.network_graph.NetworkGraph.display], which opens a blocking
+interactive window, `render_png` draws onto an Agg canvas and returns
 the encoded image, making it safe to call from a web request handler.
 """
 

@@ -12,6 +12,17 @@ changes are always listed under **Changed** or **Removed**.
 
 ### Added
 
+- `memq_dqc.assets`, a reference suite of 40 network topologies and 10 circuits
+  bundled inside the installed package, so the full workflow runs without
+  supplying a topology first. `network_path()`, `circuit_path()`, and
+  `network_doc_path()` resolve an asset name to a `Path`; `list_networks()` and
+  `list_circuits()` enumerate what is available. Networks are grouped by the
+  circuit size they host (10, 20, 30, 40, 60 qubits) across `pair`, `chain`,
+  `ring`, and `hub` arrangements, each in a nearest-neighbour and an
+  all-to-all intra-QPU variant, and every one carries a Markdown file
+  documenting it. Circuits are transpiled OpenQASM 3.0 programs from 4 to 60
+  qubits, each fully measured with one explicit `c[i] = measure q[i];` per
+  qubit, so they serve as verification inputs as well as compilation inputs.
 - Windows support. KaHyPar publishes no Windows wheels, so it is now skipped
   there via a platform marker instead of failing the whole install. Four of
   the five partitioners are unaffected; `HypergraphPartitioner` raises an

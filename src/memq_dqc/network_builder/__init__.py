@@ -16,12 +16,14 @@
 
 This subpackage ships a small local web application. It is a convenience
 tool, not part of the compiler: it produces the same network JSON that
-:class:`memq_dqc.network.NetworkGraph` consumes, so nothing here is imported
+[memq_dqc.network.NetworkGraph][memq_dqc.network.network_graph.NetworkGraph] consumes, so nothing here is imported
 by the compilation pipeline.
 
-Launch it with the ``network-builder`` console script::
+Launch it with the ``network-builder`` console script:
 
-    $ uv run network-builder
+```bash
+uv run network-builder
+```
 
 The module deliberately exports nothing at import time so that
 ``import memq_dqc`` never requires the optional Flask dependency.

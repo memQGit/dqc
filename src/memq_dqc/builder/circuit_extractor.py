@@ -318,7 +318,7 @@ def _exact_entanglement_cost(distributed: DistributedCircuit) -> float:
     operands have been stripped, one pair is required per gate.
 
     A remote swap carries no cat-entanglement: it teleports both states and
-    always costs :data:`REMOTE_SWAP_EBIT_COST` pairs, counted directly from
+    always costs `REMOTE_SWAP_EBIT_COST` pairs, counted directly from
     each emitted ``rswap``.
 
     Raises:

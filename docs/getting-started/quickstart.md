@@ -1,9 +1,22 @@
 # Quickstart
 
-This page compiles a circuit onto a network and verifies the result. It assumes
-you have a circuit (`circuit.qasm`, OpenQASM 3.0) and a network topology
-(`network.json`) to hand — the `demo/inputs/` directory in the repository has
-working examples.
+This page compiles a circuit onto a network and verifies the result. You need a
+circuit (OpenQASM) and a network topology (`network.json`) — and if you don't
+have either yet, the library ships a reference set you can use straight away:
+
+```python
+from memq_dqc import Compiler
+from memq_dqc.assets import circuit_path, network_path
+
+compiler = Compiler(circuit_path("qft_n10"), network_path("10_qubits/n2_pair_nn"))
+compiler.compile()
+print("verified:", compiler.verify(shots=20000))
+```
+
+`list_circuits()` and `list_networks()` from the same module enumerate what is
+available; see [Bundled Networks & Circuits](../guide/bundled-assets.md) for
+the full catalogue. The examples that follow use `circuit.qasm` and
+`network.json` as stand-ins for your own files.
 
 ## The recommended entry point: `Compiler`
 

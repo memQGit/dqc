@@ -15,7 +15,7 @@
 """JSON persistence for scheduling instances.
 
 Round-trippable, human-readable JSON for
-:class:`~memq_dqc.scheduler.instance.SchedulingInstance`. The document carries
+[SchedulingInstance][memq_dqc.scheduler.instance.SchedulingInstance]. The document carries
 an explicit ``type`` discriminator and ``schema_version`` for
 forward-compatibility, orders every collection deterministically, and rejects
 non-finite numbers (no ``NaN``/infinity) on both write and read. Loading
@@ -61,7 +61,7 @@ def scheduling_instance_to_json(
         instance: The scheduling instance to serialize.
         path: Optional destination file. When given, the document is written
             there as UTF-8 text in addition to being returned.
-        indent: Indentation forwarded to :func:`json.dumps`. Pass ``None`` for
+        indent: Indentation forwarded to `json.dumps`. Pass ``None`` for
             the most compact single-line output (suited to large corpora).
 
     Returns:
@@ -87,10 +87,10 @@ def scheduling_instance_from_json(
 
     Args:
         source: A parsed mapping, a JSON document string, or a path to a JSON
-            file (as ``str`` or :class:`os.PathLike`).
+            file (as ``str`` or `os.PathLike`).
 
     Returns:
-        The reconstructed, validated :class:`SchedulingInstance`.
+        The reconstructed, validated [SchedulingInstance][memq_dqc.scheduler.instance.SchedulingInstance].
 
     Raises:
         ValueError: If the document type or schema version is unsupported, a

@@ -14,7 +14,7 @@
 
 """Versioned scheduling-instance data model for external RL schedulers.
 
-A :class:`SchedulingInstance` is a single, self-contained artifact holding
+A [SchedulingInstance][memq_dqc.scheduler.instance.SchedulingInstance] is a single, self-contained artifact holding
 every input an external discrete-event simulator or reinforcement-learning
 scheduler needs to plan a distributed circuit: the distributed operation DAG,
 a deterministic zero-EPR-wait nominal schedule, the physical resources and
@@ -22,10 +22,10 @@ links, and the entanglement (EPR) demands. It carries no OpenQASM AST objects
 and no live compiler state, so it round-trips through JSON without loss.
 
 This module defines only immutable, typed records plus
-:func:`validate_scheduling_instance`. Construction lives in
-:mod:`memq_dqc.scheduler.nominal` and
-:func:`memq_dqc.compiler.compile_scheduling_instance`; JSON persistence lives in
-:mod:`memq_dqc.scheduler.instance_serialize`. The schema is versioned and kept
+[validate_scheduling_instance][memq_dqc.scheduler.instance.validate_scheduling_instance]. Construction lives in
+[memq_dqc.scheduler.nominal][memq_dqc.scheduler.nominal] and
+[memq_dqc.compiler.compile_scheduling_instance][memq_dqc.compiler.compile_scheduling_instance]; JSON persistence lives in
+[memq_dqc.scheduler.instance_serialize][memq_dqc.scheduler.instance_serialize]. The schema is versioned and kept
 separate from the annotated-DAG and operation-schedule JSON schemas so existing
 consumers of those documents are unaffected.
 
@@ -76,7 +76,7 @@ class SchedulingCompileOptions:
         hardware_profile: Scheduler hardware profile whose timings set the
             deterministic operation durations. ``None`` selects the default
             profile. Besides naming a modality and entanglement profile, a
-            :class:`~memq_dqc.scheduler.schedule.SchedulerHardwareProfile` can carry
+            [SchedulerHardwareProfile][memq_dqc.scheduler.schedule.SchedulerHardwareProfile] can carry
             custom hardware parameters (gate, measurement, and entanglement
             timings) that override the selected profile's values.
     """

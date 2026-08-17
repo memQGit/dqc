@@ -14,9 +14,9 @@
 
 """JSON serialization for operation schedules.
 
-Opt-in helpers for converting an :class:`OperationSchedule` into a JSON
+Opt-in helpers for converting an [OperationSchedule][memq_dqc.scheduler.schedule.OperationSchedule] into a JSON
 document. Serialization never happens automatically as part of scheduling;
-call :func:`schedule_to_json` (or :meth:`Scheduler.to_json`) explicitly when
+call [schedule_to_json][memq_dqc.scheduler.serialize.schedule_to_json] (or [Scheduler.to_json][memq_dqc.scheduler.schedule.Scheduler.to_json]) explicitly when
 an exportable representation is needed.
 
 The document has two top-level keys:
@@ -26,8 +26,8 @@ The document has two top-level keys:
   are omitted because they are fully reconstructable from ``operations``.
 
 Each entry in ``operations`` carries a ``type`` discriminator that is either
-``"operation"`` (a :class:`ScheduledOperation`) or ``"entanglement"`` (an
-:class:`EntanglementGeneration`), its stored fields, and the derived
+``"operation"`` (a [ScheduledOperation][memq_dqc.scheduler.schedule.ScheduledOperation]) or ``"entanglement"`` (an
+[EntanglementGeneration][memq_dqc.scheduler.schedule.EntanglementGeneration]), its stored fields, and the derived
 ``end_time`` for convenience.
 """
 
@@ -121,7 +121,7 @@ def schedule_to_json(
         schedule: The operation schedule to serialize.
         path: Optional destination file. When given, the JSON document is
             written there as UTF-8 text in addition to being returned.
-        indent: Indentation forwarded to :func:`json.dumps`. Pass ``None`` for
+        indent: Indentation forwarded to `json.dumps`. Pass ``None`` for
             the most compact single-line output.
 
     Returns:
