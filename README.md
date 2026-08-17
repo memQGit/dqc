@@ -15,8 +15,8 @@
     <a href="https://xdqc.readthedocs.io/en/latest/">
         <img src="https://readthedocs.org/projects/xdqc/badge/?version=latest" alt="Documentation Status">
     </a>
-    <a href="https://codecov.io/gh/memQGit/xdqc">
-        <img src="https://codecov.io/gh/memQGit/xdqc/branch/main/graph/badge.svg" alt="Coverage">
+    <a href="https://codecov.io/gh/memQGit/xdqc" > 
+        <img src="https://codecov.io/gh/memQGit/xdqc/graph/badge.svg?token=ZCPU4YYJ8B"/> 
     </a>
     <a href="https://github.com/memQGit/xdqc/blob/main/pyproject.toml">
         <img src="https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue" alt="Python versions">
