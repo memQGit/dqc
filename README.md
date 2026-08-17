@@ -110,6 +110,30 @@ partitioner = Partitioner("network.json", "circuit.qasm", algo="hypergraph")
 
 ---
 
+## Network builder
+
+Topology JSON gets tedious to write by hand past a few QPUs. The network builder is a local web app, shipped with the library, for drawing a network in the browser and exporting it as a topology file:
+
+    uv run network-builder
+
+That starts a server on `http://127.0.0.1:8010` and opens it in your browser. Add `--port 8020` to serve somewhere else (8010 is the default so the builder does not collide with `mkdocs serve` on 8000), or `--no-browser` to start the server without opening a tab.
+
+Draw QPUs, qubits, and links by hand, or use the generator panel to produce ring, hub, grid, all-to-all, and homogeneous-line topologies from a QPU count. *Save As* downloads a `.json` file that drops straight into the workflow:
+
+```python
+network = NetworkGraph("my_network.json")
+```
+
+Installing from PyPI rather than a clone? The builder needs Flask, which ships as an optional extra:
+
+    pip install "xdqc[builder]"
+
+The builder also records per-qubit `coherenceTime` and per-link `fidelity`. No current partitioner or scheduler reads these — they are carried in the format so networks built today stay useful to coherence- and fidelity-aware algorithms later.
+
+See the [Network Builder guide](https://xdqc.readthedocs.io/en/latest/guide/network-builder/) for details.
+
+---
+
 ## Visualization
 
 `xdqc.visualization` provides SVG-based views of the compilation output:

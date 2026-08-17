@@ -30,8 +30,16 @@ nav = mkdocs_gen_files.Nav()
 root = Path(__file__).parent.parent
 src = root / "src"
 
+#: Subpackages excluded from the API reference. The network builder is a
+#: standalone local tool documented by its usage guide, not by its
+#: internals, so its modules are not worth an autodoc page.
+EXCLUDED_PACKAGES = {"network_builder"}
+
 for path in sorted(src.rglob("*.py")):
     module_path = path.relative_to(src).with_suffix("")
+
+    if EXCLUDED_PACKAGES & set(module_path.parts):
+        continue
     doc_path = path.relative_to(src).with_suffix(".md")
     full_doc_path = Path("reference", doc_path)
 
