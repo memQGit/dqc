@@ -32,8 +32,9 @@ src = root / "src"
 
 #: Subpackages excluded from the API reference. The network builder is a
 #: standalone local tool documented by its usage guide, not by its
-#: internals, so its modules are not worth an autodoc page.
-EXCLUDED_PACKAGES = {"network_builder"}
+#: internals, so its modules are not worth an autodoc page. The assets
+#: package is a bundled data reference, not code worth autodoc'ing.
+EXCLUDED_PACKAGES = {"network_builder", "assets"}
 
 for path in sorted(src.rglob("*.py")):
     module_path = path.relative_to(src).with_suffix("")

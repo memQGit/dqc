@@ -311,7 +311,7 @@ def _measured_qubits_in_clbit_order(circuit: QuantumCircuit) -> list[int]:
 
     Returns:
         Qubit indices ordered by ascending classical-bit index, suitable as
-        the ``qargs`` for :meth:`Statevector.probabilities_dict` so the
+        the ``qargs`` for `Statevector.probabilities_dict` so the
         resulting bitstrings are keyed in classical-register order.
     """
     clbit_to_qubit: dict[int, int] = {}
@@ -428,9 +428,9 @@ def dist_to_mono_circuit(dist_circuit_path: str) -> str:
 def dist_to_mono_program(dist_program: ast.Program) -> ast.Program:
     """Rewrite a distributed program into a monolithic program.
 
-    Performs the same rewrite as :func:`dist_to_mono_circuit` but operates
+    Performs the same rewrite as [dist_to_mono_circuit][memq_dqc.verify.verify.dist_to_mono_circuit] but operates
     on an in-memory program rather than a file, so no serialization
-    round-trip is required. See :func:`dist_to_mono_circuit` for the full
+    round-trip is required. See [dist_to_mono_circuit][memq_dqc.verify.verify.dist_to_mono_circuit] for the full
     list of transformations applied.
 
     Args:
@@ -486,9 +486,9 @@ def manual_cost_verification(qasm: str) -> int:
     """Return the total manual cost of remote operations in a QASM string.
 
     Costs are in e-bit pairs:
-        ``rswap`` costs :data:`REMOTE_SWAP_EBIT_COST` (two teleportations).
+        ``rswap`` costs `REMOTE_SWAP_EBIT_COST` (two teleportations).
         ``rcp``, ``rcry``, ``rcx``, and ``rcz`` each cost
-        :data:`REMOTE_GATE_EBIT_COST`.
+        `REMOTE_GATE_EBIT_COST`.
 
     Args:
         qasm: OpenQASM source code to analyze.

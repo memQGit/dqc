@@ -18,6 +18,6 @@ This subpackage is **not** part of the public API. Its contents are
 implementation details of the partitioners and circuit builders, and may
 change without notice. Import them from their defining modules
 (``memq_dqc.utils.circuit_utils``, ``memq_dqc.utils.common``) rather than from this
-package, and prefer the documented entry points in :mod:`memq_dqc` for anything
+package, and prefer the documented entry points in [memq_dqc][memq_dqc] for anything
 user-facing.
 """

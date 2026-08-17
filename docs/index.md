@@ -1,5 +1,13 @@
 # DQC — Distributed Quantum Compiler
 
+!!! warning "Version 0.1.0 — beta, experimental"
+
+    DQC is an early release. It is usable for research and benchmarking, but
+    the public API may change in any minor release before `1.0.0`. Pin an
+    exact version if you depend on it, and check the
+    [changelog](https://github.com/memQGit/dqc/blob/main/CHANGELOG.md) for
+    what moved between releases.
+
 <div class="memq-hero" markdown>
 
 An open-source Python library for **distributed quantum compilation**. Given a

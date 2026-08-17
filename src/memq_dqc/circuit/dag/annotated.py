@@ -15,14 +15,14 @@
 """Annotated distributed-DAG export.
 
 Opt-in helpers that produce a standalone, richly annotated
-:class:`networkx.DiGraph` view of a compiled distributed circuit, plus a JSON
+`networkx.DiGraph` view of a compiled distributed circuit, plus a JSON
 serializer for it. These never run automatically as part of compilation; call
-:func:`build_annotated_dag` (or :meth:`Compiler.annotated_dag`) and
-:func:`annotated_dag_to_json` (or :meth:`Compiler.to_dag_json`) explicitly when
+[build_annotated_dag][memq_dqc.circuit.dag.annotated.build_annotated_dag] (or [Compiler.annotated_dag][memq_dqc.compiler.Compiler.annotated_dag]) and
+[annotated_dag_to_json][memq_dqc.circuit.dag.annotated.annotated_dag_to_json] (or [Compiler.to_dag_json][memq_dqc.compiler.Compiler.to_dag_json]) explicitly when
 an exportable graph representation is needed.
 
 The annotated graph is derived *read-only* from the existing
-:class:`~memq_dqc.circuit.dag.distributed.DistributedCircuitDAG`; it copies the
+[DistributedCircuitDAG][memq_dqc.circuit.dag.distributed.DistributedCircuitDAG]; it copies the
 dependency structure into a new graph and bakes on the execution detail that is
 otherwise hidden behind object layers: operation classification, logical
 qubits, physical qubits (QPU + slot), communication qubits, EPR-pair
@@ -65,7 +65,7 @@ _REMOTE_DATA_GATE_NAMES = _REMOTE_GATE_NAMES - {"rswap"}
 def build_annotated_dag(distributed: DistributedCircuit) -> nx.DiGraph:
     """Build an annotated distributed-DAG graph for a compiled circuit.
 
-    Constructs a brand-new :class:`networkx.DiGraph` that mirrors the
+    Constructs a brand-new `networkx.DiGraph` that mirrors the
     dependency structure of ``distributed.dag`` and annotates each node and
     edge with execution detail. The source circuit and its DAG are only read;
     nothing is mutated.
@@ -136,14 +136,14 @@ def annotated_dag_to_json(
 
     This is an opt-in helper; building the graph never serializes
     automatically. The document mirrors the node and edge attributes baked on
-    by :func:`build_annotated_dag`; the raw operation object and its AST node
+    by [build_annotated_dag][memq_dqc.circuit.dag.annotated.build_annotated_dag]; the raw operation object and its AST node
     are intentionally omitted.
 
     Args:
-        graph: An annotated graph produced by :func:`build_annotated_dag`.
+        graph: An annotated graph produced by [build_annotated_dag][memq_dqc.circuit.dag.annotated.build_annotated_dag].
         path: Optional destination file. When given, the JSON document is
             written there as UTF-8 text in addition to being returned.
-        indent: Indentation forwarded to :func:`json.dumps`. Pass ``None`` for
+        indent: Indentation forwarded to `json.dumps`. Pass ``None`` for
             the most compact single-line output.
 
     Returns:
@@ -340,7 +340,7 @@ def _graph_to_dict(graph: nx.DiGraph) -> dict[str, Any]:
     """Return a JSON-serializable mapping for an annotated graph.
 
     Args:
-        graph: An annotated graph produced by :func:`build_annotated_dag`.
+        graph: An annotated graph produced by [build_annotated_dag][memq_dqc.circuit.dag.annotated.build_annotated_dag].
 
     Returns:
         A mapping with ``type``, ``schema_version``, ``num_nodes``,
@@ -368,7 +368,7 @@ def _node_to_dict(data: dict[str, Any]) -> dict[str, Any]:
 
     Args:
         data: The node attribute mapping baked on by
-            :func:`build_annotated_dag`.
+            [build_annotated_dag][memq_dqc.circuit.dag.annotated.build_annotated_dag].
 
     Returns:
         A mapping of the node's serializable fields. The raw operation object
@@ -433,7 +433,7 @@ def _edge_to_dict(
         source_id: The ``op_id`` at the edge's source.
         target_id: The ``op_id`` at the edge's target.
         data: The edge attribute mapping baked on by
-            :func:`build_annotated_dag`.
+            [build_annotated_dag][memq_dqc.circuit.dag.annotated.build_annotated_dag].
 
     Returns:
         A mapping of the edge's serializable fields.

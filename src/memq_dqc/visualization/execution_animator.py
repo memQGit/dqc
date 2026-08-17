@@ -13,16 +13,16 @@
 # limitations under the License.
 """Animated network-graph playback of a distributed circuit's execution.
 
-This module draws a :class:`~memq_dqc.network.NetworkGraph` as a NetworkX plot in
+This module draws a [NetworkGraph][memq_dqc.network.network_graph.NetworkGraph] as a NetworkX plot in
 which every node is a physical qubit and every edge is either an intra-QPU
 (local) or inter-QPU (remote) connection, then plays an
-:class:`~memq_dqc.scheduler.schedule.OperationSchedule` back over that graph. On
+[OperationSchedule][memq_dqc.scheduler.schedule.OperationSchedule] back over that graph. On
 each frame the qubits and links taking part in the currently executing
 operations are highlighted, so a distributed circuit's execution can be
 watched from start to finish.
 
 Operations are colored by the same roles the scheduler Gantt chart uses (see
-:func:`memq_dqc.scheduler.schedule_visualizer._pretty_role`), so the animation and
+`memq_dqc.scheduler.schedule_visualizer._pretty_role`), so the animation and
 the Gantt agree on what counts as a local gate, a remote gate, a routed swap,
 a cat-entanglement region, or entanglement generation.
 
@@ -36,21 +36,23 @@ Two playback modes are available:
   faithful but spends most frames waiting on entanglement.
 
 Example:
-    Compile, schedule, and animate a circuit on a two-QPU network::
+    Compile, schedule, and animate a circuit on a two-QPU network:
 
-        from memq_dqc import Compiler, Scheduler
-        from memq_dqc.network import NetworkGraph
-        from memq_dqc.visualization import animate_circuit_execution
+    ```python
+    from memq_dqc import Compiler, Scheduler
+    from memq_dqc.network import NetworkGraph
+    from memq_dqc.visualization import animate_circuit_execution
 
-        network = NetworkGraph("demo/inputs/demo_network.json")
-        compiler = Compiler("demo/inputs/qft_n4.qasm", network)
-        compiler.compile(ebit_assignment=True)
+    network = NetworkGraph("demo/inputs/demo_network.json")
+    compiler = Compiler("demo/inputs/qft_n4.qasm", network)
+    compiler.compile(ebit_assignment=True)
 
-        scheduler = Scheduler(compiler, algo="des_link_fifo")
-        scheduler.run()
+    scheduler = Scheduler(compiler, algo="des_link_fifo")
+    scheduler.run()
 
-        animation = animate_circuit_execution(network, scheduler.schedule)
-        animation.show()
+    animation = animate_circuit_execution(network, scheduler.schedule)
+    animation.show()
+    ```
 """
 
 from __future__ import annotations
@@ -258,10 +260,10 @@ def animate_circuit_execution(
         title: Figure title. Defaults to a generated summary of the schedule.
         figsize: Figure size in inches.
         pos: Explicit node positions. Defaults to
-            :func:`qpu_clustered_layout`.
+            [qpu_clustered_layout][memq_dqc.visualization.execution_animator.qpu_clustered_layout].
         show_labels: Whether to draw physical-qubit labels on the nodes.
         controls: Whether to reserve space for, and attach, play/pause and
-            scrub widgets. :meth:`NetworkExecutionAnimation.show` enables this
+            scrub widgets. [NetworkExecutionAnimation.show][memq_dqc.visualization.execution_animator.NetworkExecutionAnimation.show] enables this
             automatically, so it is only needed when embedding the figure.
 
     Returns:
@@ -292,8 +294,8 @@ class NetworkExecutionAnimation:
     """Playable animation of a schedule over a physical-qubit network graph.
 
     Instances build their figure and frame list eagerly, then expose the
-    animation for display (:meth:`show`), notebook embedding
-    (:meth:`to_jshtml`), or export (:meth:`save`).
+    animation for display ([show][memq_dqc.visualization.execution_animator.NetworkExecutionAnimation.show]), notebook embedding
+    ([to_jshtml][memq_dqc.visualization.execution_animator.NetworkExecutionAnimation.to_jshtml]), or export ([save][memq_dqc.visualization.execution_animator.NetworkExecutionAnimation.save]).
     """
 
     def __init__(
@@ -695,7 +697,7 @@ class NetworkExecutionAnimation:
         """Update every dynamic artist to depict one frame.
 
         Args:
-            index: Frame index into :attr:`frames`.
+            index: Frame index into [frames][memq_dqc.visualization.execution_animator.NetworkExecutionAnimation.frames].
 
         Returns:
             The artists that were updated.
@@ -915,7 +917,7 @@ def _build_label_index(
 
     The scheduler emits physical qubits as ``q<qpu>[<id>]`` for computation
     qubits and ``c<qpu>[<id>]`` for communication qubits, which differs from
-    the ``q_<qpu>_<id>`` form :attr:`PhysicalQubit.label` uses. The label is
+    the ``q_<qpu>_<id>`` form [PhysicalQubit.label][memq_dqc.network.network_graph.PhysicalQubit.label] uses. The label is
     rebuilt from each node's own fields rather than parsed from the schedule,
     so the two stay in step.
 
@@ -940,7 +942,7 @@ def _validate_schedule_qubits(
 
     Args:
         schedule: Schedule to validate.
-        label_to_node: Mapping produced by :func:`_build_label_index`.
+        label_to_node: Mapping produced by `_build_label_index`.
 
     Raises:
         ValueError: If the schedule names qubits the network does not have,

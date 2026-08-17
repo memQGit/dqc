@@ -15,7 +15,7 @@
 """OpenQASM 3 preprocessing.
 
 The public surface here is the set of entry points for getting an OpenQASM 3
-program in and out of memq_dqc, plus :class:`CircuitQubit`, the qubit reference
+program in and out of memq_dqc, plus [CircuitQubit][memq_dqc.preprocessing.qasm.types.CircuitQubit], the qubit reference
 those programs are expressed in terms of.
 
 The statement-cleaning helpers and the ``Cleaned*`` node types are

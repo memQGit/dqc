@@ -27,7 +27,19 @@
     <a href="https://github.com/memQGit/dqc/blob/main/LICENSE">
       <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License">
     </a>
+    <a href="https://github.com/memQGit/dqc/blob/main/CHANGELOG.md">
+      <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Version 0.1.0">
+    </a>
+    <a href="https://github.com/memQGit/dqc/blob/main/CHANGELOG.md">
+      <img src="https://img.shields.io/badge/status-beta%20%C2%B7%20experimental-orange" alt="Status: beta, experimental">
+    </a>
 </p>
+
+> [!WARNING]
+> **DQC is at `0.1.0` — a beta, experimental release.** It is usable for
+> research and benchmarking, but the public API may change in any minor
+> release before `1.0.0`. Pin an exact version if you depend on it, and see
+> the [CHANGELOG](CHANGELOG.md) for what moved.
 
 **DQC** (*Distributed Quantum Compiler*) is an open-source Python library for distributed quantum compilation. Given a quantum circuit and a network topology, it partitions the circuit across QPUs, routes inter-QPU gates, and reconstructs a distributed circuit ready for execution or further analysis.
 
@@ -44,6 +56,21 @@ The library is designed to be modular and plug-and-play: researchers can run the
 ---
 
 ## Quick start
+
+No circuit or network to hand? The library ships a reference set, so the
+shortest complete run is:
+
+```python
+from memq_dqc import Compiler
+from memq_dqc.assets import circuit_path, network_path
+
+compiler = Compiler(circuit_path("qft_n10"), network_path("10_qubits/n2_pair_nn"))
+compiler.compile()
+
+print("verified:", compiler.verify(shots=20000))
+```
+
+With your own files:
 
 ```python
 from memq_dqc.partition import Partitioner
@@ -107,6 +134,42 @@ Pass `algo=` to `Partitioner` to select a partitioning strategy. The default is 
 ```python
 partitioner = Partitioner("network.json", "circuit.qasm", algo="hypergraph")
 ```
+
+---
+
+## Bundled networks and circuits
+
+`memq_dqc.assets` exposes a reference suite that ships inside the installed
+package — 40 network topologies and 10 circuits — so the full workflow runs
+without writing a topology first. Both accessors return a `Path`, which is what
+`Compiler`, `Partitioner`, and `NetworkGraph` already accept.
+
+```python
+from memq_dqc.assets import circuit_path, list_circuits, list_networks, network_path
+
+list_circuits()  # ['adder_n28', 'multiply_n13', 'qft_n10', ...]  4-60 qubits
+list_networks()  # ['10_qubits/n2_pair_a2a', '10_qubits/n2_pair_nn', ...]
+```
+
+Circuits are transpiled OpenQASM 3.0 programs named `<algorithm>_n<qubits>`,
+spanning 4 to 60 qubits. Each is fully measured — a `bit[n] c` register and one
+explicit `c[i] = measure q[i];` per qubit — so they work as verification inputs
+as well as compilation inputs. Sampling-based `verify()` is practical up to
+`multiply_n13` plus `adder_n28`; the wide QFTs starve it, and verify exactly
+via `method="statevector"` instead. See the guide for which method covers
+which circuit.
+
+Networks are grouped by the circuit size they host (10, 20, 30, 40, 60 qubits)
+and named `n<QPUs>_<arrangement>_<variant>` — for example
+`30_qubits/n4_hub_nn`. The size is a capacity, not an exact match: a 30-qubit
+network hosts any circuit of 30 qubits or fewer. Arrangements cover `pair`,
+`chain`, `ring`, and `hub`; each comes in a nearest-neighbour (`_nn`) and an
+all-to-all (`_a2a`) intra-QPU variant, so you can isolate the effect of local
+connectivity while holding the inter-QPU arrangement fixed. Every network has a
+same-named Markdown file documenting it in full, reachable via
+`network_doc_path()`.
+
+See the [Bundled Networks & Circuits guide](https://dqc.readthedocs.io/en/latest/guide/bundled-assets/) for the full catalogue.
 
 ---
 

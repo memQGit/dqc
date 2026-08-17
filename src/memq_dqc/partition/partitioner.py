@@ -344,7 +344,7 @@ class Partitioner:
         first access if needed.
 
         Returns:
-            An annotated :class:`networkx.DiGraph` of the distributed circuit.
+            An annotated `networkx.DiGraph` of the distributed circuit.
         """
         from memq_dqc.circuit.dag import build_annotated_dag
 
@@ -359,7 +359,7 @@ class Partitioner:
         """Serialize the annotated distributed DAG to a JSON document.
 
         Opt-in export; compilation never serializes automatically. See
-        :func:`memq_dqc.circuit.dag.annotated_dag_to_json` for the document
+        [memq_dqc.circuit.dag.annotated_dag_to_json][memq_dqc.circuit.dag.annotated.annotated_dag_to_json] for the document
         layout. Extracts the distributed circuit on first access if needed.
 
         Args:

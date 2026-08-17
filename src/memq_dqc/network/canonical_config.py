@@ -16,7 +16,7 @@
 
 This module provides a stable, translation-oriented JSON representation for
 quantum networks. The canonical format is broader than the legacy network
-graph JSON used by :class:`memq_dqc.network.NetworkGraph`: it captures
+graph JSON used by [memq_dqc.network.NetworkGraph][memq_dqc.network.network_graph.NetworkGraph]: it captures
 topology, local hardware, reusable noise models, protocols, observables, and
 simulation settings with explicit cross-references by string ID.
 """
