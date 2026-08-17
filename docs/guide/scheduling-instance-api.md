@@ -91,7 +91,7 @@ Recommended for a first RL corpus: leave everything default (i.e.
 Hardware profile options:
 
 ```python
-SchedulerHardwareProfile.ba_trapped_ion()      # default
+SchedulerHardwareProfile.ba_trapped_ion()  # default
 SchedulerHardwareProfile.sr_trapped_ion()
 SchedulerHardwareProfile.neutral_atom()
 ```
@@ -347,12 +347,12 @@ from memq_dqc import compile_scheduling_instance
 inst = compile_scheduling_instance("qft.qasm", "net.json")
 
 # Observation building blocks:
-ops = inst.operations       # DAG nodes + nominal timing
-deps = inst.dependencies    # precedence edges
-res = inst.resources        # qubits + links (annotate .parameters yourself)
-dem = inst.epr_demands      # per-demand: consumer op, #pairs, assigned/candidate
-                            #   links, nominal start, predecessors, remaining
-                            #   critical path
+ops = inst.operations  # DAG nodes + nominal timing
+deps = inst.dependencies  # precedence edges
+res = inst.resources  # qubits + links (annotate .parameters yourself)
+dem = inst.epr_demands  # per-demand: consumer op, #pairs, assigned/candidate
+#   links, nominal start, predecessors, remaining
+#   critical path
 mk = inst.nominal_makespan  # zero-EPR-wait lower bound (baseline/normalizer)
 
 # Your DES enforces the DAG, applies your own EPR gen-rate + lifetime model,

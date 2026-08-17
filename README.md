@@ -140,13 +140,13 @@ See the [Network Builder guide](https://dqc.readthedocs.io/en/latest/guide/netwo
 
 ```python
 from memq_dqc.visualization import (
-    plot_distributed_circuit,   # gate layout across QPUs
-    plot_partition_flow,        # qubit migration across QPUs
-    plot_partition_heatmap,     # QPU assignment heatmap per window
-    plot_migration_timeline,    # qubit movement timeline with EPR cost
-    plot_circuit_dag,           # circuit DAG
-    plot_operation_gantt,       # operation Gantt chart
-    write_svg_dashboard_html,   # bundle panels into an HTML viewer
+    plot_distributed_circuit,  # gate layout across QPUs
+    plot_partition_flow,  # qubit migration across QPUs
+    plot_partition_heatmap,  # QPU assignment heatmap per window
+    plot_migration_timeline,  # qubit movement timeline with EPR cost
+    plot_circuit_dag,  # circuit DAG
+    plot_operation_gantt,  # operation Gantt chart
+    write_svg_dashboard_html,  # bundle panels into an HTML viewer
 )
 ```
 
@@ -160,7 +160,7 @@ distributed circuit executes:
 from memq_dqc.visualization import animate_circuit_execution
 
 animation = animate_circuit_execution(network, scheduler.schedule)
-animation.show()          # interactive window with play/pause and a scrubber
+animation.show()  # interactive window with play/pause and a scrubber
 animation.save("run.gif")  # or export to .gif / .mp4 / .html
 ```
 
