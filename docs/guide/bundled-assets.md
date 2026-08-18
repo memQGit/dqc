@@ -94,6 +94,13 @@ verify_distributed_circuit(
 Neither limit is a compilation failure. Every bundled circuit partitions and
 reconstructs; what varies is whether the result can be checked at that width.
 
+!!! note "More sophisticated verification is coming soon"
+
+    Sampling and statevector are today's two verification methods, and each
+    has a ceiling — sampling on distribution concentration, statevector on
+    qubit count. A more scalable verification approach that lifts these
+    limits is planned.
+
 ## Networks
 
 Networks are grouped by the circuit size they are built to host, and named

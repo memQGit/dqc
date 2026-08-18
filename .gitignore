@@ -37,7 +37,7 @@ TEMPORARY_TEST.qasm
 
 # Local notes
 scheduler_breakdown.md
-src/xdqc/scheduler/scheduler_plan.md
+src/memq_dqc/scheduler/scheduler_plan.md
 notes.txt
 CLEANUP.txt
 TODO.md
@@ -50,7 +50,7 @@ RELEASE_TODO.md
 # Benchmarking suite — kept local-only, not shipped to GitHub
 benchmarking/
 /make_figures.py
-src/xdqc/_bench.py
+src/memq_dqc/_bench.py
 tests/test_scheduler_benchmarking.py
 tests/test_scheduler_makespan_benchmarking.py
 # AI
@@ -60,7 +60,7 @@ CLAUDE.md
 local_only/
 .claude/
 
-# xdqc walkthrough demo (local hand-off only, not for GitHub)
+# dqc walkthrough demo (local hand-off only, not for GitHub)
 ml_demo/
 /demo_network.json
 /demo_network_new.json
@@ -73,5 +73,5 @@ ml_demo/
 # MkDocs build output
 site/
 
-# Local web app (xdqc studio)
+# Local web app (dqc studio)
 studio/

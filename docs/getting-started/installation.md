@@ -1,11 +1,31 @@
 # Installation
 
-DQC uses the [uv](https://docs.astral.sh/uv/) package manager and requires
-**Python 3.11 or newer**.
+DQC requires **Python 3.11 or newer** and is built and published with the
+[uv](https://docs.astral.sh/uv/) package manager. If you're new to uv, see
+the [first steps guide](https://docs.astral.sh/uv/getting-started/first-steps/)
+to get it installed.
+
+## From PyPI
+
+The package is published on PyPI as `memq-dqc`. To add it to an existing
+project:
+
+```bash
+uv add memq-dqc
+# or, with pip:
+pip install memq-dqc
+```
+
+This installs the library and its runtime dependencies (with the exception of KaHyPar for Windows users).
+This is the fastest way to get started if you just want to import
+`memq_dqc` into your own code.
 
 ## From a clone
 
-Clone the repository and sync the environment:
+Cloning the repository additionally gives you the example circuits,
+benchmarking assets, and demo notebooks used throughout these docs (under
+`examples/`, `benchmarking/`, and `demo/`), which are not part of the PyPI
+package.
 
 ```bash
 git clone https://github.com/memQGit/dqc.git
@@ -13,23 +33,12 @@ cd dqc
 uv sync
 ```
 
-`uv sync` installs the library and its runtime dependencies (Qiskit,
-NetworkX, OpenQASM 3, matplotlib, and — on every platform except Windows —
-KaHyPar) into a project virtual environment. Run any command inside that
-environment with `uv run`, for example:
+`uv sync` installs the library and its runtime dependencies into a project
+virtual environment. Run any command inside that environment with
+`uv run`, for example:
 
 ```bash
 uv run python -c "import memq_dqc; print(memq_dqc.__all__)"
-```
-
-## As a dependency
-
-To use DQC inside another project:
-
-```bash
-uv add memq-dqc
-# or, with pip:
-pip install memq-dqc
 ```
 
 ## Windows support

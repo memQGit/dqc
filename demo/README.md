@@ -1,4 +1,4 @@
-# xDQC Demos
+# DQC Demos
 
 Runnable notebooks covering the library. Launch them from the repository root
 so the kernel starts in this directory:

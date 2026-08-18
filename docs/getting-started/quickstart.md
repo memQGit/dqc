@@ -11,6 +11,9 @@ from memq_dqc.assets import circuit_path, network_path
 compiler = Compiler(circuit_path("qft_n10"), network_path("10_qubits/n2_pair_nn"))
 compiler.compile()
 print("verified:", compiler.verify(shots=20000))
+
+# Save the compiled, distributed circuit as an OpenQASM 3.0 file.
+compiler.save_distributed_circuit("distributed.qasm")
 ```
 
 `list_circuits()` and `list_networks()` from the same module enumerate what is
