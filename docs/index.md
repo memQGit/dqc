@@ -30,7 +30,7 @@ across circuits and network topologies.
 OpenQASM circuit + network topology
         │  compile
         ▼
-   distributed OpenQASM  ──►  verify  (is it still correct?)
+   distributed OpenQASM  ──►  verify  (circuit equivalence)
         │  schedule
         ▼
      execution schedule
