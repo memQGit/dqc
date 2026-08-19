@@ -32,7 +32,7 @@ topologies** and **10 transpiled circuits** (4–60 qubits) inside the installed
 package, so the full workflow runs before you have written a topology of your
 own.
 
-## 2. Modular design
+## 2. Modularity
 
 The pipeline is nine packages, each owning exactly one stage. You import from
 the ones your work touches and ignore the rest.
@@ -80,7 +80,7 @@ A new partitioning algorithm does not know that schedulers exist. A new
 scheduler does not know how partitioning happened. Both are handed a
 fully-formed object and asked one question.
 
-## 3. Extensibility and benchmarking
+## 3. Designed to be adaptable and extensible 
 
 Adding a partitioning algorithm means implementing **one method**. Subclass
 [`BasePartitioner`][memq_dqc.partition.BasePartitioner], fill in `run()`, and
