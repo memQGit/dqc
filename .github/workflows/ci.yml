@@ -94,3 +94,29 @@ jobs:
 
       - name: Build package
         run: uv build
+
+      # Installs the built wheel into an environment that has never seen the
+      # dev group, so only the dependencies the wheel itself declares are
+      # present. The test suite runs against `uv sync --dev` and so cannot
+      # see a runtime import satisfied by a dev-only dependency -- exactly
+      # how the missing `qiskit-qasm3-import` reached PyPI in 0.1.0. The
+      # snippet is the shortest complete run from README.md, so a failure
+      # here means the front-page example is broken for a fresh install.
+      # Ubuntu-only: this checks packaging metadata, not platform behaviour.
+      - name: Smoke test the built wheel
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          uv run --isolated --no-project --with dist/*.whl python -c '
+          from memq_dqc import Compiler
+          from memq_dqc.assets import circuit_path, network_path
+
+          compiler = Compiler(
+              circuit_path("qft_n10"),
+              network_path("10_qubits/n2_pair_nn"),
+          )
+
+          compiler.compile()
+
+          print("verified:", compiler.verify(shots=20000))
+          '
