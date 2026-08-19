@@ -17,13 +17,6 @@ execution or further analysis.
 
 </div>
 
-**DQC** (*Distributed Quantum Compiler*) is built around one design goal:
-every stage of the pipeline — partitioning, routing, scheduling,
-visualization — is a swappable component. Researchers can run the
-full compilation workflow in a few lines of code, drop in their own
-partitioning algorithm, and benchmark it against the built-in strategies
-across circuits and network topologies.
-
 ## The workflow
 
 ```
@@ -58,6 +51,8 @@ print("makespan:", scheduler.schedule.makespan)
 
 <div class="grid cards" markdown>
 
+- :material-puzzle-outline: **[Key Features](key-features.md)** — what goes in
+  and comes out, the nine packages, and how few of them a change touches.
 - :material-download: **[Installation](getting-started/installation.md)** —
   set up the library with `uv`.
 - :material-rocket-launch: **[Quickstart](getting-started/quickstart.md)** —
