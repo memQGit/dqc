@@ -1,6 +1,6 @@
 # Scheduling Strategies
 
-This repository currently exposes four concrete scheduling strategies:
+DQC currently exposes four concrete scheduling strategies:
 
 - `fifo`
 - `des_link_fifo`
@@ -18,12 +18,21 @@ d_i =
 t_{1q}, & \text{if } i \text{ is a local 1Q gate} \\
 t_{2q}, & \text{if } i \text{ is a local 2Q gate} \\
 t_{\mathrm{meas}}, & \text{if } i \text{ is a measurement} \\
-t_{2q} + t_{\mathrm{meas}} + t_{1q}, &
-\text{if } i \text{ is a remote gate} \\
-t_{2q} + 2 t_{1q} + t_{\mathrm{meas}}, &
+t_{2q} + t_{1q} + t_{\mathrm{meas}}, &
+\text{if } i \text{ is a } \mathrm{catent} \\
+2 t_{1q} + t_{\mathrm{meas}}, &
+\text{if } i \text{ is a } \mathrm{catdisent} \\
+2 \left( t_{2q} + 3 t_{1q} + 2 t_{\mathrm{meas}} \right), &
 \text{if } i \text{ is an } \mathrm{rswap}
 \end{cases}
 $$
+
+A remote gate is not one operation but a `catent` / `catdisent` pair, and each
+is priced separately. An `rswap` is **two** state teleportations, and one
+teleportation costs a two-qubit gate, three single-qubit gates, and two
+measurements — hence the factor of 2. See
+[Hardware & Settings](hardware.md#derived-durations) for the worked numbers
+under each packaged profile.
 
 The deterministic EPR duration used by `fifo` is
 
@@ -42,7 +51,9 @@ $t_{1q}$, $t_{2q}$, $t_{\mathrm{meas}}$, $r$, and the EPR lifetime are the
 primitive parameters; every duration above is derived from them. They default
 to the modality and entanglement profile selected in
 `src/memq_dqc/settings.toml`, and each can be overridden per compile or per
-scheduler run on `SchedulerHardwareProfile`:
+scheduler run on `SchedulerHardwareProfile`. [Hardware &
+Settings](hardware.md) documents every parameter and profile; the short
+version is:
 
 ```python
 from memq_dqc import SchedulerHardwareProfile
