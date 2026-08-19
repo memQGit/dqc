@@ -92,6 +92,20 @@ plugins:
             filters:
               - "!^_"
 
+# Fail the build on links that do not resolve. `.readthedocs.yaml` sets
+# `fail_on_warning: true`, so these become hard errors there and in any local
+# `mkdocs build --strict`. Note this validates links written in Markdown
+# pages; hrefs inside notebook markdown cells are emitted verbatim by
+# mkdocs-jupyter and are not checked, so notebooks link to absolute docs URLs.
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+  nav:
+    omitted_files: warn
+    not_found: warn
+
 markdown_extensions:
   # `generic: true` emits MathJax-agnostic markup that
   # javascripts/mathjax.js then typesets; needed by guide/scheduling.md
