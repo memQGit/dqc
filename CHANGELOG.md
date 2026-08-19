@@ -12,6 +12,14 @@ changes are always listed under **Changed** or **Removed**.
 
 ### Added
 
+- `BasePartitioner`, `QPU`, `PartitionSchedule`, and `PartitionWindows` are now
+  exported from `memq_dqc.partition`. They were already reachable only through
+  `memq_dqc.partition.partitioner`, yet appear in the signatures of
+  `Compiler.__init__` (whose `algo` argument accepts a `BasePartitioner`
+  subclass or instance) and `Compiler.recompile_with_placement` (whose
+  `schedule` is a `PartitionSchedule`, keyed by `QPU`). Subclassing a
+  partitioner or injecting a placement therefore required importing from a
+  private-looking path. Purely additive; no existing import changes.
 - `memq_dqc.assets`, a reference suite of 40 network topologies and 10 circuits
   bundled inside the installed package, so the full workflow runs without
   supplying a topology first. `network_path()`, `circuit_path()`, and
