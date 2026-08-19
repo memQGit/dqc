@@ -50,6 +50,10 @@ theme:
 extra_css:
   - stylesheets/extra.css
 
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
 plugins:
   - search
   - gen-files:
@@ -88,7 +92,26 @@ plugins:
             filters:
               - "!^_"
 
+# Fail the build on links that do not resolve. `.readthedocs.yaml` sets
+# `fail_on_warning: true`, so these become hard errors there and in any local
+# `mkdocs build --strict`. Note this validates links written in Markdown
+# pages; hrefs inside notebook markdown cells are emitted verbatim by
+# mkdocs-jupyter and are not checked, so notebooks link to absolute docs URLs.
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+  nav:
+    omitted_files: warn
+    not_found: warn
+
 markdown_extensions:
+  # `generic: true` emits MathJax-agnostic markup that
+  # javascripts/mathjax.js then typesets; needed by guide/scheduling.md
+  # and guide/hardware.md, which state their timing models as equations.
+  - pymdownx.arithmatex:
+      generic: true
   - admonition
   - attr_list
   - md_in_html
@@ -108,13 +131,18 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Key Features: key-features.md
   - Getting Started:
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
   - Guide:
       - Workflow & Architecture: guide/workflow.md
+      - Network Topology Format: guide/networks.md
       - Network Builder: guide/network-builder.md
+      - Bundled Networks & Circuits: guide/bundled-assets.md
       - Partitioning Algorithms: guide/partitioning.md
+      - Hardware & Settings: guide/hardware.md
+      - Scheduling Strategies: guide/scheduling.md
       - Visualization: guide/visualization.md
       - Logging & Verbosity: guide/logging.md
       - Scheduling-Instance API: guide/scheduling-instance-api.md
