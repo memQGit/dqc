@@ -83,5 +83,14 @@ jobs:
           fail_ci_if_error: true
           token: ${{ env.CODECOV_TOKEN }}
 
+      # `--strict` promotes MkDocs warnings to errors, matching
+      # `fail_on_warning: true` in .readthedocs.yaml. Without this step the
+      # link validation configured in docs/mkdocs.yml only ever runs on a Read
+      # the Docs build, which cannot happen while the repo is private.
+      # Ubuntu-only: the output is platform-independent.
+      - name: Build docs (strict)
+        if: matrix.os == 'ubuntu-latest'
+        run: uv run --group docs mkdocs build --strict -f docs/mkdocs.yml
+
       - name: Build package
         run: uv build
