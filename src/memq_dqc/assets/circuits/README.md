@@ -50,5 +50,5 @@ qubits included: `adder_n28` is 34 qubits wide once distributed over
 `30_qubits/n2_pair_nn`.
 
 Neither limit is a compilation failure — every circuit here partitions and
-reconstructs. See the [guide](https://dqc.readthedocs.io/en/latest/guide/bundled-assets/)
+reconstructs. See the [guide](https://memq-dqc.readthedocs.io/en/latest/guide/bundled-assets/)
 for the statevector example.
