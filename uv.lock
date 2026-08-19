@@ -1509,6 +1509,7 @@ dependencies = [
     { name = "pylatexenc" },
     { name = "qiskit" },
     { name = "qiskit-aer" },
+    { name = "qiskit-qasm3-import" },
 ]
 
 [package.optional-dependencies]
@@ -1531,7 +1532,6 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "qiskit" },
-    { name = "qiskit-qasm3-import" },
     { name = "ruff" },
     { name = "tox" },
 ]
@@ -1553,6 +1553,7 @@ requires-dist = [
     { name = "pylatexenc", specifier = ">=2.10" },
     { name = "qiskit", specifier = ">=2.3.0" },
     { name = "qiskit-aer", specifier = ">=0.17.2" },
+    { name = "qiskit-qasm3-import", specifier = ">=0.5" },
 ]
 provides-extras = ["builder"]
 
@@ -1571,7 +1572,6 @@ dev = [
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "pytest-cov", specifier = ">=7.0.0" },
     { name = "qiskit", specifier = ">=1.0" },
-    { name = "qiskit-qasm3-import", specifier = ">=0.5" },
     { name = "ruff", specifier = ">=0.14.11" },
     { name = "tox", specifier = ">=4.25.0" },
 ]
