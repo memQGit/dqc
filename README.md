@@ -12,8 +12,8 @@
     <a href="https://github.com/memQGit/dqc/actions/workflows/ci.yml">
         <img src="https://github.com/memQGit/dqc/actions/workflows/ci.yml/badge.svg" alt="CI Status">
     </a>
-    <a href="https://dqc.readthedocs.io/en/latest/">
-        <img src="https://readthedocs.org/projects/dqc/badge/?version=latest" alt="Documentation Status">
+    <a href="https://memq-dqc.readthedocs.io/en/latest/">
+        <img src="https://readthedocs.org/projects/memq-dqc/badge/?version=latest" alt="Documentation Status">
     </a>
     <a href="https://codecov.io/gh/memQGit/dqc" > 
         <img src="https://codecov.io/gh/memQGit/dqc/graph/badge.svg?token=ZCPU4YYJ8B"/> 
@@ -46,6 +46,8 @@
 It is built around one design goal: every stage of the pipeline — partitioning, routing, scheduling, visualization — is a swappable component, so researchers can extend the compiler with their own algorithms rather than work around it.
 
 The library is designed to be modular and plug-and-play: researchers can run the full compilation workflow in a few lines of code, swap in different partitioning algorithms, and benchmark them against each other across circuits and network topologies.
+
+📖 **Full documentation: [memq-dqc.readthedocs.io](https://memq-dqc.readthedocs.io/en/latest/)** — guides, API reference, and runnable demos.
 
 ---
 
@@ -169,7 +171,7 @@ connectivity while holding the inter-QPU arrangement fixed. Every network has a
 same-named Markdown file documenting it in full, reachable via
 `network_doc_path()`.
 
-See the [Bundled Networks & Circuits guide](https://dqc.readthedocs.io/en/latest/guide/bundled-assets/) for the full catalogue.
+See the [Bundled Networks & Circuits guide](https://memq-dqc.readthedocs.io/en/latest/guide/bundled-assets/) for the full catalogue.
 
 ---
 
@@ -193,7 +195,7 @@ Installing from PyPI rather than a clone? The builder needs Flask, which ships a
 
 The builder also records per-qubit `coherenceTime` and per-link `fidelity`. No current partitioner or scheduler reads these — they are carried in the format so networks built today stay useful to coherence- and fidelity-aware algorithms later.
 
-See the [Network Builder guide](https://dqc.readthedocs.io/en/latest/guide/network-builder/) for details.
+See the [Network Builder guide](https://memq-dqc.readthedocs.io/en/latest/guide/network-builder/) for details.
 
 ---
 
