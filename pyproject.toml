@@ -20,6 +20,9 @@ dependencies = [
     "pylatexenc>=2.10",
     "qiskit>=2.3.0",
     "qiskit-aer>=0.17.2",
+    # verify_distributed_circuit() parses OpenQASM 3 via qiskit.qasm3.loads,
+    # which needs this optional Qiskit backend at runtime.
+    "qiskit-qasm3-import>=0.5",
 ]
 
 classifiers = [
@@ -85,7 +88,6 @@ dev = [
     "pytest>=9.0.2",
     "pytest-cov>=7.0.0",
     "qiskit>=1.0",
-    "qiskit_qasm3_import>=0.5",
     "ruff>=0.14.11",
     "tox>=4.25.0",
 ]
