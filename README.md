@@ -57,7 +57,7 @@ The library is designed to be modular and plug-and-play: researchers can run the
 
 ## Quick start
 
-No circuit or network to hand? The library ships a reference set, so the
+No circuit or network to use? The library ships a reference set, so the
 shortest complete run is:
 
 ```python
