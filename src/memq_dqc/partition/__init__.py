@@ -19,13 +19,23 @@ from .benchmark_static import BenchmarkStaticPartitioner
 from .hypergraph import HypergraphPartitioner
 from .interaction import InteractionPartitioner
 from .interaction_static import InteractionStaticPartitioner
-from .partitioner import Partitioner
+from .partitioner import (
+    QPU,
+    BasePartitioner,
+    Partitioner,
+    PartitionSchedule,
+    PartitionWindows,
+)
 
 __all__ = [
+    "QPU",
+    "BasePartitioner",
     "BenchmarkRandomPartitioner",
     "BenchmarkStaticPartitioner",
     "HypergraphPartitioner",
     "InteractionPartitioner",
     "InteractionStaticPartitioner",
+    "PartitionSchedule",
+    "PartitionWindows",
     "Partitioner",
 ]

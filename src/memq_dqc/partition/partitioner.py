@@ -56,8 +56,11 @@ class QPU:
     id: int
 
 
-PartitionSchedule = list[dict[QPU, set[int]]]
-PartitionWindows = list[list[Op]]
+PartitionSchedule: TypeAlias = list[dict[QPU, set[int]]]
+"""Per-window placement mapping each QPU to its assigned logical qubits."""
+
+PartitionWindows: TypeAlias = list[list[Op]]
+"""Per-window operation groupings produced alongside a placement."""
 NetworkInput: TypeAlias = NetworkGraph | str | PathLike[str]
 ProgramInput: TypeAlias = ast.Program | str | PathLike[str]
 
