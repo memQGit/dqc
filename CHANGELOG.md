@@ -10,7 +10,20 @@ changes are always listed under **Changed** or **Removed**.
 
 ## [Unreleased]
 
-## [0.1.0] - Unreleased
+## [0.1.1] - 2026-08-19
+
+### Fixed
+
+- **`verify()` now works on a fresh install.** `qiskit-qasm3-import` is a
+  runtime requirement — `verify_distributed_circuit()` parses OpenQASM 3 via
+  `qiskit.qasm3.loads()`, which needs it — but it was declared only in the
+  `dev` dependency group. A `pip install memq-dqc` therefore produced an
+  environment where verification raised
+  `MissingOptionalLibraryError`. It is now a project dependency, so no manual
+  install is needed. Users on `0.1.0` can either upgrade or run
+  `pip install qiskit_qasm3_import`.
+
+## [0.1.0] - 2026-08-19
 
 Initial public release.
 
@@ -162,5 +175,6 @@ pipeline.
 - The `examples/` directory, which duplicated `demo/` and contained a notebook
   that no longer imported. Its inputs now live in `demo/inputs/`.
 
-[Unreleased]: https://github.com/memQGit/dqc/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/memQGit/dqc/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/memQGit/dqc/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/memQGit/dqc/releases/tag/v0.1.0
