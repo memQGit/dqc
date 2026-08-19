@@ -49,7 +49,7 @@ network-builder = "memq_dqc.network_builder.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/memQGit/dqc"
-Documentation = "https://dqc.readthedocs.io/en/latest/"
+Documentation = "https://memq-dqc.readthedocs.io/en/latest/"
 Repository = "https://github.com/memQGit/dqc"
 Issues = "https://github.com/memQGit/dqc/issues"
 Changelog = "https://github.com/memQGit/dqc/blob/main/CHANGELOG.md"

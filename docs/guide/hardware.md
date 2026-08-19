@@ -227,5 +227,5 @@ selector raises `ValueError` naming the selector.
 
 - [Scheduling Strategies](scheduling.md) — what each of the four schedulers
   does with these timings.
-- [Scheduling & Hardware](https://dqc.readthedocs.io/en/latest/demos/scheduling_and_hardware/)
+- [Scheduling & Hardware](https://memq-dqc.readthedocs.io/en/latest/demos/scheduling_and_hardware/)
   — the runnable walkthrough.
