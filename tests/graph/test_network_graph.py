@@ -357,6 +357,21 @@ def test_remote_swap_ebit_cost_tracks_route_length(
     )
 
 
+def test_remote_swap_ebit_cost_is_two_per_hop(
+    chain_3qpu_2pairs_network_path: Path,
+) -> None:
+    network = NetworkGraph(str(chain_3qpu_2pairs_network_path))
+
+    # QPUs 0 and 2 are linked only through QPU 1, so the swap routes as two
+    # adjacent remote swaps: two hops at 2 e-bit pairs per hop.
+    assert network.remote_swap_ebit_cost(0, 2) == 4
+    # Each leg of that route is a single hop.
+    assert network.remote_swap_ebit_cost(0, 1) == 2
+    assert network.remote_swap_ebit_cost(1, 2) == 2
+    # Same QPU is free.
+    assert network.remote_swap_ebit_cost(1, 1) == 0
+
+
 def test_remote_swap_ebit_cost_requires_two_pairs(
     simple1_network_path: Path,
 ) -> None:

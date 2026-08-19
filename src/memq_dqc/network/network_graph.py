@@ -467,10 +467,10 @@ class NetworkGraph:
     ) -> int:
         """Return routed swap cost between two QPUs.
 
-        Every remote swap costs two e-bit pairs. A direct swap is one such
-        swap; a route through intermediaries walks the chain out and back to
-        restore the intermediate placements, which is ``2h - 1`` swaps for
-        ``h`` hops.
+        Every remote swap costs two e-bit pairs, and a route of ``h`` hops
+        lowers to ``h`` adjacent remote swaps, so the cost is ``2h``. A swap
+        onto a directly linked QPU is one hop and costs 2; a swap onto a QPU
+        one further along the chain is two hops and costs 4.
 
         Args:
             qpu_a: First QPU ID.
@@ -493,7 +493,7 @@ class NetworkGraph:
             pair_counts=pair_counts,
         )
         hops = len(path) - 1
-        return REMOTE_SWAP_EBIT_COST * ((2 * hops) - 1)
+        return REMOTE_SWAP_EBIT_COST * hops
 
     def _remote_comm_pair_counts(self) -> dict[tuple[int, int], int]:
         """Count simultaneously usable comm pairs between QPU pairs.
