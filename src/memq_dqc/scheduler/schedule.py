@@ -43,6 +43,7 @@ _MEASUREMENT_TIME = 3.0
 SchedulerModality: TypeAlias = Literal[
     "trapped_ion.ba",
     "trapped_ion.sr",
+    "trapped_ion.forte",
     "neutral_atom",
 ]
 SchedulerEntanglementProfile: TypeAlias = Literal[
@@ -220,6 +221,47 @@ class SchedulerHardwareProfile:
         """
         return cls(
             modality="trapped_ion.sr",
+            entanglement_profile=entanglement_profile,
+            one_qubit_gate_time=one_qubit_gate_time,
+            two_qubit_gate_time=two_qubit_gate_time,
+            measurement_time=measurement_time,
+            entanglement_rate=entanglement_rate,
+            epr_lifetime=epr_lifetime,
+        )
+
+    @classmethod
+    def forte_trapped_ion(
+        cls,
+        *,
+        entanglement_profile: SchedulerEntanglementProfile = (
+            DEFAULT_SCHEDULER_ENTANGLEMENT_PROFILE
+        ),
+        one_qubit_gate_time: float | None = None,
+        two_qubit_gate_time: float | None = None,
+        measurement_time: float | None = None,
+        entanglement_rate: float | None = None,
+        epr_lifetime: float | None = None,
+    ) -> SchedulerHardwareProfile:
+        """Return the IonQ Forte Enterprise 1 trapped-ion hardware selection.
+
+        Timings come from the vendor-published calibration record; unlike the
+        other packaged modalities, this profile also supplies its own
+        measurement time rather than falling back to the package default.
+
+        Args:
+            entanglement_profile: Entanglement-generation profile to pair with
+                the modality.
+            one_qubit_gate_time: Optional single-qubit gate duration override.
+            two_qubit_gate_time: Optional two-qubit gate duration override.
+            measurement_time: Optional measurement duration override.
+            entanglement_rate: Optional entanglement-generation rate override.
+            epr_lifetime: Optional EPR-pair lifetime override.
+
+        Returns:
+            The hardware profile.
+        """
+        return cls(
+            modality="trapped_ion.forte",
             entanglement_profile=entanglement_profile,
             one_qubit_gate_time=one_qubit_gate_time,
             two_qubit_gate_time=two_qubit_gate_time,
@@ -840,7 +882,12 @@ def _load_scheduler_timing_model(
         epr_lifetime=overrides.get(
             "epr_lifetime", entanglement_profile.epr_lifetime
         ),
-        measurement_time=overrides.get("measurement_time", _MEASUREMENT_TIME),
+        measurement_time=overrides.get(
+            "measurement_time",
+            modality_profile.measurement_time
+            if modality_profile.measurement_time is not None
+            else _MEASUREMENT_TIME,
+        ),
     )
 
 

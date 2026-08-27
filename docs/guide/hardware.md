@@ -45,13 +45,18 @@ used by the schedule visualizer.
 
 ## Modality profiles
 
-A modality supplies the local gate times. Three ship with the library:
+A modality supplies the local gate times. Four ship with the library:
 
-| Selector | Device | $t_{1q}$ | $t_{2q}$ |
-|---|---|---|---|
-| `trapped_ion.ba` | Ba⁺ trapped ion | 10 | 500 |
-| `trapped_ion.sr` | Sr⁺ trapped ion | 13 | 200 |
-| `neutral_atom` | Yb neutral atom | 1 | 0.8 |
+| Selector | Device | $t_{1q}$ | $t_{2q}$ | $t_{\mathrm{meas}}$ |
+|---|---|---|---|---|
+| `trapped_ion.ba` | Ba⁺ trapped ion | 10 | 500 | — |
+| `trapped_ion.sr` | Sr⁺ trapped ion | 13 | 200 | — |
+| `trapped_ion.forte` | IonQ Forte Enterprise 1 | 63 | 650 | 250 |
+| `neutral_atom` | Yb neutral atom | 1 | 0.8 | — |
+
+A profile may supply its own `measurement_time`; a `—` means it does not, and
+the scheduler falls back to its package default of 3 µs. `trapped_ion.forte` is
+the only packaged profile whose readout time is vendor-published.
 
 `trapped_ion.ba` is the default. Note the three-order-of-magnitude spread in
 $t_{2q}$ — the choice of modality changes makespans far more than any
@@ -65,7 +70,7 @@ experimental values from the literature, cited in `settings.toml`.
 | Selector | Source | $r$ (pairs/µs) | $t_{\mathrm{epr}} = 1/r$ |
 |---|---|---|---|
 | `ion.time_bin` | Saha et al. | 3.5 × 10⁻⁶ | ~285,700 µs |
-| `ion.polarization` | O'Reilly et al. | 2.5 × 10⁻³ | 400 µs |
+| `ion.polarization` | O'Reilly et al. | 2.5 × 10⁻⁴ | 4,000 µs |
 | `neutral_atom.polarization` | Young et al. | 3.2 × 10⁻² | 31.25 µs |
 | `demo.demo` | illustrative, not physical | 1 × 10⁻¹ | 10 µs |
 
@@ -124,7 +129,8 @@ atoms = SchedulerHardwareProfile.neutral_atom(
 )
 ```
 
-`ba_trapped_ion()`, `sr_trapped_ion()`, and `neutral_atom()` are equivalent to
+`ba_trapped_ion()`, `sr_trapped_ion()`, `forte_trapped_ion()`, and
+`neutral_atom()` are equivalent to
 constructing `SchedulerHardwareProfile(modality=...)` directly; prefer them, as
 they keep the selector string out of your code.
 
@@ -173,15 +179,15 @@ from.
 | FIFO entanglement window | $t_{\mathrm{epr}} = 1/r$ |
 | DES success probability | $p = 1 - e^{-r t_c}$ |
 
-Worked out for the packaged profiles, with $t_{\mathrm{meas}} = 3$ and
-$t_c = 1$:
+Worked out for the packaged profiles, with $t_c = 1$ and each profile's own
+$t_{\mathrm{meas}}$ (3 except for `trapped_ion.forte`, which supplies 250):
 
-| | `trapped_ion.ba` | `trapped_ion.sr` | `neutral_atom` |
-|---|---|---|---|
-| `catent` | 513 | 216 | 4.8 |
-| `catdisent` | 23 | 29 | 5.0 |
-| State teleport | 536 | 245 | 9.8 |
-| `rswap` | 1072 | 490 | 19.6 |
+| | `trapped_ion.ba` | `trapped_ion.sr` | `trapped_ion.forte` | `neutral_atom` |
+|---|---|---|---|---|
+| `catent` | 513 | 216 | 963 | 4.8 |
+| `catdisent` | 23 | 29 | 376 | 5.0 |
+| State teleport | 536 | 245 | 1339 | 9.8 |
+| `rswap` | 1072 | 490 | 2678 | 19.6 |
 
 Inspect them yourself for any profile:
 
@@ -207,7 +213,7 @@ settings = load_settings()
 settings.global_settings.time_unit  # 'us'
 settings.des_simulation.entanglement_time_step  # 1.0
 sorted(".".join(k) for k in settings.modality_profiles)
-# ['neutral_atom', 'trapped_ion.ba', 'trapped_ion.sr']
+# ['neutral_atom', 'trapped_ion.ba', 'trapped_ion.forte', 'trapped_ion.sr']
 ```
 
 Selectors accept either dotted strings or separate components:

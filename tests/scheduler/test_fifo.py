@@ -331,10 +331,40 @@ def test_scheduler_accepts_explicit_entanglement_profile(
     _x_op, _h_op, epr_op, catent_op, remote_op, catdisent_op = (
         scheduler.schedule.operations
     )
-    assert epr_op.duration == pytest.approx(400.0)
+    assert epr_op.duration == pytest.approx(4000.0)
     assert catent_op.duration == pytest.approx(513.0)
     assert remote_op.duration == pytest.approx(500.0)
     assert catdisent_op.duration == pytest.approx(23.0)
+
+
+def test_forte_profile_supplies_its_own_measurement_time(
+    tmp_path,
+    three_comp_one_comm_x2_network_path,
+) -> None:
+    """The Forte modality carries a readout time instead of the 3 us default."""
+    distributed_circuit = _build_distributed_circuit(
+        tmp_path,
+        three_comp_one_comm_x2_network_path,
+    )
+
+    scheduler = Scheduler(
+        distributed_circuit,
+        profile=SchedulerHardwareProfile.forte_trapped_ion(
+            entanglement_profile="ion.polarization"
+        ),
+    )
+    scheduler.run()
+
+    assert scheduler.schedule is not None
+    _x_op, _h_op, epr_op, catent_op, remote_op, catdisent_op = (
+        scheduler.schedule.operations
+    )
+    assert epr_op.duration == pytest.approx(4000.0)
+    # 650 (2q) + 63 (1q) + 250 (readout)
+    assert catent_op.duration == pytest.approx(963.0)
+    assert remote_op.duration == pytest.approx(650.0)
+    # 2 x 63 (1q) + 250 (readout)
+    assert catdisent_op.duration == pytest.approx(376.0)
 
 
 def test_scheduler_profile_object_supports_cross_family_mix(
@@ -360,7 +390,7 @@ def test_scheduler_profile_object_supports_cross_family_mix(
     )
     assert x_op.duration == pytest.approx(1.0)
     assert h_op.duration == pytest.approx(1.0)
-    assert epr_op.duration == pytest.approx(400.0)
+    assert epr_op.duration == pytest.approx(4000.0)
     assert catent_op.duration == pytest.approx(4.8)
     assert remote_op.duration == pytest.approx(0.8)
     assert catdisent_op.duration == pytest.approx(5.0)
