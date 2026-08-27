@@ -39,11 +39,34 @@ class LinkSelector:
     ("links") tied on cost. Always taking the first would overuse a single
     link, so this selector prefers the least-used link among the cheapest
     options, balancing load deterministically across one distributed build.
+
+    Balancing is suspended while a cat-entanglement gate group is open. Every
+    gate in a group shares one ``catent``/``catdisent`` pair, which is only
+    possible if each gate lands on the *same* communication qubits; handing
+    consecutive members different equal-cost links would force the group to
+    close after its first gate and emit one e-bit pair per remote gate. The
+    builder therefore calls :meth:`hold` once a group is open and
+    :meth:`release` when it closes, so load is balanced across groups rather
+    than across the gates within one.
     """
 
     def __init__(self) -> None:
         """Initialize an empty per-link usage tally."""
         self._use_counts: dict[tuple[str, str], int] = {}
+        self._held_key: tuple[str, str] | None = None
+        self._last_key: tuple[str, str] | None = None
+
+    def hold(self) -> None:
+        """Pin the most recently selected link until :meth:`release`.
+
+        While pinned, :meth:`select` returns that link whenever it is still
+        among the cheapest options. No-op if nothing has been selected yet.
+        """
+        self._held_key = self._last_key
+
+    def release(self) -> None:
+        """Resume balancing across equal-cost links."""
+        self._held_key = None
 
     def select(
         self, options: list[_RankedOption]
@@ -64,10 +87,32 @@ class LinkSelector:
             The chosen ``(comm_pair, local_paths)`` pair.
         """
         min_cost = options[0][0]
-        _, comm_pair, local_paths = min(
-            (option for option in options if option[0] == min_cost),
-            key=lambda option: self._use_counts.get(_link_key(option[1]), 0),
-        )
+        cheapest = [option for option in options if option[0] == min_cost]
+
+        # A pinned link wins outright while it remains among the cheapest, so
+        # that an open gate group keeps reusing one catent/catdisent pair. If
+        # it is no longer cheapest the pin is simply ignored and the group
+        # will close on the mismatch, which is the correct outcome.
+        chosen = None
+        if self._held_key is not None:
+            chosen = next(
+                (
+                    option
+                    for option in cheapest
+                    if _link_key(option[1]) == self._held_key
+                ),
+                None,
+            )
+        if chosen is None:
+            chosen = min(
+                cheapest,
+                key=lambda option: self._use_counts.get(
+                    _link_key(option[1]), 0
+                ),
+            )
+
+        _, comm_pair, local_paths = chosen
         key = _link_key(comm_pair)
         self._use_counts[key] = self._use_counts.get(key, 0) + 1
+        self._last_key = key
         return comm_pair, local_paths
