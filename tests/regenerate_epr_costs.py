@@ -19,10 +19,18 @@ from test_benchmark_epr_regression import (  # noqa: E402
     _compile,
 )
 
-TOPOLOGIES = ["fully_connected_2qpu", "nearest_neighbor_2qpu",
-              "ring_3qpu", "grid_4qpu"]
-ALGORITHMS = ["hypergraph", "interaction", "interaction-static",
-              "benchmark_static"]
+TOPOLOGIES = [
+    "fully_connected_2qpu",
+    "nearest_neighbor_2qpu",
+    "ring_3qpu",
+    "grid_4qpu",
+]
+ALGORITHMS = [
+    "hypergraph",
+    "interaction",
+    "interaction-static",
+    "benchmark_static",
+]
 
 
 def main() -> None:
