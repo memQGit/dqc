@@ -42,11 +42,15 @@ class ModalityProfile:
         path: Selector path used to identify the profile.
         one_qubit_gate_time: Duration of a single-qubit gate.
         two_qubit_gate_time: Duration of a two-qubit gate.
+        measurement_time: Duration of a measurement (readout). ``None`` when
+            the profile does not specify one, in which case the scheduler
+            falls back to its package default.
     """
 
     path: tuple[str, ...]
     one_qubit_gate_time: float
     two_qubit_gate_time: float
+    measurement_time: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,6 +246,15 @@ def _parse_modality_profiles(
                 leaf,
                 "2q_gate_time",
                 context=f"settings.modality.{'.'.join(path)}",
+            ),
+            measurement_time=(
+                _require_positive_number(
+                    leaf,
+                    "measurement_time",
+                    context=f"settings.modality.{'.'.join(path)}",
+                )
+                if "measurement_time" in leaf
+                else None
             ),
         )
     if not profiles:
