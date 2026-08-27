@@ -58,11 +58,19 @@ in CI for anyone with a clone.
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 
 import pytest
 
 from memq_dqc.partition.partitioner import Partitioner
+
+# KaHyPar publishes no Windows wheels, so the hypergraph cases cannot run
+# there. Skip them rather than pinning a platform-dependent expectation.
+requires_kahypar = pytest.mark.skipif(
+    importlib.util.find_spec("kahypar") is None,
+    reason="kahypar is not installed (no Windows wheels are published)",
+)
 
 _FIXTURES = Path(__file__).parent / "fixtures" / "benchmark"
 
@@ -161,7 +169,12 @@ def _compile(circuit: str, topology: str, algorithm: str) -> Partitioner:
 @pytest.mark.parametrize(
     ("circuit", "topology", "algorithm", "expected"),
     [
-        pytest.param(*key, value, id=f"{key[0]}-{key[1]}-{key[2]}")
+        pytest.param(
+            *key,
+            value,
+            id=f"{key[0]}-{key[1]}-{key[2]}",
+            marks=[requires_kahypar] if key[2] == "hypergraph" else [],
+        )
         for key, value in EXPECTED_EPR_COST.items()
     ],
 )
@@ -179,6 +192,7 @@ def test_epr_cost_is_unchanged(
     )
 
 
+@requires_kahypar
 def test_epr_cost_is_stable_across_repeated_compiles() -> None:
     """The deterministic partitioners must not vary run to run.
 
@@ -193,6 +207,7 @@ def test_epr_cost_is_stable_across_repeated_compiles() -> None:
     assert len(costs) == 1
 
 
+@requires_kahypar
 def test_all_to_all_intra_qpu_enables_gate_grouping() -> None:
     """All-to-all groups remote gates; nearest-neighbor cannot.
 
