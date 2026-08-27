@@ -114,7 +114,9 @@ def test_hold_is_ignored_when_the_pinned_link_is_no_longer_cheapest():
     selector.hold()
 
     # "a" is still offered, but only at a higher cost than "c".
-    comm_pair, _ = selector.select([_option(1, "c", "z"), _option(5, "a", "x")])
+    comm_pair, _ = selector.select(
+        [_option(1, "c", "z"), _option(5, "a", "x")]
+    )
 
     assert comm_pair[0].label == "c"
 

@@ -78,12 +78,28 @@ _NETWORK_DIR_FOR_CIRCUIT = {
 EXPECTED_EPR_COST = {
     ("multiply_n13_transpiled", "fully_connected_2qpu", "hypergraph"): 8,
     ("multiply_n13_transpiled", "fully_connected_2qpu", "interaction"): 16,
-    ("multiply_n13_transpiled", "fully_connected_2qpu", "interaction-static"): 8,
-    ("multiply_n13_transpiled", "fully_connected_2qpu", "benchmark_static"): 16,
+    (
+        "multiply_n13_transpiled",
+        "fully_connected_2qpu",
+        "interaction-static",
+    ): 8,
+    (
+        "multiply_n13_transpiled",
+        "fully_connected_2qpu",
+        "benchmark_static",
+    ): 16,
     ("multiply_n13_transpiled", "nearest_neighbor_2qpu", "hypergraph"): 14,
     ("multiply_n13_transpiled", "nearest_neighbor_2qpu", "interaction"): 19,
-    ("multiply_n13_transpiled", "nearest_neighbor_2qpu", "interaction-static"): 11,
-    ("multiply_n13_transpiled", "nearest_neighbor_2qpu", "benchmark_static"): 14,
+    (
+        "multiply_n13_transpiled",
+        "nearest_neighbor_2qpu",
+        "interaction-static",
+    ): 11,
+    (
+        "multiply_n13_transpiled",
+        "nearest_neighbor_2qpu",
+        "benchmark_static",
+    ): 14,
     ("multiply_n13_transpiled", "ring_3qpu", "hypergraph"): 18,
     ("multiply_n13_transpiled", "ring_3qpu", "interaction"): 18,
     ("multiply_n13_transpiled", "ring_3qpu", "interaction-static"): 14,
@@ -114,7 +130,11 @@ EXPECTED_EPR_COST = {
     ("adder_n28_transpiled", "fully_connected_2qpu", "benchmark_static"): 98,
     ("adder_n28_transpiled", "nearest_neighbor_2qpu", "hypergraph"): 11,
     ("adder_n28_transpiled", "nearest_neighbor_2qpu", "interaction"): 33,
-    ("adder_n28_transpiled", "nearest_neighbor_2qpu", "interaction-static"): 13,
+    (
+        "adder_n28_transpiled",
+        "nearest_neighbor_2qpu",
+        "interaction-static",
+    ): 13,
     ("adder_n28_transpiled", "nearest_neighbor_2qpu", "benchmark_static"): 106,
     ("adder_n28_transpiled", "ring_3qpu", "hypergraph"): 2,
     ("adder_n28_transpiled", "ring_3qpu", "interaction"): 67,
@@ -187,7 +207,9 @@ def test_all_to_all_intra_qpu_enables_gate_grouping() -> None:
     Asserted as a strict inequality plus a SWAP-count check rather than exact
     values, so it keeps testing the mechanism even if the numbers move.
     """
-    grouped = _compile("qft_n18_transpiled", "fully_connected_2qpu", "hypergraph")
+    grouped = _compile(
+        "qft_n18_transpiled", "fully_connected_2qpu", "hypergraph"
+    )
     ungrouped = _compile(
         "qft_n18_transpiled", "nearest_neighbor_2qpu", "hypergraph"
     )
