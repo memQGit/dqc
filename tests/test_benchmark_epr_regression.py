@@ -85,7 +85,7 @@ _NETWORK_DIR_FOR_CIRCUIT = {
 # Regenerate with tests/regenerate_epr_costs.py after an intended change.
 EXPECTED_EPR_COST = {
     ("multiply_n13_transpiled", "fully_connected_2qpu", "hypergraph"): 8,
-    ("multiply_n13_transpiled", "fully_connected_2qpu", "interaction"): 16,
+    ("multiply_n13_transpiled", "fully_connected_2qpu", "interaction"): 9,
     (
         "multiply_n13_transpiled",
         "fully_connected_2qpu",
@@ -97,7 +97,7 @@ EXPECTED_EPR_COST = {
         "benchmark_static",
     ): 16,
     ("multiply_n13_transpiled", "nearest_neighbor_2qpu", "hypergraph"): 14,
-    ("multiply_n13_transpiled", "nearest_neighbor_2qpu", "interaction"): 19,
+    ("multiply_n13_transpiled", "nearest_neighbor_2qpu", "interaction"): 18,
     (
         "multiply_n13_transpiled",
         "nearest_neighbor_2qpu",
@@ -109,11 +109,11 @@ EXPECTED_EPR_COST = {
         "benchmark_static",
     ): 14,
     ("multiply_n13_transpiled", "ring_3qpu", "hypergraph"): 18,
-    ("multiply_n13_transpiled", "ring_3qpu", "interaction"): 18,
+    ("multiply_n13_transpiled", "ring_3qpu", "interaction"): 17,
     ("multiply_n13_transpiled", "ring_3qpu", "interaction-static"): 14,
     ("multiply_n13_transpiled", "ring_3qpu", "benchmark_static"): 22,
     ("multiply_n13_transpiled", "grid_4qpu", "hypergraph"): 27,
-    ("multiply_n13_transpiled", "grid_4qpu", "interaction"): 40,
+    ("multiply_n13_transpiled", "grid_4qpu", "interaction"): 39,
     ("multiply_n13_transpiled", "grid_4qpu", "interaction-static"): 27,
     ("multiply_n13_transpiled", "grid_4qpu", "benchmark_static"): 34,
     ("qft_n18_transpiled", "fully_connected_2qpu", "hypergraph"): 9,
