@@ -94,9 +94,8 @@ class InteractionPartitioner(BasePartitioner):
                 # rate as the circuit; the bounds keep a segment's interaction
                 # graph large enough to be informative and small enough to keep
                 # the per-segment KL pass inexpensive. This is a starting point,
-                # not an optimum -- window_length is an explicit input and is
-                # worth sweeping (see benchmarking/experiments/
-                # experiment_9_segment_length).
+                # not an optimum -- window_length is an explicit input and
+                # is worth sweeping for a given circuit and network.
                 base_window = 2.0 * math.sqrt(num_two_qubit_ops)
                 min_window = 1 if num_two_qubit_ops < 10 else 10
                 max_window = min(100, num_two_qubit_ops)
