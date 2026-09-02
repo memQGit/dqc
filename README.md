@@ -33,6 +33,8 @@
     <a href="https://github.com/memQGit/dqc/blob/main/CHANGELOG.md">
       <img src="https://img.shields.io/badge/status-beta%20%C2%B7%20experimental-orange" alt="Status: beta, experimental">
     </a>
+    <a href="https://doi.org/10.5281/zenodo.22260966"><img src="https://zenodo.org/badge/1133126143.svg" alt="DOI"></a>
+
 </p>
 
 > [!WARNING]
