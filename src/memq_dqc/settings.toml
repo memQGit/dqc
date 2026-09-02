@@ -12,6 +12,16 @@ entanglement_time_step = 1.0 # microseconds
 1q_gate_time = 13
 2q_gate_time = 200
 
+# IonQ Forte Enterprise 1 calibration data, retrieved 2026-05-22 from
+# https://cloud.ionq.com/backends. Reported timings are in seconds; converted
+# to microseconds here. 1q = 63 us, 2q = 650 us, readout = 250 us. The same
+# record reports 1q/2q/SPAM fidelities of 0.9998/0.9918/0.9941 and
+# T1 = 188 s, T2 = 0.95 s, none of which the scheduler models today.
+[modality.trapped_ion.forte] # IonQ Forte Enterprise 1 (Yb+ / Ba+ hybrid)
+1q_gate_time = 63
+2q_gate_time = 650
+measurement_time = 250
+
 [modality.neutral_atom] # Yb neutral atom
 1q_gate_time = 1
 2q_gate_time = 0.8
@@ -39,8 +49,8 @@ entanglement_time_step = 1.0 # microseconds
 entanglement_rate = 3.5e-6 # pairs per microsecond
 epr_lifetime = 1e9 # microseconds (real value: 50)
 
-[entanglement_gen.ion.polarization] # O'Reilly et al. (Experimental value)
-entanglement_rate = 2.5e-3 # pairs per microsecond
+[entanglement_gen.ion.polarization] # O'Reilly et al. 2024, PRL 133, 090802 (Experimental value)
+entanglement_rate = 2.5e-4 # pairs per microsecond (250 Hz)
 epr_lifetime = 1e9 # microseconds (real value: 50)
 
 [entanglement_gen.neutral_atom.polarization] # Young et al. (Experimental value)

@@ -10,6 +10,58 @@ changes are always listed under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-02
+
+### Added
+
+- **IonQ Forte trapped-ion profile** (`modality.trapped_ion.forte`), built
+  from IonQ's published Forte Enterprise 1 calibration record: 63 us
+  single-qubit, 650 us two-qubit, 250 us readout. It is the first packaged
+  profile whose readout time is traceable to a source, so `ModalityProfile`
+  gains an optional `measurement_time` that the scheduler prefers when
+  present. The three existing profiles omit it and keep falling back to the
+  3 us package default, so their resolved timings are unchanged.
+- `CITATION.cff`, so GitHub renders a "Cite this repository" entry and
+  citation tools can generate a reference automatically.
+- `tests/test_benchmark_epr_regression.py`, pinning EPR cost across three
+  circuits, four topologies, and four deterministic partitioners, so a
+  regression in e-bit accounting fails a test rather than a figure.
+
+### Fixed
+
+- **A cat-entanglement group now stays on one link and shares one e-bit
+  pair.** Equal-cost link balancing ran per remote gate, including gates
+  inside an open group, so a group's members could be split across different
+  communication-qubit pairs — inflating e-bit cost by up to 18x on the
+  benchmark suite. `LinkSelector.hold()` pins the selection while a group is
+  open and `release()` resumes balancing, so load spreads *across* groups
+  rather than within one. A pinned link that stops being cheapest is ignored
+  rather than forced, closing the group on the mismatch.
+- **`HypergraphPartitioner` now applies its seed.** The partitioner recorded
+  a seed and documented it, but never forwarded it to KaHyPar, which used the
+  `seed=-1` from `kahypar_config.ini`. The seed is now passed through, so a
+  run can be made reproducible. Omitting it keeps the INI seed, so existing
+  results are unchanged. Note that this does not make KaHyPar's output
+  identical across platforms.
+- **`entanglement_gen.ion.polarization` rate corrected** from 2.5e-3 to
+  2.5e-4 pairs/us. The profile is attributed to O'Reilly et al., who report
+  250 Hz; the stored value was 2500 Hz, off by a factor of ten. Anything
+  deriving a schedule from this profile will see EPR windows lengthen
+  accordingly.
+
+### Changed
+
+- The interaction partitioner's automatic segment length is now a plain
+  `2*sqrt(g)` window rather than gate-density scaled, and is documented as a
+  tunable starting point. This lowers interaction-partitioner EPR counts.
+
+### Known limitations
+
+- KaHyPar output remains platform-dependent: `qft_n18` on `grid_4qpu` costs
+  226 e-bits on macOS and 240 on Linux, stable run to run on each. The
+  benchmark regression test asserts hypergraph rows within a 50% band for
+  that reason; the other three partitioners are pinned exactly.
+
 ## [0.1.1] - 2026-08-19
 
 ### Fixed
@@ -175,6 +227,7 @@ pipeline.
 - The `examples/` directory, which duplicated `demo/` and contained a notebook
   that no longer imported. Its inputs now live in `demo/inputs/`.
 
-[Unreleased]: https://github.com/memQGit/dqc/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/memQGit/dqc/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/memQGit/dqc/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/memQGit/dqc/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/memQGit/dqc/releases/tag/v0.1.0

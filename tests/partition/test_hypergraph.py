@@ -107,6 +107,7 @@ def test_hypergraph_partitioner_builds_static_schedule(
         config_path: str | Path,
         epsilon: float,
         block_capacities: list[int] | None = None,
+        seed: int | None = None,
     ) -> dict[str, int]:
         assert packet_counter
         assert k == 2
@@ -299,8 +300,10 @@ def _capturing_fake(captured: dict) -> object:
         config_path,
         epsilon,
         block_capacities=None,
+        seed=None,
     ) -> dict[str, int]:
         captured["block_capacities"] = block_capacities
+        captured["seed"] = seed
         return {"0": 0, "1": 0, "2": 0, "3": 1, "4": 1, "5": 1}
 
     return fake_partition_hypergraph
@@ -321,6 +324,42 @@ def test_partitioner_passes_qpu_capacities_by_default(
     Partitioner(network, program, algo="hypergraph").run()
 
     assert captured["block_capacities"] == network.comp_qubits_per_qpu()
+
+
+def test_partitioner_forwards_the_seed_to_kahypar(
+    simple1_circuit_path: Path,
+    three_comp_one_comm_x2_network_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict = {}
+    monkeypatch.setattr(
+        hypergraph_module, "partition_hypergraph", _capturing_fake(captured)
+    )
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+
+    Partitioner(
+        network, program, algo="hypergraph", algo_kwargs={"seed": 7}
+    ).run()
+
+    assert captured["seed"] == 7
+
+
+def test_partitioner_without_a_seed_leaves_the_ini_seed_alone(
+    simple1_circuit_path: Path,
+    three_comp_one_comm_x2_network_path: Path,
+    monkeypatch,
+) -> None:
+    captured: dict = {}
+    monkeypatch.setattr(
+        hypergraph_module, "partition_hypergraph", _capturing_fake(captured)
+    )
+    program = load_qasm_program(str(simple1_circuit_path))
+    network = NetworkGraph(str(three_comp_one_comm_x2_network_path))
+
+    Partitioner(network, program, algo="hypergraph").run()
+
+    assert captured["seed"] is None
 
 
 def test_partitioner_respect_capacities_false_passes_none(

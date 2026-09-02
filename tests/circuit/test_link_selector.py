@@ -84,3 +84,45 @@ def test_local_paths_pass_through():
     (_, _), local_paths = selector.select([_option(2, "a", "x")])
 
     assert local_paths == (["a"], ["x"])
+
+
+def test_hold_pins_the_last_link_so_a_gate_group_can_share_one_ebit():
+    """A held link wins over balancing, keeping one group on one link.
+
+    Every gate in a cat-entanglement group shares a single catent/catdisent
+    pair, which requires all of them to land on the same communication qubits.
+    Without the pin the balancer hands each member a different equal-cost link
+    and the group collapses to one e-bit pair per remote gate.
+    """
+    selector = LinkSelector()
+    options = [_option(2, "a", "x"), _option(2, "b", "y")]
+
+    assert selector.select(options)[0][0].label == "a"
+    selector.hold()
+
+    # Balancing alone would now prefer the unused "b" link on every call.
+    for _ in range(3):
+        assert selector.select(options)[0][0].label == "a"
+
+    selector.release()
+    assert selector.select(options)[0][0].label == "b"
+
+
+def test_hold_is_ignored_when_the_pinned_link_is_no_longer_cheapest():
+    selector = LinkSelector()
+    selector.select([_option(2, "a", "x")])
+    selector.hold()
+
+    # "a" is still offered, but only at a higher cost than "c".
+    comm_pair, _ = selector.select(
+        [_option(1, "c", "z"), _option(5, "a", "x")]
+    )
+
+    assert comm_pair[0].label == "c"
+
+
+def test_hold_before_any_selection_is_a_noop():
+    selector = LinkSelector()
+    selector.hold()
+
+    assert selector.select([_option(2, "a", "x")])[0][0].label == "a"

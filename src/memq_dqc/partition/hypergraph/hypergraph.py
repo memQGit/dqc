@@ -85,8 +85,8 @@ class HypergraphPartitioner(BasePartitioner):
                 weights so it respects non-uniform, fully-packed networks.
                 Set False to reproduce the prior behavior where KahyPar
                 balances uniformly using only ``epsilon``.
-            seed: Optional seed, recorded but not currently wired into the
-                KahyPar configuration.
+            seed: Optional KahyPar random seed. When omitted, the seed
+                from the INI configuration is used.
         """
         super().__init__(network, program, seed=seed)
         self.config_path = config_path
@@ -118,6 +118,7 @@ class HypergraphPartitioner(BasePartitioner):
             k=len(qpu_ids),
             config_path=resolve_kahypar_config_path(self.config_path),
             epsilon=self.epsilon,
+            seed=self.seed,
             block_capacities=(
                 [qpu_capacities[qpu_id] for qpu_id in qpu_ids]
                 if self.respect_qpu_capacities
@@ -228,6 +229,7 @@ def partition_hypergraph(
     config_path: str | PathLike[str],
     epsilon: float = 0.03,
     block_capacities: Sequence[int] | None = None,
+    seed: int | None = None,
 ) -> dict[str, int]:
     """Partition hypergraph nodes with KahyPar.
 
@@ -241,6 +243,8 @@ def partition_hypergraph(
             ``block_capacities[i]`` as its maximum allowed weight via
             KahyPar's custom target block weights. When omitted, KahyPar
             balances uniformly using only ``epsilon``.
+        seed: Optional KahyPar random seed. When omitted, the seed from the
+            INI configuration is used.
 
     Returns:
         Mapping from logical qubit string IDs to partition block IDs.
@@ -289,6 +293,8 @@ def partition_hypergraph(
     context.loadINIconfiguration(str(config_path))
     context.setK(k)
     context.setEpsilon(epsilon)
+    if seed is not None:
+        context.setSeed(seed)
     if block_capacities is not None:
         if len(block_capacities) != k:
             raise ValueError(

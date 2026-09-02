@@ -352,6 +352,8 @@ def build_distributed_statements(
                     active_gate_group,
                 )
                 active_gate_group = None
+                # Group over: resume balancing across equal-cost links.
+                link_selector.release()
             # Remap the logical gate operands into the current window's QPU
             # register space before building remote-gate statements.
             gate_qubits = _remap_cleaned_qubits(
@@ -385,6 +387,10 @@ def build_distributed_statements(
                 )
             ):
                 distributed_gate_emitted = True
+                # Pin the link this group opened on, so the remaining members
+                # land on the same communication qubits and can share one
+                # catent/catdisent pair instead of forcing a new one each.
+                link_selector.hold()
             else:
                 distributed_statements.extend(remote_gate_statements)
                 distributed_gate_emitted = True
@@ -393,6 +399,7 @@ def build_distributed_statements(
                     current_circuit_qubit_to_physical,
                     placement_swaps,
                 )
+                link_selector.release()
         # Insert non-remote gates
         else:
             if isinstance(statement, CleanedQuantumGate):

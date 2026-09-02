@@ -89,10 +89,14 @@ class InteractionPartitioner(BasePartitioner):
             if num_two_qubit_ops == 0:
                 self.window_length = 1
             else:
-                gate_density = num_two_qubit_ops / max(1, num_qubits)
-                # TODO: parameterize this function
-                density_scale = max(0.5, min(math.sqrt(gate_density), 2.0))
-                base_window = math.sqrt(num_two_qubit_ops) * density_scale
+                # Default segment length: 2*sqrt(g), bounded. The sqrt keeps
+                # the segment count and the segment size growing at the same
+                # rate as the circuit; the bounds keep a segment's interaction
+                # graph large enough to be informative and small enough to keep
+                # the per-segment KL pass inexpensive. This is a starting point,
+                # not an optimum -- window_length is an explicit input and
+                # is worth sweeping for a given circuit and network.
+                base_window = 2.0 * math.sqrt(num_two_qubit_ops)
                 min_window = 1 if num_two_qubit_ops < 10 else 10
                 max_window = min(100, num_two_qubit_ops)
                 self.window_length = max(
