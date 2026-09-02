@@ -7,6 +7,7 @@ authors:
     given-names: Luke
     email: luke.andreesen@memq.tech
     affiliation: memQ Inc.
+    orcid: "https://orcid.org/0009-0001-3475-6223"
   - name: memQ Inc.
     email: luke.andreesen@memq.tech
 repository-code: "https://github.com/memQGit/dqc"
