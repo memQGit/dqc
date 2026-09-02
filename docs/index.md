@@ -1,6 +1,6 @@
 # DQC — Distributed Quantum Compiler
 
-!!! warning "Version 0.1.0 — beta, experimental"
+!!! warning "Version 0.1.2 — beta, experimental"
 
     DQC is an early release. It is usable for research and benchmarking, but
     the public API may change in any minor release before `1.0.0`. Pin an

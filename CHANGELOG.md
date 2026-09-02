@@ -10,6 +10,13 @@ changes are always listed under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-01
+
+### Added
+
+- `CITATION.cff`, so GitHub renders a "Cite this repository" entry and tools
+  can generate a citation for the project automatically.
+
 ## [0.1.1] - 2026-08-19
 
 ### Fixed
@@ -175,6 +182,7 @@ pipeline.
 - The `examples/` directory, which duplicated `demo/` and contained a notebook
   that no longer imported. Its inputs now live in `demo/inputs/`.
 
-[Unreleased]: https://github.com/memQGit/dqc/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/memQGit/dqc/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/memQGit/dqc/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/memQGit/dqc/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/memQGit/dqc/releases/tag/v0.1.0
