@@ -28,7 +28,7 @@
       <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License">
     </a>
     <a href="https://github.com/memQGit/dqc/blob/main/CHANGELOG.md">
-      <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Version 0.1.0">
+      <img src="https://img.shields.io/badge/version-0.1.2-blue" alt="Version 0.1.2">
     </a>
     <a href="https://github.com/memQGit/dqc/blob/main/CHANGELOG.md">
       <img src="https://img.shields.io/badge/status-beta%20%C2%B7%20experimental-orange" alt="Status: beta, experimental">
@@ -36,7 +36,7 @@
 </p>
 
 > [!WARNING]
-> **DQC is at `0.1.0` — a beta, experimental release.** It is usable for
+> **DQC is at `0.1.2` — a beta, experimental release.** It is usable for
 > research and benchmarking, but the public API may change in any minor
 > release before `1.0.0`. Pin an exact version if you depend on it, and see
 > the [CHANGELOG](CHANGELOG.md) for what moved.

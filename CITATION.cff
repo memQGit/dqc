@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "DQC — Distributed Quantum Compiler"
+message: "If you use this software, please cite it as below."
+type: software
+authors:
+  - family-names: Andreesen
+    given-names: Luke
+    email: luke.andreesen@memq.tech
+    affiliation: memQ Inc.
+  - name: memQ Inc.
+    email: luke.andreesen@memq.tech
+repository-code: "https://github.com/memQGit/dqc"
+url: "https://memq-dqc.readthedocs.io/en/latest/"
+abstract: >-
+  A Python library for distributed quantum compilation. It takes an input
+  circuit and a network topology, partitions the circuit across QPUs,
+  reconstructs and emits the distributed circuit as OpenQASM, and builds a
+  time execution schedule. Intended as a modular platform for benchmarking
+  partitioning algorithms and exploring quantum network configurations.
+keywords:
+  - quantum computing
+  - distributed quantum computing
+  - quantum compiler
+  - circuit partitioning
+  - quantum networks
+license: Apache-2.0
+version: 0.1.2
+date-released: "2026-09-01"
