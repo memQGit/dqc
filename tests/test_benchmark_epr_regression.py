@@ -44,6 +44,24 @@ same commit as the change, and regenerate the results tables and figures that
 depend on it. Never update a number here to make a red test green without
 establishing why it moved.
 
+WHY HYPERGRAPH IS A BAND AND NOT A NUMBER
+-----------------------------------------
+KaHyPar returns a different partition on Linux than on macOS for the same
+input, so its cost cannot be pinned to one integer. ``grid_4qpu`` diverges
+most: the multiplier costs 27 on macOS and 35 on Linux, and QFT-18 costs 226
+against 240. Both are stable run to run on a given platform, so this is a
+property of the compiled library and not flakiness. Seeding does not close the
+gap -- the multiplier case does respond to ``seed`` (27 to 35 across values,
+so Linux's result is reachable), but QFT-18 returns 226 for every seed tried
+on macOS while Linux still returns 240.
+
+So the ``hypergraph`` rows assert a band around the recorded value instead of
+equality. The tolerance below is sized off that worst observed spread, with
+headroom. It is deliberately wide, and the regressions this file exists to
+catch are far wider still: the ``34f06f8`` regression multiplied cost by 18x,
+which no plausible tolerance would hide. Treat a hypergraph number as
+indicative; the other three partitioners stay pinned exactly.
+
 WHAT IS COVERED
 ---------------
 Three circuits of different structure (a multiplier, a QFT, an adder) across
@@ -71,6 +89,10 @@ requires_kahypar = pytest.mark.skipif(
     importlib.util.find_spec("kahypar") is None,
     reason="kahypar is not installed (no Windows wheels are published)",
 )
+
+# Widest observed Linux/macOS gap is 30% (27 vs 35 on multiply/grid_4qpu);
+# 0.5 leaves headroom without admitting a real regression.
+_HYPERGRAPH_REL_TOLERANCE = 0.5
 
 _FIXTURES = Path(__file__).parent / "fixtures" / "benchmark"
 
@@ -181,12 +203,23 @@ def _compile(circuit: str, topology: str, algorithm: str) -> Partitioner:
 def test_epr_cost_is_unchanged(
     circuit: str, topology: str, algorithm: str, expected: int
 ) -> None:
-    """Pin EPR-pair cost per (circuit, topology, partitioner)."""
-    partitioner = _compile(circuit, topology, algorithm)
+    """Pin EPR-pair cost per (circuit, topology, partitioner).
 
-    assert partitioner.cost == pytest.approx(expected), (
-        f"EPR cost for {circuit} / {topology} / {algorithm} moved from "
-        f"{expected} to {partitioner.cost:.0f}. Establish which change moved "
+    Exactly, except for ``hypergraph``, which is asserted within
+    ``_HYPERGRAPH_REL_TOLERANCE`` because KahyPar's output is
+    platform-dependent. See this module's docstring.
+    """
+    partitioner = _compile(circuit, topology, algorithm)
+    if algorithm == "hypergraph":
+        allowed = pytest.approx(expected, rel=_HYPERGRAPH_REL_TOLERANCE)
+        bound = f"outside {_HYPERGRAPH_REL_TOLERANCE:.0%} of {expected}"
+    else:
+        allowed = pytest.approx(expected)
+        bound = f"away from the pinned {expected}"
+
+    assert partitioner.cost == allowed, (
+        f"EPR cost for {circuit} / {topology} / {algorithm} moved to "
+        f"{partitioner.cost:.0f}, {bound}. Establish which change moved "
         "it and whether the new value is correct before updating this table; "
         "the published results tables depend on these numbers."
     )
