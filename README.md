@@ -33,7 +33,12 @@
     <a href="https://github.com/memQGit/dqc/blob/main/CHANGELOG.md">
       <img src="https://img.shields.io/badge/status-beta%20%C2%B7%20experimental-orange" alt="Status: beta, experimental">
     </a>
-    <a href="https://doi.org/10.5281/zenodo.22260966"><img src="https://zenodo.org/badge/1133126143.svg" alt="DOI"></a>
+    <a href="https://doi.org/10.5281/zenodo.22260966">
+      <img src="https://zenodo.org/badge/DOI/10.5281/zenodo.22260966.svg" alt="DOI">
+    </a>
+    <a href="https://arxiv.org/abs/2609.15728">
+      <img src="https://img.shields.io/badge/arXiv-2609.15728-b31b1b.svg" alt="arXiv:2609.15728">
+    </a>
 
 </p>
 
@@ -48,6 +53,8 @@
 It is built around one design goal: every stage of the pipeline — partitioning, routing, scheduling, visualization — is a swappable component, so researchers can extend the compiler with their own algorithms rather than work around it.
 
 The library is designed to be modular and plug-and-play: researchers can run the full compilation workflow in a few lines of code, swap in different partitioning algorithms, and benchmark them against each other across circuits and network topologies.
+
+Our preprint, [*A Modular, Topology-Aware Software Stack for Entanglement-Based Distributed Quantum Computing*](https://arxiv.org/abs/2609.15728), describes the framework behind DQC and uses it to show that the best-performing compilation strategy varies with the circuit and the network, and that both network topology and intra-QPU connectivity substantially affect the entanglement cost of execution.
 
 📖 **Full documentation: [memq-dqc.readthedocs.io](https://memq-dqc.readthedocs.io/en/latest/)** — guides, API reference, and runnable demos.
 
