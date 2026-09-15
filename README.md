@@ -33,11 +33,11 @@
     <a href="https://github.com/memQGit/dqc/blob/main/CHANGELOG.md">
       <img src="https://img.shields.io/badge/status-beta%20%C2%B7%20experimental-orange" alt="Status: beta, experimental">
     </a>
-    <a href="https://doi.org/10.5281/zenodo.22260966">
-      <img src="https://zenodo.org/badge/DOI/10.5281/zenodo.22260966.svg" alt="DOI">
-    </a>
     <a href="https://arxiv.org/abs/2609.15728">
       <img src="https://img.shields.io/badge/arXiv-2609.15728-b31b1b.svg" alt="arXiv:2609.15728">
+    </a>
+    <a href="https://doi.org/10.5281/zenodo.22260966">
+      <img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.22260966-blue.svg" alt="DOI: 10.5281/zenodo.22260966">
     </a>
 
 </p>
