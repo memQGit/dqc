@@ -10,6 +10,14 @@ changes are always listed under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+### Added
+
+- **MCP server** (`memq-dqc-mcp`), exposing the compile, verify, schedule,
+  and partitioner-comparison workflow as Model Context Protocol tools so MCP
+  clients such as Claude can drive the compiler. Built on FastMCP, which
+  ships as the optional `mcp` extra (`pip install "memq-dqc[mcp]"`). Runs
+  over stdio by default, with `--transport http` for URL-based clients.
+
 ## [0.1.2] - 2026-09-02
 
 ### Added
