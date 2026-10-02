@@ -43,8 +43,12 @@ classifiers = [
 builder = [
     "flask>=3.0,<4",
 ]
+mcp = [
+    "fastmcp>=4.0,<5",
+]
 
 [project.scripts]
+memq-dqc-mcp = "memq_dqc.mcp_server.cli:main"
 network-builder = "memq_dqc.network_builder.cli:main"
 
 [project.urls]
@@ -78,8 +82,10 @@ docs = [
 ]
 dev = [
     { include-group = "docs" },
-    # Mirrors the `builder` extra so `uv run network-builder` works from a
-    # checkout without asking for extras explicitly.
+    # Mirror the `mcp` and `builder` extras so `uv run memq-dqc-mcp` and
+    # `uv run network-builder` work from a checkout without asking for
+    # extras explicitly.
+    "fastmcp>=4.0,<5",
     "flask>=3.0,<4",
     "notebook>=7.5.3",
     "pre-commit>=4.5.1",

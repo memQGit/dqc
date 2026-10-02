@@ -37,11 +37,12 @@ nav = mkdocs_gen_files.Nav()
 root = Path(__file__).parent.parent
 src = root / "src"
 
-#: Subpackages excluded from the API reference. The network builder is a
-#: standalone local tool documented by its usage guide, not by its
-#: internals, so its modules are not worth an autodoc page. The assets
-#: package is a bundled data reference, not code worth autodoc'ing.
-EXCLUDED_PACKAGES = {"network_builder", "assets"}
+#: Subpackages excluded from the API reference. The network builder and
+#: the MCP server are standalone local tools documented by their usage
+#: guides, not by their internals, so their modules are not worth an
+#: autodoc page. The assets package is a bundled data reference, not code
+#: worth autodoc'ing.
+EXCLUDED_PACKAGES = {"network_builder", "mcp_server", "assets"}
 
 #: Subpackages whose entire ``__all__`` is re-exported by their parent
 #: package. Their pages would be strict subsets of the parent's, so the
