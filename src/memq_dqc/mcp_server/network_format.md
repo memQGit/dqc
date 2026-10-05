@@ -4,6 +4,10 @@ A network is a JSON object describing the QPUs, the physical qubits each one
 owns, and the links between them. This is the format every memq-dqc tool
 accepts as `network`, inline or as a `.json` file.
 
+Prefer the `build_network` tool, which generates valid networks with
+identically sized QPUs. Write the JSON by hand only for designs it cannot
+express, and check the result with `describe_network`.
+
 ## Minimal complete example
 
 Two QPUs, each with 2 computation (data) qubits and 2 communication qubits,

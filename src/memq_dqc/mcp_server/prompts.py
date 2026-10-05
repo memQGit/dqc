@@ -33,25 +33,26 @@ Work through these steps:
    - Number of QPUs.
    - Computation qubits per QPU, or the number of qubits in the circuits
      the network must run [that number divided across the QPUs, rounded up].
-   - How the QPUs are linked: pair, chain, ring, hub, all-to-all, or a
-     custom list of links [pair for 2 QPUs, chain otherwise].
-   - Connectivity inside each QPU: nearest neighbour, all-to-all, or line
+   - How the QPUs are linked: chain (a pair, for 2 QPUs), ring, hub,
+     all-to-all, or a custom list of links [chain].
+   - Connectivity inside each QPU: nearest neighbour or all-to-all
      [nearest neighbour].
    - Remote links per linked QPU pair [2]. Explain that with 1, QPUs that
-     are not directly linked cannot interact.
+     are not directly linked cannot interact.{save_question}
 3. Restate the design in a sentence or two, including the total
    computation and communication qubit counts, and wait for me to confirm.
-4. Build the network JSON, following the format reference below exactly.
-   If you can run code, generate it with a short script instead of writing
-   it by hand: hand-written JSON gets error-prone past a few dozen qubits.
-5. Validate it with `describe_network`. That tool rejects some mistakes,
-   such as unknown qubit IDs or invalid qubit types, but not all of them,
-   so also check that its QPU count and per-QPU qubit counts match the
-   design, and recheck every rule in the reference. Fix and repeat until
-   it is correct.
-6. {save_step}
-7. Report the `describe_network` summary, then offer to compile a circuit
-   on the new network with `compile_circuit` or `compare_partitioners`.
+4. Call `build_network` with the design{save_target}.
+   Only if the design needs something `build_network` cannot express, such
+   as QPUs of different sizes or another layout inside a QPU, write the
+   network JSON yourself, following the format reference below exactly. If
+   you can run code, generate it with a short script rather than typing it
+   out.
+5. If you wrote the JSON yourself, check it with `describe_network`, which
+   validates the structure and lists every problem. Fix and repeat until it
+   passes. Either way, confirm that the QPU count and per-QPU qubit counts
+   match the design.
+6. Report the network summary, then offer to compile a circuit on the new
+   network with `compile_circuit` or `compare_partitioners`.
 """
 
 
@@ -85,13 +86,15 @@ def design_network(
         The prompt text, including the full format reference.
     """
     if output_path:
-        save_step = f"Save the network JSON to `{output_path}`."
+        save_question = ""
+        save_target = f", saving it to `{output_path}`"
     else:
-        save_step = (
-            "Ask me where to save the network JSON, suggesting "
-            "`./network.json`. If you cannot write files, give me the JSON "
-            "instead; every memq-dqc tool also accepts it inline."
+        save_question = (
+            "\n   - Where to save the network JSON [./network.json]. If you"
+            "\n     cannot write files, skip this: `build_network` returns"
+            "\n     the JSON, and every memq-dqc tool accepts it inline."
         )
+        save_target = ", saving it where I chose"
 
     parts = [
         "Help me design a quantum network topology for memq-dqc and save "
@@ -99,6 +102,10 @@ def design_network(
     ]
     if requirements:
         parts.append(f"What I have told you so far: {requirements}")
-    parts.append(_DESIGN_NETWORK_STEPS.format(save_step=save_step))
+    parts.append(
+        _DESIGN_NETWORK_STEPS.format(
+            save_question=save_question, save_target=save_target
+        )
+    )
     parts.append(f"Format reference:\n\n{network_format()}")
     return "\n\n".join(parts)

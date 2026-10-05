@@ -34,9 +34,10 @@ machine for a local server; a hosted server would need to restrict them.
 from __future__ import annotations
 
 import json
+import math
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias, get_args
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast, get_args
 
 from memq_dqc.assets import (
     circuit_path,
@@ -45,7 +46,12 @@ from memq_dqc.assets import (
     network_path,
 )
 from memq_dqc.compiler import Compiler
-from memq_dqc.network import NetworkGraph
+from memq_dqc.network import (
+    NetworkGraph,
+    generate_network,
+    validate_network,
+)
+from memq_dqc.network.generation import IntraQpuConnectivity, QpuArrangement
 from memq_dqc.preprocessing.qasm.analysis import count_total_qubits
 from memq_dqc.scheduler import Scheduler
 from memq_dqc.scheduler.schedule import (
@@ -106,7 +112,9 @@ def list_bundled_assets() -> dict[str, list[str]]:
 
 
 def describe_network(network: str) -> dict[str, Any]:
-    """Summarize a network topology.
+    """Validate a network topology and summarize it.
+
+    Use this to check a hand-written network before compiling on it.
 
     Args:
         network: Bundled network name, inline network JSON, or a path to a
@@ -114,8 +122,88 @@ def describe_network(network: str) -> dict[str, Any]:
 
     Returns:
         QPU ids and per-QPU computation and communication qubit counts.
+
+    Raises:
+        ValueError: If the network is malformed. The message lists every
+            problem found.
     """
-    graph = _load_network(network)
+    data = _read_network(network)
+    validate_network(data)
+    return _summarize_network(_network_graph(data))
+
+
+def build_network(
+    num_qpus: int,
+    computation_qubits_per_qpu: int | None = None,
+    circuit_qubits: int | None = None,
+    arrangement: QpuArrangement = "chain",
+    qpu_links: list[tuple[int, int]] | None = None,
+    intra_qpu: IntraQpuConnectivity = "nearest_neighbor",
+    links_per_pair: int = 2,
+    output_path: str | None = None,
+) -> dict[str, Any]:
+    """Generate a network topology with identically sized QPUs.
+
+    Give exactly one of ``computation_qubits_per_qpu`` and
+    ``circuit_qubits``.
+
+    Args:
+        num_qpus: Number of QPUs.
+        computation_qubits_per_qpu: Computation (data) qubits on each QPU.
+        circuit_qubits: Size of the largest circuit the network must run.
+            Each QPU then gets that many qubits divided across the QPUs,
+            rounded up.
+        arrangement: How the QPUs are linked: ``chain``, ``ring`` (3+ QPUs),
+            ``hub`` (QPU 0 is the centre), or ``all_to_all``.
+        qpu_links: Explicit ``[qpu_a, qpu_b]`` links between QPU ids
+            ``0..num_qpus-1``. Overrides ``arrangement`` when given.
+        intra_qpu: Coupling inside each QPU: ``nearest_neighbor`` (a 2D
+            grid) or ``all_to_all``.
+        links_per_pair: Remote links between each pair of linked QPUs. With
+            fewer than 2, QPUs that are not directly linked cannot interact.
+        output_path: Optional file to write the network JSON to.
+
+    Returns:
+        The network summary, plus the path it was written to, or the
+        network JSON itself when no ``output_path`` is given. The JSON can
+        be passed directly as the ``network`` argument of other tools.
+
+    Raises:
+        ValueError: If both or neither qubit counts are given.
+    """
+    if (computation_qubits_per_qpu is None) == (circuit_qubits is None):
+        raise ValueError(
+            "Give exactly one of computation_qubits_per_qpu and "
+            "circuit_qubits."
+        )
+    if circuit_qubits is not None:
+        computation_qubits_per_qpu = math.ceil(circuit_qubits / num_qpus)
+    network = generate_network(
+        num_qpus,
+        cast(int, computation_qubits_per_qpu),
+        arrangement if qpu_links is None else qpu_links,
+        intra_qpu=intra_qpu,
+        links_per_pair=links_per_pair,
+    )
+    result = _summarize_network(_network_graph(network))
+    if output_path is not None:
+        destination = _output(output_path)
+        destination.write_text(json.dumps(network, indent=2) + "\n")
+        result["output_path"] = str(destination)
+    else:
+        result["network_json"] = json.dumps(network, separators=(",", ":"))
+    return result
+
+
+def _summarize_network(graph: NetworkGraph) -> dict[str, Any]:
+    """Return the summary ``describe_network`` and ``build_network`` report.
+
+    Args:
+        graph: A loaded network.
+
+    Returns:
+        QPU ids and per-QPU computation and communication qubit counts.
+    """
     return {
         "num_qpus": graph.num_qpus,
         "qpu_ids": graph.qpu_ids(),
@@ -417,16 +505,41 @@ def _load_network(network: str) -> NetworkGraph:
     Returns:
         The loaded network graph.
     """
+    return _network_graph(_read_network(network))
+
+
+def _read_network(network: str) -> dict[str, Any]:
+    """Parse a network given as a bundled name, inline JSON, or file path.
+
+    Args:
+        network: Bundled name, inline network JSON, or file path.
+
+    Returns:
+        The parsed network JSON.
+    """
     if network in list_networks():
-        return NetworkGraph(str(network_path(network)))
-    if network.lstrip().startswith("{"):
-        # NetworkGraph only reads from a file, so stage inline JSON in one.
-        json.loads(network)  # Fail fast with a JSON error, not a file error.
-        with tempfile.TemporaryDirectory() as tmp:
-            staged = Path(tmp) / "network.json"
-            staged.write_text(network)
-            return NetworkGraph(str(staged))
-    return NetworkGraph(str(Path(network).expanduser()))
+        text = network_path(network).read_text()
+    elif network.lstrip().startswith("{"):
+        text = network
+    else:
+        text = Path(network).expanduser().read_text()
+    return json.loads(text)
+
+
+def _network_graph(data: dict[str, Any]) -> NetworkGraph:
+    """Build a ``NetworkGraph`` from parsed network JSON.
+
+    Args:
+        data: The parsed network JSON.
+
+    Returns:
+        The loaded network graph.
+    """
+    # NetworkGraph only reads from a file, so stage the JSON in one.
+    with tempfile.TemporaryDirectory() as tmp:
+        staged = Path(tmp) / "network.json"
+        staged.write_text(json.dumps(data))
+        return NetworkGraph(str(staged))
 
 
 def _output(output_path: str) -> Path:

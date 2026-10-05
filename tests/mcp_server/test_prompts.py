@@ -59,7 +59,7 @@ def test_design_network_embeds_format_reference():
     text = prompts.design_network()
 
     assert prompts.network_format() in text
-    assert "describe_network" in text
+    assert "build_network" in text
 
 
 def test_design_network_includes_given_requirements():
@@ -78,5 +78,6 @@ def test_design_network_uses_output_path_when_given():
     with_path = prompts.design_network(output_path="nets/ring.json")
     without_path = prompts.design_network()
 
-    assert "Save the network JSON to `nets/ring.json`." in with_path
-    assert "Ask me where to save" in without_path
+    assert "saving it to `nets/ring.json`" in with_path
+    assert "Where to save" not in with_path
+    assert "Where to save the network JSON" in without_path
