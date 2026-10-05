@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Network graph data structures, loaders, and canonical config helpers."""
+"""Network graph data structures, loaders, generators, and config helpers."""
 
 from .canonical_config import (
     CanonicalNetworkConfigBuilder,
@@ -22,7 +22,9 @@ from .canonical_config import (
     validate_canonical_network_config,
     write_canonical_network_config,
 )
+from .generation import generate_network
 from .network_graph import NetworkGraph, PhysicalQubit
+from .validation import validate_network
 
 __all__ = [
     "CanonicalNetworkConfigBuilder",
@@ -31,6 +33,8 @@ __all__ = [
     "PhysicalQubit",
     "build_canonical_network_config",
     "dumps_canonical_network_config",
+    "generate_network",
     "validate_canonical_network_config",
+    "validate_network",
     "write_canonical_network_config",
 ]

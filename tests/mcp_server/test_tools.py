@@ -166,3 +166,62 @@ def test_compare_partitioners_reports_failures_last(monkeypatch):
         "partitioner": "benchmark_random",
         "error": "RuntimeError: boom",
     }
+
+
+def test_describe_network_rejects_malformed_network():
+    network = json.loads(network_path(NETWORK).read_text())
+    network["qubits"]["c_1_0"]["remoteConnections"] = []
+
+    with pytest.raises(ValueError, match="list it on both qubits"):
+        tools.describe_network(json.dumps(network))
+
+
+def test_build_network_returns_json_usable_by_other_tools():
+    built = tools.build_network(3, computation_qubits_per_qpu=2)
+
+    result = tools.compile_circuit(CIRCUIT, built["network_json"])
+
+    assert built["num_qpus"] == 3
+    assert built["communication_qubits_per_qpu"] == [2, 4, 2]
+    assert result["num_qpus"] == 3
+
+
+def test_build_network_sizes_qpus_from_circuit_qubits():
+    built = tools.build_network(3, circuit_qubits=10, arrangement="ring")
+
+    assert built["computation_qubits_per_qpu"] == [4, 4, 4]
+
+
+def test_build_network_explicit_links_override_arrangement():
+    built = tools.build_network(
+        3,
+        computation_qubits_per_qpu=2,
+        arrangement="ring",
+        qpu_links=[(0, 1), (0, 2)],
+    )
+
+    assert built["communication_qubits_per_qpu"] == [4, 2, 2]
+
+
+def test_build_network_writes_output_file(tmp_path):
+    destination = tmp_path / "net.json"
+
+    built = tools.build_network(
+        2, computation_qubits_per_qpu=3, output_path=str(destination)
+    )
+
+    assert built["output_path"] == str(destination.resolve())
+    assert "network_json" not in built
+    assert tools.describe_network(str(destination)) == {
+        key: value for key, value in built.items() if key != "output_path"
+    }
+
+
+@pytest.mark.parametrize(
+    "sizes",
+    [{}, {"computation_qubits_per_qpu": 2, "circuit_qubits": 4}],
+    ids=["neither", "both"],
+)
+def test_build_network_needs_exactly_one_size(sizes):
+    with pytest.raises(ValueError, match="exactly one"):
+        tools.build_network(2, **sizes)

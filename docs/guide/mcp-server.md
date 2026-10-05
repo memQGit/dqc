@@ -105,7 +105,8 @@ To pick up a new release later, run the `--help` command again with
 |---|---|
 | `list_algorithms` | Lists partitioner, scheduler, modality, and entanglement-profile names. |
 | `list_bundled_assets` | Lists the [bundled circuits and networks](bundled-assets.md). |
-| `describe_network` | Summarizes a network: QPU ids and per-QPU qubit counts. |
+| `describe_network` | Validates a network and summarizes it: QPU ids and per-QPU qubit counts. |
+| `build_network` | Generates a network from a QPU count, qubits per QPU, and an arrangement. |
 | `compile_circuit` | Partitions a circuit and returns its e-bit cost and distributed OpenQASM. |
 | `verify_compilation` | Compiles, then checks the distributed circuit against the original. |
 | `schedule_circuit` | Compiles, schedules, and returns the makespan and operation counts. |
@@ -126,8 +127,10 @@ and `schedule_circuit` take an optional `output_path`, and
 
 ## Designing a network
 
-To compile on a topology that isn't bundled, use the `design_network`
-prompt. In Claude Code it appears as a slash command
+To compile on a topology that isn't bundled, ask for one directly, such as
+"build a 4-QPU ring with 5 qubits per QPU": the model calls `build_network`,
+which wraps [`generate_network`](networks.md#generating-networks). For a
+guided version, use the `design_network` prompt. In Claude Code it appears as a slash command
 (`/mcp__memq-dqc__design_network`); in Claude Desktop, under the **+** menu.
 The model then:
 
@@ -135,8 +138,9 @@ The model then:
 2. asks only for what you haven't said: QPU count, qubits per QPU, how the
    QPUs are linked, connectivity inside each QPU, and links per QPU pair,
    each with a default you can accept;
-3. confirms the design, builds the network JSON, and checks it with
-   `describe_network`;
+3. confirms the design and builds it with `build_network`, writing the JSON
+   by hand only for designs that tool can't express, such as QPUs of
+   different sizes;
 4. saves it and offers to compile a circuit on it.
 
 Both arguments are optional. `requirements` passes along anything you have
@@ -148,9 +152,9 @@ its own as the `memq://network-format` resource. Clients that don't support
 prompts can still read that resource, since the server's instructions
 point the model to it.
 
-`describe_network` catches some mistakes, such as unknown qubit IDs, but not
-all of them, so the prompt also has the model check its file against the
-format rules.
+`describe_network` runs [`validate_network`](networks.md#validating-a-network)
+on whatever it is given, so a hand-written network with a broken link is
+rejected with a list of every problem.
 
 ## Resources
 

@@ -62,6 +62,7 @@ def test_server_registers_every_tool():
         "list_algorithms",
         "list_bundled_assets",
         "describe_network",
+        "build_network",
         "compile_circuit",
         "verify_compilation",
         "schedule_circuit",

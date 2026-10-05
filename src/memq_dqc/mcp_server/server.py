@@ -42,10 +42,10 @@ A network under "N_qubits/" fits circuits of at most N qubits. Lower
 ebit_cost means fewer remote entangled pairs; lower makespan means faster
 execution. Call list_algorithms for valid partitioner and scheduler names.
 
-To build a custom network, read the memq://network-format resource for the
-JSON format, or use the design_network prompt, which gathers the
-requirements from the user. Check any network you write with
-describe_network.
+To create a network, call build_network. For a design it cannot express,
+write the JSON by hand using the memq://network-format resource and check
+it with describe_network. The design_network prompt walks the user through
+choosing a design.
 """
 
 
@@ -63,12 +63,13 @@ def create_server() -> FastMCP:
         server.tool(fn, annotations=read_only)
     for fn in (
         tools.describe_network,
+        tools.build_network,
         tools.compile_circuit,
         tools.verify_compilation,
         tools.schedule_circuit,
         tools.compare_partitioners,
     ):
-        # Compiling tools only write files when given an ``output_path``.
+        # These tools only write files when given an ``output_path``.
         server.tool(fn, annotations={"openWorldHint": False})
 
     server.resource(
