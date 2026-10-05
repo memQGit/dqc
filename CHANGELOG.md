@@ -17,6 +17,9 @@ changes are always listed under **Changed** or **Removed**.
   clients such as Claude can drive the compiler. Built on FastMCP, which
   ships as the optional `mcp` extra (`pip install "memq-dqc[mcp]"`). Runs
   over stdio by default, with `--transport http` for URL-based clients.
+  A `design_network` prompt walks the model through building a custom
+  network topology, backed by a `memq://network-format` resource
+  documenting the JSON format.
 
 ## [0.1.2] - 2026-09-02
 

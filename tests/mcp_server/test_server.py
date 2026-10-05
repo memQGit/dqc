@@ -22,6 +22,7 @@ from fastmcp import Client  # noqa: E402
 from fastmcp.exceptions import ToolError  # noqa: E402
 
 from memq_dqc.assets import circuit_path  # noqa: E402
+from memq_dqc.mcp_server import prompts  # noqa: E402
 from memq_dqc.mcp_server.server import create_server  # noqa: E402
 
 
@@ -37,6 +38,16 @@ async def _list_tools():
 async def _call(name, arguments):
     async with Client(create_server()) as client:
         return await client.call_tool(name, arguments)
+
+
+async def _list_prompts():
+    async with Client(create_server()) as client:
+        return await client.list_prompts()
+
+
+async def _get_prompt(name, arguments):
+    async with Client(create_server()) as client:
+        return await client.get_prompt(name, arguments)
 
 
 async def _read(uri):
@@ -106,3 +117,28 @@ def test_bundled_network_resources_return_json_and_doc():
 
     assert network[0].text.lstrip().startswith("{")
     assert doc[0].text.startswith("# n2_pair_nn")
+
+
+def test_network_format_resource_returns_reference():
+    contents = _run(_read("memq://network-format"))
+
+    assert contents[0].text == prompts.network_format()
+
+
+def test_design_network_prompt_is_registered_with_optional_arguments():
+    (prompt,) = _run(_list_prompts())
+
+    assert prompt.name == "design_network"
+    assert {arg.name: arg.required for arg in prompt.arguments} == {
+        "requirements": False,
+        "output_path": False,
+    }
+
+
+def test_design_network_prompt_renders_over_mcp():
+    result = _run(
+        _get_prompt("design_network", {"requirements": "3 QPUs in a chain"})
+    )
+
+    text = result.messages[0].content.text
+    assert text == prompts.design_network(requirements="3 QPUs in a chain")

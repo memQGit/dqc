@@ -14,10 +14,12 @@
 
 """FastMCP server exposing the distributed-compiler tools.
 
-``create_server`` registers every
-function in ``memq_dqc.mcp_server.tools`` as an MCP tool, and the bundled
-circuits and networks as MCP resources. The returned server is
-transport-agnostic: the console script runs it over stdio or HTTP.
+``create_server`` registers every function in ``memq_dqc.mcp_server.tools``
+as an MCP tool, the network-design workflow from
+``memq_dqc.mcp_server.prompts`` as an MCP prompt, and the bundled circuits,
+bundled networks, and network format reference as MCP resources. The
+returned server is transport-agnostic: the console script runs it over
+stdio or HTTP.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from fastmcp import FastMCP
 
 from memq_dqc.assets import circuit_path, network_doc_path, network_path
 
-from . import tools
+from . import prompts, tools
 
 _INSTRUCTIONS = """\
 Tools for memq_dqc, a distributed quantum compiler. The workflow is: take a
@@ -39,6 +41,11 @@ list_bundled_assets), inline OpenQASM 3 / network JSON, or a file path.
 A network under "N_qubits/" fits circuits of at most N qubits. Lower
 ebit_cost means fewer remote entangled pairs; lower makespan means faster
 execution. Call list_algorithms for valid partitioner and scheduler names.
+
+To build a custom network, read the memq://network-format resource for the
+JSON format, or use the design_network prompt, which gathers the
+requirements from the user. Check any network you write with
+describe_network.
 """
 
 
@@ -63,6 +70,23 @@ def create_server() -> FastMCP:
     ):
         # Compiling tools only write files when given an ``output_path``.
         server.tool(fn, annotations={"openWorldHint": False})
+
+    server.resource(
+        "memq://network-format",
+        name="network_format",
+        mime_type="text/markdown",
+        description=(
+            "Reference for the network topology JSON format: fields, rules, "
+            "sizing, and common shapes, with a complete example."
+        ),
+    )(prompts.network_format)
+    server.prompt(
+        prompts.design_network,
+        description=(
+            "Design a custom network topology: asks for the requirements, "
+            "builds and validates the network JSON, and saves it."
+        ),
+    )
 
     @server.resource(
         "memq://circuits/{name}",

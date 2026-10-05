@@ -124,9 +124,42 @@ and `schedule_circuit` take an optional `output_path`, and
 `verify_compilation` defaults to the exact `statevector` method, capped at
 20 qubits. Pass `method="sampling"` for wider circuits.
 
-The bundled assets are also available as MCP resources at
-`memq://circuits/{name}`, `memq://networks/{size}/{name}`, and
-`memq://networks/{size}/{name}/doc`.
+## Designing a network
+
+To compile on a topology that isn't bundled, use the `design_network`
+prompt. In Claude Code it appears as a slash command
+(`/mcp__memq-dqc__design_network`); in Claude Desktop, under the **+** menu.
+The model then:
+
+1. suggests a bundled network if one already fits;
+2. asks only for what you haven't said: QPU count, qubits per QPU, how the
+   QPUs are linked, connectivity inside each QPU, and links per QPU pair,
+   each with a default you can accept;
+3. confirms the design, builds the network JSON, and checks it with
+   `describe_network`;
+4. saves it and offers to compile a circuit on it.
+
+Both arguments are optional. `requirements` passes along anything you have
+already decided, such as "4 QPUs in a ring, 5 qubits each". `output_path`
+sets where the file is saved; without it, the model asks.
+
+The prompt includes the JSON format reference, which is also available on
+its own as the `memq://network-format` resource. Clients that don't support
+prompts can still read that resource, since the server's instructions
+point the model to it.
+
+`describe_network` catches some mistakes, such as unknown qubit IDs, but not
+all of them, so the prompt also has the model check its file against the
+format rules.
+
+## Resources
+
+| URI | Contents |
+|---|---|
+| `memq://network-format` | The network JSON format reference, written for a model. |
+| `memq://circuits/{name}` | OpenQASM source of a bundled circuit. |
+| `memq://networks/{size}/{name}` | JSON of a bundled network. |
+| `memq://networks/{size}/{name}/doc` | Description of a bundled network. |
 
 ## Running over HTTP
 
