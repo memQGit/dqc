@@ -78,6 +78,51 @@ Optional fields:
 | `localIndex` | Position within the QPU. Inferred from a `q_<qpu>_<idx>` / `c_<qpu>_<idx>` ID, or assigned in file order, when omitted. |
 | `label`, `coherenceTime`, `coherenceTimeUnit` | Recorded on the graph node, not consumed by any current partitioner or scheduler. |
 
+## Generating networks
+
+`generate_network` builds a topology from a few parameters, so most
+networks never need to be written by hand. Every QPU gets the same number
+of computation qubits:
+
+```python
+import json
+
+from memq_dqc.network import NetworkGraph, generate_network
+
+network = generate_network(
+    4,  # QPUs
+    5,  # computation qubits per QPU
+    "ring",  # or "chain", "hub", "all_to_all", or [(0, 1), (1, 2), ...]
+    intra_qpu="nearest_neighbor",  # or "all_to_all"
+    links_per_pair=2,
+)
+with open("ring.json", "w") as f:
+    json.dump(network, f, indent=2)
+
+graph = NetworkGraph("ring.json")
+```
+
+It follows the same conventions as the
+[bundled networks](bundled-assets.md), and reproduces each of them exactly:
+each pair of linked QPUs gets `links_per_pair` remote links, each link gets
+its own communication qubit on both ends, and with nearest-neighbour
+connectivity the computation qubits sit on a 2D grid with communication
+qubits spaced evenly around its edge.
+
+## Validating a network
+
+`NetworkGraph` loads any file whose qubit references resolve, so a network
+with, say, a link listed on only one end, or a remote link on a computation
+qubit, loads without error. `validate_network` checks the structure up
+front and raises a `ValueError` listing every problem it finds:
+
+```python
+from memq_dqc.network import validate_network
+
+with open("my_network.json") as f:
+    validate_network(json.load(f))
+```
+
 ## Edges come only from the per-qubit lists
 
 This is the one rule worth internalising, and the usual cause of a topology

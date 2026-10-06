@@ -10,6 +10,26 @@ changes are always listed under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+### Added
+
+- **MCP server** (`memq-dqc-mcp`), exposing the compile, verify, schedule,
+  and partitioner-comparison workflow as Model Context Protocol tools so MCP
+  clients such as Claude can drive the compiler. Built on FastMCP, which
+  ships as the optional `mcp` extra (`pip install "memq-dqc[mcp]"`). Runs
+  over stdio by default, with `--transport http` for URL-based clients.
+  A `design_network` prompt walks the model through building a custom
+  network topology, backed by a `memq://network-format` resource
+  documenting the JSON format.
+- `memq_dqc.network.generate_network`, which builds a network topology from a
+  QPU count, qubits per QPU, and an arrangement (chain, ring, hub,
+  all-to-all, or explicit QPU links), with nearest-neighbour or all-to-all
+  coupling inside each QPU. It reproduces every bundled network exactly.
+  The MCP server exposes it as the `build_network` tool.
+- `memq_dqc.network.validate_network`, which checks a network's structure
+  and lists every problem, such as links recorded on only one end or remote
+  links on computation qubits, that `NetworkGraph` would otherwise load
+  silently. The MCP `describe_network` tool now runs it.
+
 ## [0.1.2] - 2026-09-02
 
 ### Added

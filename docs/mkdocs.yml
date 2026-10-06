@@ -51,6 +51,7 @@ extra_css:
   - stylesheets/extra.css
 
 extra_javascript:
+  - javascripts/mcp-setup.js
   - javascripts/mathjax.js
   - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
 
@@ -139,6 +140,8 @@ nav:
       - Workflow & Architecture: guide/workflow.md
       - Network Topology Format: guide/networks.md
       - Network Builder: guide/network-builder.md
+      - MCP Server: guide/mcp-server.md
+      - MCP Setup via an AI Agent: guide/mcp-agent-setup.md
       - Bundled Networks & Circuits: guide/bundled-assets.md
       - Partitioning Algorithms: guide/partitioning.md
       - Hardware & Settings: guide/hardware.md

@@ -208,6 +208,18 @@ See the [Network Builder guide](https://memq-dqc.readthedocs.io/en/latest/guide/
 
 ---
 
+## MCP server
+
+The compiler is also available as a [Model Context Protocol](https://modelcontextprotocol.io) server, so MCP clients such as Claude Desktop, Claude Code, and Cursor can compile, verify, schedule, and compare partitioners from a plain-language request. It runs locally over stdio, and `uvx` fetches memq-dqc with it, so there is nothing to install first:
+
+    claude mcp add --scope user memq-dqc -- uvx --from "memq-dqc[mcp]" memq-dqc-mcp
+
+Already have memq-dqc installed? Add the extra with `pip install --upgrade "memq-dqc[mcp]"` instead. Or skip the manual steps: paste the [agent setup page](https://memq-dqc.readthedocs.io/en/latest/guide/mcp-agent-setup/) into Claude Code or Cursor and let it install and register the server for you.
+
+See the [MCP Server guide](https://memq-dqc.readthedocs.io/en/latest/guide/mcp-server/) for other clients and the tool list.
+
+---
+
 ## Visualization
 
 `memq_dqc.visualization` provides SVG-based views of the compilation output:
