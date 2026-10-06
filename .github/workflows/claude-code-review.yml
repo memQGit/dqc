@@ -12,6 +12,9 @@ on:
 
 jobs:
   claude-review:
+    # Dependabot PRs can't read repo secrets (no CLAUDE_CODE_OAUTH_TOKEN)
+    # and the action rejects bot actors, so skip instead of failing.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     # Optional: Filter by PR author
     # if: |
     #   github.event.pull_request.user.login == 'external-contributor' ||
