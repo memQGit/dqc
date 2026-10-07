@@ -10,6 +10,8 @@ changes are always listed under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-06
+
 ### Added
 
 - **MCP server** (`memq-dqc-mcp`), exposing the compile, verify, schedule,
@@ -29,6 +31,15 @@ changes are always listed under **Changed** or **Removed**.
   and lists every problem, such as links recorded on only one end or remote
   links on computation qubits, that `NetworkGraph` would otherwise load
   silently. The MCP `describe_network` tool now runs it.
+
+### Changed
+
+- **Agent setup documentation** now offers a compact copyable prompt with
+  a client selector for Codex, Claude Code, Cursor, and other MCP clients.
+  The prompt checks for existing installations, uses local client help,
+  and asks agents to present concise result tables and a success banner.
+- Updated locked dependencies, including Werkzeug, urllib3, Tornado,
+  Notebook, and virtualenv.
 
 ## [0.1.2] - 2026-09-02
 
@@ -247,7 +258,8 @@ pipeline.
 - The `examples/` directory, which duplicated `demo/` and contained a notebook
   that no longer imported. Its inputs now live in `demo/inputs/`.
 
-[Unreleased]: https://github.com/memQGit/dqc/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/memQGit/dqc/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/memQGit/dqc/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/memQGit/dqc/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/memQGit/dqc/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/memQGit/dqc/releases/tag/v0.1.0
