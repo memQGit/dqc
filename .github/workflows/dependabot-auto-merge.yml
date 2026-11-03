@@ -1,0 +1,71 @@
+# Copyright 2026 memQ Inc.
+
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+
+#     http://www.apache.org/licenses/LICENSE-2.0
+
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Approves Dependabot patch/minor bumps and turns on auto-merge, so they
+# land once the required CI checks pass. Major bumps are left for a human.
+#
+# Requires two repo settings:
+#   - Settings > General > "Allow auto-merge"
+#   - Settings > Actions > General > "Allow GitHub Actions to create and
+#     approve pull requests"
+#
+# pull_request_target is needed because Dependabot-triggered pull_request
+# runs only get a read-only token. This job never checks out or runs code
+# from the PR; it only reads Dependabot's metadata and calls the GitHub API.
+
+name: Dependabot auto-merge
+
+on: pull_request_target
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.repository == 'memQGit/dqc'
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        # Fails unless every commit on the PR was made by Dependabot.
+        uses: dependabot/fetch-metadata@v3
+
+      - name: Approve and enable auto-merge
+        # update-type is the largest bump in the PR, so a grouped PR with
+        # any major bump is skipped as a whole.
+        if: >-
+          steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+          steps.metadata.outputs.update-type == 'version-update:semver-minor'
+        run: |
+          if [ "$(gh pr view "$PR_URL" --json reviewDecision -q .reviewDecision)" != "APPROVED" ]; then
+            gh pr review --approve "$PR_URL"
+          fi
+          gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Disable auto-merge for major bumps
+        # Dependabot can push a major bump onto a PR that was already set to
+        # auto-merge (e.g. a grouped PR picking up a new release).
+        if: >-
+          steps.metadata.outputs.update-type != 'version-update:semver-patch' &&
+          steps.metadata.outputs.update-type != 'version-update:semver-minor'
+        run: gh pr merge --disable-auto "$PR_URL" || true
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
