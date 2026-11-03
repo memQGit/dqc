@@ -12,9 +12,15 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "deps"
-    # Group non-security bumps
+    # Groups apply to version updates only unless "applies-to" says
+    # otherwise, so security bumps get a group of their own.
     groups:
       python-deps:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      python-security:
+        applies-to: security-updates
         patterns:
           - "*"
 
@@ -30,6 +36,11 @@ updates:
       prefix: "ci"
     groups:
       gha:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      gha-security:
+        applies-to: security-updates
         patterns:
           - "*"
 
