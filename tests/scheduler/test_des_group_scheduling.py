@@ -487,3 +487,28 @@ def test_crossed_multi_link_blocks_terminate_and_serialize(
         # The blocks do not overlap on the shared links: the second block's
         # catent starts only after the first block releases them.
         assert second_catent.start_time >= first_catdisent.end_time
+
+
+def test_group_duration_includes_ancillary_x(monkeypatch):
+    _patch_timing(monkeypatch)
+    data = [_q("q0"), _q("q1"), _q("c0"), _q("c1")]
+    ops = [
+        _op(0, "catent", data),
+        _op(1, "rcx", data, is_remote=True),
+        _op(2, "y", [_q("q0")]),
+        _op(3, "x", [_q("c1")]),
+        _op(4, "rcx", data, is_remote=True),
+        _op(5, "catdisent", data),
+    ]
+    circuit = _circuit(ops, [(0, 1), (1, 2), (1, 3), (2, 4), (3, 4), (4, 5)])
+    scheduler = DESLinkFIFOScheduler(
+        circuit, profile=SchedulerHardwareProfile(), seed=0
+    )
+    scheduler._reset_run_state()
+    assert scheduler._catent_groups[0].member_op_ids == (1, 2, 3, 4)
+    assert scheduler._group_durations[0] == (
+        _CATENT_TIME
+        + _CATDISENT_TIME
+        + 2 * _TWO_QUBIT_TIME
+        + 2 * _ONE_QUBIT_TIME
+    )

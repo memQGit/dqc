@@ -327,6 +327,8 @@ class ScheduledOperation:
         start_time: Earliest time the operation can begin.
         duration: Operation duration in abstract scheduler time units.
         is_remote: Whether the operation is a remote distributed operation.
+        cat_proxy_qubits: Communication qubits receiving an additional X
+            alongside the named data gate. Empty for ordinary operations.
     """
 
     op_id: int
@@ -336,6 +338,7 @@ class ScheduledOperation:
     start_time: float
     duration: float
     is_remote: bool
+    cat_proxy_qubits: tuple[str, ...] = ()
 
     @property
     def end_time(self) -> float:
@@ -893,6 +896,9 @@ def _load_scheduler_timing_model(
 
 def _operation_duration(op: Op, timing_model: SchedulerTimingModel) -> float:
     """Return the execution time for an operation."""
+    if op.cat_proxy_x:
+        # Conservatively charge a data-gate layer and a proxy-X layer.
+        return 2 * timing_model.local_one_qubit_gate_time
     if op.name == "catent":
         return timing_model.catent_time
     if op.name == "catdisent":
@@ -905,6 +911,59 @@ def _operation_duration(op: Op, timing_model: SchedulerTimingModel) -> float:
     if len(op.qubits) == 1:
         return timing_model.local_one_qubit_gate_time
     return timing_model.local_two_qubit_gate_time
+
+
+def _catent_group_owners(ops: list[Op]) -> dict[int, int]:
+    """Map operations in complete cat blocks to their opening operation."""
+    owners: dict[int, int] = {}
+    pending: list[Op] = []
+    for op in ops:
+        if op.name == "catent":
+            pending = [op]
+        elif pending:
+            pending.append(op)
+            if op.name == "catdisent":
+                owners.update(
+                    (member.op_id, pending[0].op_id)
+                    for member in pending
+                    if member.name != "rswap"
+                )
+                pending = []
+    for op in ops:
+        if op.cat_proxy_x and op.op_id not in owners:
+            raise ValueError(
+                f"Cat proxy correction {op.op_id} has no complete cat group."
+            )
+    return owners
+
+
+def _bound_cat_group_qubits(
+    op: Op,
+    root: CircuitQubit,
+    comm_qubits: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Bind a group's implicit proxy action to its selected EPR operands.
+
+    The returned pair contains all occupied qubits and the subset receiving
+    the additional X. The named X/Y still acts on the data operand only.
+    """
+    labels = tuple(_physical_qubit_label(qubit) for qubit in op.qubits)
+    if op.cat_proxy_x:
+        if (
+            op.name not in {"x", "y"}
+            or getattr(op.node, "modifiers", ())
+            or op.qubits != (root,)
+            or len(comm_qubits) < 2
+            or len(comm_qubits) % 2
+        ):
+            raise ValueError(
+                f"Cat proxy correction {op.op_id} does not match its group."
+            )
+        proxies = comm_qubits[1::2]
+        return (*labels, *proxies), proxies
+    if (op.is_remote and op.name != "rswap") or op.name == "catdisent":
+        return (*labels[:2], *comm_qubits), ()
+    return labels, ()
 
 
 def _is_catent_operation(op: Op) -> bool:

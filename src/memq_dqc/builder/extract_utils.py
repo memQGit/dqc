@@ -20,6 +20,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from openqasm3 import ast
+
 from memq_dqc.utils.common import qubit_partition_map, window_op_map
 
 if TYPE_CHECKING:
@@ -67,26 +69,42 @@ class GroupDurationLimit:
             return self.two_qubit_gate_time
         return self.one_qubit_gate_time
 
-    def ops_duration(self, ops: Iterable[Op]) -> float:
-        """Return the total duration charged for a sequence of operations."""
-        return sum(self.op_duration(op) for op in ops)
+    def ops_duration(
+        self, ops: Iterable[Op], *, control: int | None = None
+    ) -> float:
+        """Include proxy-X corrections for antidiagonal control gates."""
+        return sum(
+            self.op_duration(op)
+            + (
+                self.one_qubit_gate_time
+                if op.name in _ANTIDIAGONAL_GATES
+                and op.qubit_indices == (control,)
+                else 0.0
+            )
+            for op in ops
+        )
 
     def allows(
         self,
         current_duration: float,
         added_ops: Iterable[Op],
+        *,
+        control: int | None = None,
     ) -> bool:
         """Return whether adding ``added_ops`` keeps the group within budget.
 
         Args:
             current_duration: Total gate duration already in the group.
             added_ops: Operations that would be folded into the group.
+            control: Shared control whose X/Y gates need a proxy correction.
 
         Returns:
             ``True`` if the resulting total gate duration stays within the
             budget (within a small float tolerance).
         """
-        prospective = current_duration + self.ops_duration(added_ops)
+        prospective = current_duration + self.ops_duration(
+            added_ops, control=control
+        )
         return prospective <= self.gate_duration_budget + _DURATION_EPS
 
 
@@ -104,6 +122,8 @@ _DIAGONAL_GATES = frozenset(
         "u1",
     }
 )
+_ANTIDIAGONAL_GATES = frozenset({"x", "y"})
+_CAT_COMPATIBLE_CONTROL_GATES = _DIAGONAL_GATES | _ANTIDIAGONAL_GATES
 # Only these controlled gates are supported by cat-based remote lowering.
 # A first operand alone does not make a gate controlled (notably SWAP).
 _CONTROLLED_TWO_QUBIT_GATES = frozenset({"cx", "cp", "cry", "cz"})
@@ -422,11 +442,11 @@ def identify_gate_groups(
     The grouping logic follows the experimental OpenQASM statement workflow:
     groups start from a two-qubit gate, continue across compatible gates with
     a shared control, and may commute one future two-qubit gate into the group
-    when the intervening operations are disjoint. Only diagonal one-qubit
-    gates may act on that control within a group: changing its computational
-    basis value would leave the cat-entangled remote copy stale. The function
-    only inspects the completed partitioner's windows and does not mutate or
-    install the groups anywhere.
+    when the intervening operations are disjoint. Diagonal and antidiagonal
+    one-qubit gates may act on that control within a group. The emitter must
+    accompany each antidiagonal X/Y with X on the live remote cat proxy.
+    The function only inspects the completed partitioner's windows and does
+    not mutate or install the groups anywhere.
 
     Args:
         circuit: Circuit whose operations are partitioned.
@@ -581,14 +601,18 @@ def _search_for_group_gate(
                 added_ops = [*pending_one_qubit_gates, op]
                 duration_exceeded = (
                     duration_limit is not None
-                    and not duration_limit.allows(group_duration, added_ops)
+                    and not duration_limit.allows(
+                        group_duration, added_ops, control=control
+                    )
                 )
                 if size_exceeded or duration_exceeded:
                     ignored_ops.extend(pending_one_qubit_gates)
                     return group_ops, ignored_ops
 
                 if duration_limit is not None:
-                    group_duration += duration_limit.ops_duration(added_ops)
+                    group_duration += duration_limit.ops_duration(
+                        added_ops, control=control
+                    )
                 group_ops.extend(pending_one_qubit_gates)
                 pending_one_qubit_gates = []
                 group_ops.append(op)
@@ -614,7 +638,11 @@ def _search_for_group_gate(
         elif len(op.qubits) == 1:
             qubit = op.qubits[0].index
             if qubit == control:
-                if op.name in _DIAGONAL_GATES:
+                if op.name in _CAT_COMPATIBLE_CONTROL_GATES and not (
+                    op.name in _ANTIDIAGONAL_GATES
+                    and isinstance(op.node, ast.QuantumGate)
+                    and op.node.modifiers
+                ):
                     pending_one_qubit_gates.append(op)
                 else:
                     ignored_ops.extend(pending_one_qubit_gates)
@@ -671,6 +699,7 @@ def _search_for_commuting_group_gate(
         duration_available = duration_limit is None or duration_limit.allows(
             group_duration,
             [*pending_one_qubit_gates, next_op],
+            control=control,
         )
 
         if (

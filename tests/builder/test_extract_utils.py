@@ -109,7 +109,7 @@ def test_identify_gate_groups_does_not_group_across_windows() -> None:
     assert gate_packets == [[{0, 1}], [{0, 2}]]
 
 
-@pytest.mark.parametrize("name", ["x", "y", "h", "rx"])
+@pytest.mark.parametrize("name", ["h", "rx", "ry"])
 def test_control_changing_one_qubit_gate_ends_group(name):
     ops = [_op(0, "cx", 0, 2), _op(1, name, 0), _op(2, "cx", 0, 3)]
     circuit, partition = _partitioned_circuit(ops, [ops])
@@ -138,8 +138,10 @@ def test_unrecognized_control_preservation_ends_group(name, qubits):
     assert packets == [[{0, 2}], [{0, 1}], [{0, 3}]]
 
 
-@pytest.mark.parametrize("name", ["z", "s", "sdg", "t", "tdg", "rz", "p"])
-def test_diagonal_control_gates_still_group(name):
+@pytest.mark.parametrize(
+    "name", ["x", "y", "z", "s", "sdg", "t", "tdg", "rz", "p"]
+)
+def test_diagonal_and_antidiagonal_control_gates_still_group(name):
     ops = [_op(0, "cx", 0, 2), _op(1, name, 0), _op(2, "cx", 0, 3)]
     circuit, partition = _partitioned_circuit(ops, [ops])
 
@@ -221,3 +223,18 @@ def test_synthesize_swaps_positions_remain_consistent_across_timesteps() -> (
                 current_pos_by_qubit[swap.q1],
                 current_pos_by_qubit[swap.q0],
             )
+
+
+@pytest.mark.parametrize("name", ["x", "y"])
+def test_modified_antidiagonal_gate_ends_group(name):
+    ops = [_op(0, "cx", 0, 2), _op(1, name, 0), _op(2, "cx", 0, 3)]
+    assert isinstance(ops[1].node, ast.QuantumGate)
+    ops[1].node.modifiers = [
+        ast.QuantumGateModifier(
+            ast.GateModifierName.pow, ast.FloatLiteral(0.5)
+        )
+    ]
+    circuit, partition = _partitioned_circuit(ops, [ops])
+    _, groups, packets = identify_gate_groups(circuit, partition)
+    assert groups == {(0, 1), (2, 3)}
+    assert packets == [[{0, 2}], [{0, 3}]]

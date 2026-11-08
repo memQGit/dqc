@@ -48,6 +48,7 @@ DIAGONAL_GATES = {
     "rz",
     "u1",
 }
+ANTIDIAGONAL_GATES = {"x", "y"}
 # Keep packet estimates consistent with the extractor's cat-compatible gates.
 CONTROLLED_TWO_QUBIT_GATES = {"cx", "cp", "cry", "cz"}
 REVERSIBLE_TARGET_TWO_QUBIT_GATES = {"cz"}
@@ -399,7 +400,11 @@ def _search_for_group_gate(
         if len(op.qubits) == 1:
             qubit = op.qubit_indices[0]
             if qubit == control:
-                if op.name in DIAGONAL_GATES:
+                if op.name in DIAGONAL_GATES | ANTIDIAGONAL_GATES and not (
+                    op.name in ANTIDIAGONAL_GATES
+                    and isinstance(op.node, ast.QuantumGate)
+                    and op.node.modifiers
+                ):
                     pending_one_qubit_ops.append(op)
                 else:
                     ignored_ops.extend(pending_one_qubit_ops)

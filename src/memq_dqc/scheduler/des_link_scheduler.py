@@ -37,8 +37,10 @@ from memq_dqc.scheduler.schedule import (
     SchedulerHardwareProfile,
     SchedulerModality,
     SchedulerTimingModel,
+    _bound_cat_group_qubits,
     _build_qubit_timelines,
     _catent_ebit_labels,
+    _catent_group_owners,
     _ebit_assignment_labels,
     _is_catent_operation,
     _operation_duration,
@@ -278,6 +280,8 @@ class BaseDESLinkScheduler(BaseScheduler):
         self._catent_groups, self._group_by_op_id = _build_catent_groups(
             self._op_by_id
         )
+        # Reject orphan correction metadata before any scheduling occurs.
+        _catent_group_owners(list(self._op_by_id.values()))
         self._group_durations = {
             catent_op_id: self._group_execution_duration(group)
             for catent_op_id, group in self._catent_groups.items()
@@ -384,6 +388,24 @@ class BaseDESLinkScheduler(BaseScheduler):
     def _schedule_local_operation(self, op: Op) -> None:
         """Reserve qubits for one local operation and enqueue completion."""
         op_labels = self._op_qubits[op.op_id]
+        cat_proxy_qubits: tuple[str, ...] = ()
+        owner = self._group_by_op_id.get(op.op_id)
+        if owner is not None and (
+            op.cat_proxy_x or op.is_remote or op.name == "catdisent"
+        ):
+            request = self._remote_requests.get(owner)
+            if request is None:
+                raise ValueError(
+                    f"Cat group {owner} has no selected EPR assignment."
+                )
+            comm_qubits = tuple(
+                qubit
+                for link_request in request.link_requests.values()
+                for qubit in link_request.link_qubits
+            )
+            op_labels, cat_proxy_qubits = _bound_cat_group_qubits(
+                op, self._op_by_id[owner].qubits[0], comm_qubits
+            )
         start_time = max(
             (self._qubit_timers[qubit] for qubit in op_labels),
             default=0.0,
@@ -403,6 +425,7 @@ class BaseDESLinkScheduler(BaseScheduler):
             start_time=start_time,
             duration=_operation_duration(op, self.timing_model),
             is_remote=op.is_remote,
+            cat_proxy_qubits=cat_proxy_qubits,
         )
         self._record_scheduled_event(scheduled_op)
         for qubit in op_labels:
@@ -1238,7 +1261,8 @@ def _build_catent_groups(
             if open_catent_id is None:
                 continue
             catent_op = op_by_id[open_catent_id]
-            entangled_qubits = set(catent_op.qubits[:2])
+            # Local proxy corrections consume time within the same block.
+            entangled_qubits = set(catent_op.qubits)
             for inner_op_id in inner_op_ids:
                 inner_op = op_by_id[inner_op_id]
                 if inner_op.is_remote:

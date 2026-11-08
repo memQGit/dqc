@@ -27,6 +27,7 @@ from qiskit.quantum_info import Statevector, hellinger_fidelity
 from qiskit_aer import AerSimulator
 
 from memq_dqc._logging import StepTimer, workflow_logging
+from memq_dqc.circuit.op import CAT_PROXY_X_ANNOTATION
 from memq_dqc.network.network_graph import (
     REMOTE_GATE_EBIT_COST,
     REMOTE_SWAP_EBIT_COST,
@@ -37,6 +38,7 @@ from memq_dqc.preprocessing.qasm import (
     parse_qasm_source,
 )
 from memq_dqc.preprocessing.qasm.ast_utils import (
+    clone_statement_node,
     is_comm_qubit_declaration,
     is_comm_qubit_reference,
     non_comm_qubits,
@@ -478,6 +480,18 @@ def dist_to_mono_program(dist_program: ast.Program) -> ast.Program:
                 continue
             elif any(is_comm_qubit_reference(qubit) for qubit in stmt.qubits):
                 continue
+            if any(
+                annotation.keyword == CAT_PROXY_X_ANNOTATION
+                for annotation in stmt.annotations
+            ):
+                # This verifier intentionally removes the cat protocol. The
+                # deferred proxy action goes with it; preserve the data gate.
+                stmt = clone_statement_node(stmt)
+                stmt.annotations = [
+                    annotation
+                    for annotation in stmt.annotations
+                    if annotation.keyword != CAT_PROXY_X_ANNOTATION
+                ]
         new_statements.append(stmt)
     return ast.Program(version=dist_program.version, statements=new_statements)
 
