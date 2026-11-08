@@ -104,8 +104,9 @@ _DIAGONAL_GATES = frozenset(
         "u1",
     }
 )
-_ANTIDIAGONAL_GATES = frozenset({"x", "y"})
-_COMMUTING_CONTROL_GATES = _DIAGONAL_GATES | _ANTIDIAGONAL_GATES
+# Only these controlled gates are supported by cat-based remote lowering.
+# A first operand alone does not make a gate controlled (notably SWAP).
+_CONTROLLED_TWO_QUBIT_GATES = frozenset({"cx", "cp", "cry", "cz"})
 _REVERSIBLE_TARGET_TWO_QUBIT_GATES = frozenset({"cz"})
 
 
@@ -421,9 +422,11 @@ def identify_gate_groups(
     The grouping logic follows the experimental OpenQASM statement workflow:
     groups start from a two-qubit gate, continue across compatible gates with
     a shared control, and may commute one future two-qubit gate into the group
-    when the intervening operations are disjoint. The function only inspects
-    the completed partitioner's windows and does not mutate or install the
-    groups anywhere.
+    when the intervening operations are disjoint. Only diagonal one-qubit
+    gates may act on that control within a group: changing its computational
+    basis value would leave the cat-entangled remote copy stale. The function
+    only inspects the completed partitioner's windows and does not mutate or
+    install the groups anywhere.
 
     Args:
         circuit: Circuit whose operations are partitioned.
@@ -554,6 +557,8 @@ def _search_for_group_gate(
 ) -> tuple[list[Op], list[Op]]:
     """Search forward from one two-qubit gate to build a gate group."""
     group_ops = [gate_ops[start_index - 1]]
+    if group_ops[0].name not in _CONTROLLED_TWO_QUBIT_GATES:
+        return group_ops, []
     ignored_ops: list[Op] = []
     targets = {target}
     group_two_qubit_count = 1
@@ -609,7 +614,7 @@ def _search_for_group_gate(
         elif len(op.qubits) == 1:
             qubit = op.qubits[0].index
             if qubit == control:
-                if op.name in _COMMUTING_CONTROL_GATES:
+                if op.name in _DIAGONAL_GATES:
                     pending_one_qubit_gates.append(op)
                 else:
                     ignored_ops.extend(pending_one_qubit_gates)
@@ -718,9 +723,12 @@ def _shares_group_control(
     op_target: int,
 ) -> bool:
     """Return whether an operation continues a shared-control group."""
-    return op_control == group_control or (
-        op_target == group_control
-        and op.name in _REVERSIBLE_TARGET_TWO_QUBIT_GATES
+    return op.name in _CONTROLLED_TWO_QUBIT_GATES and (
+        op_control == group_control
+        or (
+            op_target == group_control
+            and op.name in _REVERSIBLE_TARGET_TWO_QUBIT_GATES
+        )
     )
 
 

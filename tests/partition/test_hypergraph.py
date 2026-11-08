@@ -76,6 +76,32 @@ def test_build_gate_packets_consumes_ignored_ops_before_commuted_gate() -> (
     assert packets == [[{0, 1}, {0, 4}]]
 
 
+@pytest.mark.parametrize("name", ["x", "y", "h", "rx"])
+def test_control_changing_one_qubit_gate_splits_packets(name):
+    ops = [_op(0, "cx", 0, 2), _op(1, name, 0), _op(2, "cx", 0, 3)]
+
+    assert hypergraph_module.build_gate_packets(ops) == [
+        [{0, 2}],
+        [{0, 3}],
+    ]
+
+
+@pytest.mark.parametrize("name", ["swap", "iswap", "rxx", "unknown"])
+@pytest.mark.parametrize("qubits", [(0, 1), (1, 0)])
+def test_unrecognized_control_preservation_splits_packets(name, qubits):
+    ops = [
+        _op(0, "cx", 0, 2),
+        _op(1, name, *qubits),
+        _op(2, "cx", 0, 3),
+    ]
+
+    assert hypergraph_module.build_gate_packets(ops) == [
+        [{0, 2}],
+        [{0, 1}],
+        [{0, 3}],
+    ]
+
+
 def test_partition_result_to_assignment_uses_network_qpu_ids() -> None:
     assignment = hypergraph_module.partition_result_to_assignment(
         {"0": 1, "10": 0},

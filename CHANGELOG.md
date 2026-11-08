@@ -10,6 +10,14 @@ changes are always listed under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+### Fixed
+
+- Gate grouping now closes the cat-entanglement region before X, Y, SWAP,
+  or another operation that can change its shared control. This prevents
+  later remote gates from using a stale control copy. Diagonal control
+  gates and compatible controlled gates still share an e-bit pair.
+  Hypergraph packets follow the same compatibility rules.
+
 ## [0.1.3] - 2026-10-06
 
 ### Added

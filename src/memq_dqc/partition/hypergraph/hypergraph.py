@@ -48,7 +48,8 @@ DIAGONAL_GATES = {
     "rz",
     "u1",
 }
-ANTIDIAGONAL_GATES = {"x", "y"}
+# Keep packet estimates consistent with the extractor's cat-compatible gates.
+CONTROLLED_TWO_QUBIT_GATES = {"cx", "cp", "cry", "cz"}
 REVERSIBLE_TARGET_TWO_QUBIT_GATES = {"cz"}
 
 PacketCounter = Counter[tuple[str, ...]]
@@ -361,6 +362,8 @@ def _search_for_group_gate(
     max_size: int | None,
 ) -> tuple[list[Op], list[Op]]:
     group_ops = [ops[start_index - 1]]
+    if group_ops[0].name not in CONTROLLED_TWO_QUBIT_GATES:
+        return group_ops, []
     ignored_ops: list[Op] = []
     targets = {target}
     group_two_qubit_count = 1
@@ -396,7 +399,7 @@ def _search_for_group_gate(
         if len(op.qubits) == 1:
             qubit = op.qubit_indices[0]
             if qubit == control:
-                if op.name in DIAGONAL_GATES.union(ANTIDIAGONAL_GATES):
+                if op.name in DIAGONAL_GATES:
                     pending_one_qubit_ops.append(op)
                 else:
                     ignored_ops.extend(pending_one_qubit_ops)
@@ -527,9 +530,12 @@ def _shares_group_control(
     op_target: int,
     group_control: int,
 ) -> bool:
-    return op_control == group_control or (
-        op_target == group_control
-        and op.name in REVERSIBLE_TARGET_TWO_QUBIT_GATES
+    return op.name in CONTROLLED_TWO_QUBIT_GATES and (
+        op_control == group_control
+        or (
+            op_target == group_control
+            and op.name in REVERSIBLE_TARGET_TWO_QUBIT_GATES
+        )
     )
 
 
