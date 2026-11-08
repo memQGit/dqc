@@ -10,13 +10,13 @@ gate rcx q0, q1, c0, c1 {
 }
 
 // remote controlled phase gate (placeholder)
-gate rcp q0, q1, c0, c1 theta {
+gate rcp(theta) q0, q1, c0, c1 {
     id q0;
     id q1;
 }
 
 // remote controlled RY gate (placeholder)
-gate rcry q0, q1, c0, c1 theta {
+gate rcry(theta) q0, q1, c0, c1 {
     id q0;
     id q1;
 }
