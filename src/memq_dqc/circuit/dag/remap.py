@@ -27,6 +27,7 @@ from memq_dqc.preprocessing.qasm.ast_utils import clone_statement_node
 from memq_dqc.preprocessing.qasm.types import (
     CircuitQubit,
     CleanedIncludeStatement,
+    CleanedQuantumGate,
     CleanedQubitDeclaration,
     CleanedStatement,
 )
@@ -333,7 +334,8 @@ def _replace_qubit_declarations(
         comp_qubits_per_qpu: Number of computation qubits for each QPU
             indexed by QPU ID.
         comm_qubits_per_qpu: Number of communication qubits for each QPU
-            indexed by QPU ID.
+            in sorted QPU order. Declarations are expanded if emitted
+            physical communication indices require a larger register.
 
     Returns:
         Updated list of cleaned statements with new qubit declarations.
@@ -370,6 +372,20 @@ def _replace_qubit_declarations(
         default_counts={qpu_id: 0 for qpu_id in qpu_ids},
         label="comm_qubits_per_qpu",
     )
+
+    # Communication operands retain the network's physical localIndex, which
+    # need not be dense or start at zero. Keep those identities for scheduling
+    # and annotated-DAG exports, but allocate every referenced QASM slot.
+    for statement in statements:
+        if not isinstance(statement, CleanedQuantumGate):
+            continue
+        for qubit in statement.qubits:
+            if not qubit.register_name.startswith("c"):
+                continue
+            qpu_id = _qpu_id_from_register_name(qubit.register_name)
+            comm_counts_by_qpu[qpu_id] = max(
+                comm_counts_by_qpu[qpu_id], qubit.index + 1
+            )
 
     def _build_declaration(
         register_name: str,

@@ -502,7 +502,16 @@ def build_distributed_statements(
             is_op=False,
             filename="builder/distgates.inc",
         )
-        distributed_statements.insert(0, cast(CleanedStatement, dist_include))
+        # The placeholder bodies use id from stdgates.inc, so their include
+        # must follow the source includes rather than precede them.
+        include_idx = 0
+        while include_idx < len(distributed_statements) and isinstance(
+            distributed_statements[include_idx], CleanedIncludeStatement
+        ):
+            include_idx += 1
+        distributed_statements.insert(
+            include_idx, cast(CleanedStatement, dist_include)
+        )
     if not ebit_assignment:
         distributed_statements = _strip_remote_ebit_operands(
             distributed_statements

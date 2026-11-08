@@ -56,6 +56,12 @@ primary output. Read it as a string (`distributed_qasm`) and write it to disk
 the matching communication registers (`c0`, `c1`), and the `catent` →
 remote-gate → `catdisent` sequences that implement each cross-QPU gate.
 
+Communication register indices preserve the network's physical `localIndex`
+values. If those values are offset or sparse, the register includes unused
+slots so every referenced index is in bounds. Its declared length is therefore
+an address range, not necessarily the physical communication-qubit count;
+use `compiler.network.num_comm_qubits` for the latter.
+
 ```python
 compiler.save_distributed_circuit("outputs/qft_n4_distributed.qasm")
 print(compiler.distributed_qasm)
@@ -73,6 +79,14 @@ networking operations a distributed quantum computer must perform:
 - **Cat-entanglement** — every remote gate is wrapped in a cat-entanglement
   (`catent`) / cat-disentanglement (`catdisent`) pair that consumes an
   entangled (EPR) pair on the communication qubits.
+
+The gate declarations ship in `memq_dqc/builder/distgates.inc`; provide that
+include to your OpenQASM tool, or inline it after `stdgates.inc` if the tool
+does not resolve custom includes (for example, `qiskit.qasm3.loads`). The
+parameterized signatures are `gate rcp(theta) q0, q1, c0, c1` and
+`gate rcry(theta) q0, q1, c0, c1`. Their bodies are identity placeholders:
+successfully importing the program does not simulate distributed protocols.
+Use `compiler.verify()` for the monolithic-equivalence check below.
 
 ## 4. Verify
 
