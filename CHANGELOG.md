@@ -10,6 +10,25 @@ changes are always listed under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+### Fixed
+
+- Gate grouping now preserves its shared cat-entanglement across X and Y on
+  the data control by emitting X on the live remote communication qubit.
+  This prevents a stale control copy without spending another e-bit pair.
+  SWAP, H, generic Rx/Ry, and unsupported control changes still close the
+  group. Hypergraph packets retain X/Y compatibility, and lifetime limits
+  include the added correction. Deferred e-bit assignment preserves the
+  correction as `@memq.cat_proxy_x` metadata on the data gate and binds it
+  to the enclosing group's selected link when scheduling.
+
+### Changed
+
+- DAG, scheduling-instance, and execution-schedule JSON with deferred cat
+  proxy corrections uses schema version 2. Consumers must apply the recorded
+  proxy X as well as the original data gate. Outputs without pending proxy
+  corrections retain their legacy format; legacy scheduling instances remain
+  readable.
+
 ## [0.1.3] - 2026-10-06
 
 ### Added

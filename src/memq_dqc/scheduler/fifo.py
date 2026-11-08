@@ -28,8 +28,10 @@ from memq_dqc.scheduler.schedule import (
     SchedulerEntanglementProfile,
     SchedulerHardwareProfile,
     SchedulerModality,
+    _bound_cat_group_qubits,
     _build_qubit_timelines,
     _catent_ebit_labels,
+    _catent_group_owners,
     _ebit_assignment_labels,
     _is_catent_operation,
     _operation_duration,
@@ -51,86 +53,90 @@ class FIFOScheduler(BaseScheduler):
         remote_ops_with_catent = _remote_ops_with_catent_predecessor(
             self.distributed_circuit
         )
-        # need to add: check of available e-bit
-        for layer in self.distributed_circuit.dag.layers:
-            for op in layer:
-                # we would like to forward look to see if local operations
-                # can be done simultaneously with remote operations
-                entanglement_events: list[EntanglementGeneration] = []
-                if _is_catent_operation(op):
-                    if len(op.qubits) > 2:
-                        qubits = tuple(
-                            _physical_qubit_label(qubit) for qubit in op.qubits
-                        )
-                        (
-                            entanglement_events,
-                            start_time,
-                        ) = _schedule_entanglement_generation(
+        ops = self.distributed_circuit.ops
+        op_by_id = {op.op_id: op for op in ops}
+        group_owners = _catent_group_owners(ops)
+        group_comm_qubits: dict[int, tuple[str, ...]] = {}
+        remote_ops_with_catent.update(
+            op.op_id for op in ops if op.is_remote and op.op_id in group_owners
+        )
+        # Source order is topological and keeps each cat block together while
+        # per-qubit timestamps still allow independent operations to overlap.
+        # This also reserves deferred communication resources through the end
+        # of the entire block before another source block can acquire them.
+        for op in ops:
+            entanglement_events: list[EntanglementGeneration] = []
+            cat_proxy_qubits: tuple[str, ...] = ()
+            if _is_catent_operation(op):
+                if len(op.qubits) > 2:
+                    qubits = tuple(
+                        _physical_qubit_label(qubit) for qubit in op.qubits
+                    )
+                    entanglement_events, start_time = (
+                        _schedule_entanglement_generation(
                             data_qubits=(qubits[0], qubits[1]),
                             ebit_qubits=_catent_ebit_labels(op),
                             qubit_timers=qubit_timers,
-                            entanglement_time=(
-                                self.timing_model.entanglement_time
-                            ),
+                            entanglement_time=self.timing_model.entanglement_time,
                             multiplex_entangle=self.multiplex_entangle,
                         )
-                    else:
-                        (
-                            qubits,
-                            entanglement_events,
-                            start_time,
-                        ) = _select_remote_ebit_assignment(
+                    )
+                else:
+                    qubits, entanglement_events, start_time = (
+                        _select_remote_ebit_assignment(
                             distributed_circuit=self.distributed_circuit,
                             op=op,
                             qubit_timers=qubit_timers,
-                            entanglement_time=(
-                                self.timing_model.entanglement_time
-                            ),
+                            entanglement_time=self.timing_model.entanglement_time,
                             multiplex_entangle=self.multiplex_entangle,
                         )
-                elif op.is_remote and op.op_id not in remote_ops_with_catent:
-                    (
-                        qubits,
-                        entanglement_events,
-                        start_time,
-                    ) = _select_remote_ebit_assignment(
+                    )
+                if op.op_id in group_owners:
+                    group_comm_qubits[op.op_id] = qubits[2:]
+            elif op.is_remote and op.op_id not in remote_ops_with_catent:
+                qubits, entanglement_events, start_time = (
+                    _select_remote_ebit_assignment(
                         distributed_circuit=self.distributed_circuit,
                         op=op,
                         qubit_timers=qubit_timers,
-                        entanglement_time=(
-                            self.timing_model.entanglement_time
-                        ),
+                        entanglement_time=self.timing_model.entanglement_time,
                         multiplex_entangle=self.multiplex_entangle,
+                    )
+                )
+            else:
+                owner = group_owners.get(op.op_id)
+                if owner is not None:
+                    qubits, cat_proxy_qubits = _bound_cat_group_qubits(
+                        op, op_by_id[owner].qubits[0], group_comm_qubits[owner]
                     )
                 else:
                     qubits = tuple(
                         _physical_qubit_label(qubit) for qubit in op.qubits
                     )
-                    start_time = max(
-                        (qubit_timers.get(qubit, 0.0) for qubit in qubits),
-                        default=0.0,
-                    )
-
-                for qubit in qubits:
-                    if qubit not in qubit_timers:
-                        qubit_timers[qubit] = 0.0
-                        qubit_order.append(qubit)
-
-                scheduled_operations.extend(entanglement_events)
-
-                scheduled_op = ScheduledOperation(
-                    op_id=op.op_id,
-                    statement_id=op.statement_id,
-                    name=op.name,
-                    qubits=qubits,
-                    start_time=start_time,
-                    duration=_operation_duration(op, self.timing_model),
-                    is_remote=op.is_remote,
+                start_time = max(
+                    (qubit_timers.get(qubit, 0.0) for qubit in qubits),
+                    default=0.0,
                 )
-                scheduled_operations.append(scheduled_op)
 
-                for qubit in qubits:
-                    qubit_timers[qubit] = scheduled_op.end_time
+            for qubit in qubits:
+                if qubit not in qubit_timers:
+                    qubit_timers[qubit] = 0.0
+                    qubit_order.append(qubit)
+
+            scheduled_operations.extend(entanglement_events)
+            scheduled_op = ScheduledOperation(
+                op_id=op.op_id,
+                statement_id=op.statement_id,
+                name=op.name,
+                qubits=qubits,
+                start_time=start_time,
+                duration=_operation_duration(op, self.timing_model),
+                is_remote=op.is_remote,
+                cat_proxy_qubits=cat_proxy_qubits,
+            )
+            scheduled_operations.append(scheduled_op)
+            for qubit in qubits:
+                qubit_timers[qubit] = scheduled_op.end_time
 
         self.schedule = OperationSchedule(
             operations=tuple(scheduled_operations),

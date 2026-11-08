@@ -104,11 +104,11 @@ def scheduling_instance_from_json(
             f"{_INSTANCE_TYPE!r}."
         )
     schema_version = data.get("schema_version")
-    if schema_version != SCHEDULING_INSTANCE_SCHEMA_VERSION:
+    if schema_version not in (1, SCHEDULING_INSTANCE_SCHEMA_VERSION):
         raise ValueError(
             f"Unsupported scheduling-instance schema version "
             f"{schema_version!r}; this build supports "
-            f"{SCHEDULING_INSTANCE_SCHEMA_VERSION}."
+            f"1 and {SCHEDULING_INSTANCE_SCHEMA_VERSION}."
         )
 
     instance = _instance_from_dict(data)
@@ -162,6 +162,10 @@ def _reject_nonfinite(constant: str) -> float:
 
 def _instance_to_dict(instance: SchedulingInstance) -> dict[str, Any]:
     """Return a JSON-serializable mapping for a scheduling instance."""
+    if instance.schema_version < 2 and any(
+        op.cat_proxy_x for op in instance.operations
+    ):
+        raise ValueError("Cat proxy corrections require schema version 2.")
     return {
         "type": _INSTANCE_TYPE,
         "schema_version": instance.schema_version,
@@ -198,6 +202,7 @@ def _operation_to_dict(op: SchedulingOperation) -> dict[str, Any]:
         "group_id": op.group_id,
         "nominal_start": op.nominal_start,
         "nominal_end": op.nominal_end,
+        **({"cat_proxy_x": True} if op.cat_proxy_x else {}),
     }
 
 
@@ -292,6 +297,7 @@ def _operation_from_dict(entry: Mapping[str, Any]) -> SchedulingOperation:
         group_id=entry["group_id"],
         nominal_start=entry["nominal_start"],
         nominal_end=entry["nominal_end"],
+        cat_proxy_x=entry.get("cat_proxy_x", False),
     )
 
 
