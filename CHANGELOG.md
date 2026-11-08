@@ -10,6 +10,12 @@ changes are always listed under **Changed** or **Removed**.
 
 ## [Unreleased]
 
+### Fixed
+
+- The default FIFO scheduler now generates one EPR pair per cat-entanglement
+  group instead of an extra pair for each later remote gate in the group.
+  Grouped gates reuse their catent setup, matching compile-time EPR cost.
+
 ## [0.1.3] - 2026-10-06
 
 ### Added
