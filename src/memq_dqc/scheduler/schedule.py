@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypeVar
 
 from memq_dqc._logging import StepTimer, workflow_logging
 from memq_dqc.circuit import DistributedCircuit, Op
+from memq_dqc.circuit.dag.annotated import _assign_group_ids
 from memq_dqc.network import PhysicalQubit
 from memq_dqc.preprocessing.qasm.types import CircuitQubit
 from memq_dqc.settings import load_settings
@@ -931,22 +932,22 @@ def _catent_ebit_labels(op: Op) -> tuple[tuple[str, str], ...]:
     )
 
 
-def _remote_ops_with_catent_predecessor(
+def _remote_ops_with_catent_setup(
     distributed_circuit: DistributedCircuit,
 ) -> set[int]:
-    """Return remote op IDs whose EPR setup is owned by a catent op."""
-    graph = distributed_circuit.dag.graph
-    remote_op_ids: set[int] = set()
-    for op_id in graph.nodes:
-        op = graph.nodes[op_id]["op"]
-        if not op.is_remote:
-            continue
-        if any(
-            _is_catent_operation(graph.nodes[predecessor]["op"])
-            for predecessor in graph.predecessors(op_id)
-        ):
-            remote_op_ids.add(op_id)
-    return remote_op_ids
+    """Return remote data op IDs sharing their group's catent EPR setup.
+
+    Group membership follows emitted operation order, not immediate DAG
+    predecessors: later remote gates and intervening local gates can separate
+    a member from its catent. Reuse the annotated DAG's group classification
+    so teleportation-based remote swaps still request their own EPR pairs.
+    """
+    group_by_op_id = _assign_group_ids(distributed_circuit.ops)
+    return {
+        op.op_id
+        for op in distributed_circuit.ops
+        if op.is_remote and group_by_op_id[op.op_id] is not None
+    }
 
 
 def _remote_ebit_assignment_candidates(

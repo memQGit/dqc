@@ -12,6 +12,10 @@ changes are always listed under **Changed** or **Removed**.
 
 ### Fixed
 
+- The default FIFO scheduler now generates one EPR pair per cat-entanglement
+  group instead of an extra pair for each later remote gate in the group.
+  Grouped gates reuse their catent setup, matching compile-time EPR cost.
+
 - Distributed OpenQASM uses valid parameter syntax for `rcp` and `rcry`.
   Identity placeholders use intrinsic gates and import without depending on
   the presence or position of `stdgates.inc`.

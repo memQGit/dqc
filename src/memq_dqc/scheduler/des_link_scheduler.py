@@ -45,7 +45,7 @@ from memq_dqc.scheduler.schedule import (
     _physical_qubit_label,
     _remote_ebit_assignment_candidates,
     _remote_operation_qubit_labels,
-    _remote_ops_with_catent_predecessor,
+    _remote_ops_with_catent_setup,
 )
 
 logger = logging.getLogger(__name__)
@@ -292,19 +292,8 @@ class BaseDESLinkScheduler(BaseScheduler):
             )
             for catent_op_id, group in self._catent_groups.items()
         }
-        # Every remote gate inside a catent block reuses the block's single
-        # shared entanglement, so EPR generation only happens for the catent
-        # itself. The predecessor-based set catches only the first member
-        # (whose direct DAG predecessor is the catent); the group members add
-        # the rest, which otherwise would each generate their own EPR pair.
-        self._remote_ops_with_catent = _remote_ops_with_catent_predecessor(
+        self._remote_ops_with_catent = _remote_ops_with_catent_setup(
             self.distributed_circuit
-        )
-        self._remote_ops_with_catent.update(
-            member_op_id
-            for group in self._catent_groups.values()
-            for member_op_id in group.member_op_ids
-            if self._op_by_id[member_op_id].is_remote
         )
         (
             self._qubit_timers,
