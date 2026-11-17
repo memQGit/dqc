@@ -454,3 +454,35 @@ def test_annotated_dag_does_not_change_qasm(
     partitioner.annotated_dag()
     partitioner.to_dag_json()
     assert partitioner.distributed_qasm == before
+
+
+@pytest.mark.parametrize(
+    "case", ["orphan", "target", "wrong-gate", "modified", "unclosed"]
+)
+def test_cat_proxy_marker_rejects_invalid_group(case):
+    control, target = _q("q0", 0), _q("q1", 0)
+    marker = _op(
+        1,
+        "h" if case == "wrong-gate" else "y",
+        [target if case == "target" else control],
+    )
+    assert isinstance(marker.node, ast.QuantumGate)
+    marker.node.annotations = [ast.Annotation("memq.cat_proxy_x")]
+    if case == "modified":
+        marker.node.modifiers = [
+            ast.QuantumGateModifier(
+                ast.GateModifierName.pow, ast.FloatLiteral(0.5)
+            )
+        ]
+    ops = (
+        [marker]
+        if case == "orphan"
+        else [
+            _op(0, "catent", [control, target]),
+            marker,
+        ]
+    )
+    if case not in {"orphan", "unclosed"}:
+        ops.append(_op(2, "catdisent", [control, target]))
+    with pytest.raises(ValueError, match="cat_proxy_x requires"):
+        _assign_group_ids(ops)

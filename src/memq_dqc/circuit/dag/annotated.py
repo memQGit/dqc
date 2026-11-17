@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import networkx as nx
+from openqasm3 import ast
 
 from memq_dqc.circuit.dag.distributed import _REMOTE_GATE_NAMES
 from memq_dqc.network import PhysicalQubit
@@ -83,7 +84,10 @@ def build_annotated_dag(distributed: DistributedCircuit) -> nx.DiGraph:
 
     graph = nx.DiGraph()
     graph.graph["type"] = _GRAPH_TYPE
-    graph.graph["schema_version"] = _SCHEMA_VERSION
+    # Older consumers must not silently discard a required proxy action.
+    graph.graph["schema_version"] = (
+        2 if any(op.cat_proxy_x for op in distributed.ops) else _SCHEMA_VERSION
+    )
 
     for node_id in source_graph.nodes:
         op = source_graph.nodes[node_id]["op"]
@@ -98,6 +102,7 @@ def build_annotated_dag(distributed: DistributedCircuit) -> nx.DiGraph:
             is_remote=op.is_remote,
             is_two_qubit=len(data_qubits) == 2,
             group_id=group_by_op_id.get(op.op_id),
+            cat_proxy_x=op.cat_proxy_x,
             logical_qubits=data_qubits,
             physical_qubits=tuple(_physical_qubit(q) for q in data_qubits),
             comm_qubits=tuple(_physical_qubit(q) for q in comm_qubits),
@@ -202,20 +207,44 @@ def _assign_group_ids(ops: list[Op]) -> dict[int, int | None]:
     group_by_op_id: dict[int, int | None] = {}
     next_group_id = 0
     current_group: int | None = None
+    current_control = None
+    corrected_groups: set[int] = set()
+    completed_groups: set[int] = set()
     for op in ops:
+        if op.cat_proxy_x:
+            if (
+                current_group is None
+                or op.name not in {"x", "y"}
+                or op.qubits != (current_control,)
+                or not isinstance(op.node, ast.QuantumGate)
+                or op.node.modifiers
+            ):
+                raise ValueError(
+                    "cat_proxy_x requires a bare X/Y on the live cat "
+                    "group's control."
+                )
+            corrected_groups.add(current_group)
         if op.name == "catent":
             current_group = next_group_id
+            current_control = op.qubits[0]
             next_group_id += 1
             group_by_op_id[op.op_id] = current_group
         elif op.name == "catdisent":
             group_by_op_id[op.op_id] = current_group
+            if current_group is not None:
+                completed_groups.add(current_group)
             current_group = None
+            current_control = None
         elif op.name == "rswap":
             group_by_op_id[op.op_id] = None
-        elif op.is_remote:
+        elif op.is_remote or op.cat_proxy_x:
             group_by_op_id[op.op_id] = current_group
         else:
             group_by_op_id[op.op_id] = None
+    if corrected_groups - completed_groups:
+        raise ValueError(
+            "cat_proxy_x requires a complete cat-entanglement group."
+        )
     return group_by_op_id
 
 
@@ -384,6 +413,7 @@ def _node_to_dict(data: dict[str, Any]) -> dict[str, Any]:
         "is_remote": data["is_remote"],
         "is_two_qubit": data["is_two_qubit"],
         "group_id": data["group_id"],
+        **({"cat_proxy_x": True} if data["cat_proxy_x"] else {}),
         "logical_qubits": [
             _circuit_qubit_to_dict(qubit) for qubit in data["logical_qubits"]
         ],

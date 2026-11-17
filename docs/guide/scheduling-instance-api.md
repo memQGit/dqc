@@ -151,12 +151,14 @@ keywords — to override parameters, pass a profile.
 ## 3. `SchedulingInstance` (the artifact)
 Immutable dataclass. Fields:
 
-- `schema_version: int` — currently `1` (== `SCHEDULING_INSTANCE_SCHEMA_VERSION`)
+- `schema_version: int` — `1` for ordinary circuits; `2` when required
+  cat-proxy correction metadata is present. Readers support legacy `1` and
+  current `2` (`SCHEDULING_INSTANCE_SCHEMA_VERSION`).
 - `instance_id: str` — deterministic, derived from the fingerprint
   (`"inst-<16 hex>"`)
 - `compiler_version: str` — memq_dqc version that produced it
 - `source_fingerprint: str` — SHA-256 of normalized inputs+options+profile+schema
-  version
+  version of source normalization (independent of the compiled output version)
 - `time_unit: str` — `"microseconds"`
 - `operations: tuple[SchedulingOperation, ...]` — ordered by `op_id`
 - `dependencies: tuple[SchedulingDependency, ...]` — ordered by `(source, target)`
@@ -175,6 +177,44 @@ One node of the distributed DAG.
 `op_id:int`, `statement_id:int`, `name:str`, `op_type:str`, `is_remote:bool`,
 `data_qubits:tuple[str,...]`, `comm_qubits:tuple[str,...]`, `duration:float`,
 `group_id:int|None`, `nominal_start:float`, `nominal_end:float`.
+
+`cat_proxy_x:bool` (default `False`) records a pending X on the remote
+cat-state proxy, in addition to the operation's original data-qubit gate.
+It is used for X/Y gates inside a shared-control group when e-bit assignment
+is deferred. Resolve its proxy from the enclosing `group_id`'s **selected**
+EPR pair: the remote half, not the measured local Bell half. It consumes no
+new EPR pair. The duration includes both the data gate and the correction.
+
+In deferred OpenQASM output this action is preserved as an annotation:
+
+```qasm
+@memq.cat_proxy_x
+y q0[0];
+```
+
+The meaning is Y on the data control **and X on the live remote proxy**;
+it is not Y on both qubits. Concrete e-bit output instead emits an ordinary
+X on the communication qubit. Execution schedule records expose the selected
+proxy labels in `cat_proxy_qubits`, and schedule JSON preserves them. An
+external executor must apply X to each listed proxy as well as the named
+data gate. A QASM consumer that ignores annotations will not execute this
+distributed protocol correctly. The monolithic verifier intentionally drops
+cat scaffolding and this annotation, so protocol validation must execute the
+Bell preparation, measurements, feed-forward, and proxy action explicitly.
+
+Annotated-DAG, scheduling-instance, and execution-schedule JSON carrying a
+pending proxy action use schema version `2` so older readers can reject an
+unsupported action rather than silently drop it. Ordinary DAG/instance
+outputs stay at version `1`, and ordinary execution schedules keep their
+existing unversioned format. The annotation is reserved for emitted
+distributed output and is rejected in monolithic compiler input.
+
+This is the antidiagonal embedding in [Wu et al., Quantum 7, 1196 (2023),
+Theorem 10, Eq. (30)](https://arxiv.org/html/2212.12688v3#S3.SS3).
+
+Unmodified X/Y and diagonal gates can remain inside a group. H, generic
+Rx/Ry, SWAP, target-side control changes, and modified X/Y close it. Group
+size and lifetime limits still apply, including the proxy correction cost.
 
 `op_type` ∈ `local_gate`, `local_swap`, `measurement`, `remote_gate`,
 `remote_swap`, `epr_generation` (a `catent`), `disentangle` (a `catdisent`).

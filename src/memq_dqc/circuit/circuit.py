@@ -257,6 +257,11 @@ class Circuit:
         validate_register_names(statements)
         # TODO: think about how to make this easier to access (currently circuit.mono.program)
         ops = extract_ops(statements)
+        if any(op.cat_proxy_x for op in ops):
+            raise ValueError(
+                "The @memq.cat_proxy_x annotation is reserved for emitted "
+                "distributed circuits, not monolithic compiler inputs."
+            )
         self.mono = MonoCircuit(
             program=program,
             statements=statements,
@@ -363,6 +368,42 @@ def _build_ebit_candidates_by_op_id(
             network,
             expected_pairs=_expected_ebit_pair_count(ops, index),
         )
+    # Every member reuses the opener's chosen pair. Advertise only links that
+    # can execute the entire block at the emitted data locations, without
+    # introducing local routing swaps that are absent from the protocol.
+    group: list[Op] = []
+    has_proxy_correction = False
+    for op in ops:
+        if op.name == "catent":
+            group = [op]
+            has_proxy_correction = False
+        elif group and op.cat_proxy_x:
+            has_proxy_correction = True
+        elif group and op.is_remote:
+            group.append(op)
+        elif group and op.name == "catdisent":
+            if len(group) == 2 and not has_proxy_correction:
+                # Preserve the existing ungrouped deferred-routing contract.
+                group = []
+                continue
+            direct_candidates = [
+                _remote_ebit_candidates(member, network, require_direct=True)
+                for member in group
+            ]
+            shared = tuple(
+                candidate
+                for candidate in direct_candidates[0]
+                if all(
+                    candidate in options for options in direct_candidates[1:]
+                )
+            )
+            if not shared:
+                raise ValueError(
+                    "Cat-entanglement group has no common direct e-bit assignment."
+                )
+            for member in group:
+                candidates_by_op_id[member.op_id] = shared
+            group = []
     return candidates_by_op_id
 
 
@@ -380,6 +421,7 @@ def _remote_ebit_candidates(
     network: NetworkGraph,
     *,
     expected_pairs: int | None = None,
+    require_direct: bool = False,
 ) -> tuple[EbitAssignment, ...]:
     """Return viable e-bit assignments for one remote operation."""
     if len(op.qubits) < 2:
@@ -393,7 +435,11 @@ def _remote_ebit_candidates(
         network_qubit_a,
         network_qubit_b,
     )
-    pairs = tuple(comm_pair for _, comm_pair, _ in pair_options)
+    pairs = tuple(
+        comm_pair
+        for cost, comm_pair, _ in pair_options
+        if not require_direct or cost == 0
+    )
     if expected_pairs is not None:
         expected_pair_count = expected_pairs
     elif op.name == "rswap":

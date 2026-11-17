@@ -50,7 +50,7 @@ from memq_dqc.circuit.dag.swap_builders import (
     _build_rswap_statements_for_swap,
     _validate_local_swap_pair,
 )
-from memq_dqc.circuit.op import Op
+from memq_dqc.circuit.op import CAT_PROXY_X_ANNOTATION, Op
 from memq_dqc.preprocessing.qasm.ast_utils import clone_statement_node
 from memq_dqc.preprocessing.qasm.types import (
     CircuitQubit,
@@ -403,18 +403,43 @@ def build_distributed_statements(
         # Insert non-remote gates
         else:
             if isinstance(statement, CleanedQuantumGate):
+                mapped_qubits = _remap_cleaned_qubits(
+                    statement.qubits, current_circuit_qubit_to_physical
+                )
+                correct_cat_proxy = (
+                    active_gate_group is not None
+                    and active_gate_group.enabled
+                    and active_gate_group.catdisent is not None
+                    and statement.name in {"x", "y"}
+                    and isinstance(statement.node, ast.QuantumGate)
+                    and not statement.node.modifiers
+                    and mapped_qubits == [active_gate_group.control_qubit]
+                )
+                if correct_cat_proxy and not ebit_assignment:
+                    # Keep the original data gate and bind its proxy action
+                    # only when the enclosing cat group's link is selected.
+                    # An AST annotation survives OpenQASM/Op round-trips.
+                    mapped_node = clone_statement_node(mapped_node)
+                    mapped_node.annotations.append(
+                        ast.Annotation(CAT_PROXY_X_ANNOTATION)
+                    )
                 distributed_statements.append(
                     CleanedQuantumGate(
                         statement_type=statement.statement_type,
                         node=mapped_node,
                         is_op=statement.is_op,
                         name=statement.name,
-                        qubits=_remap_cleaned_qubits(
-                            statement.qubits,
-                            current_circuit_qubit_to_physical,
-                        ),
+                        qubits=mapped_qubits,
                     )
                 )
+                if (
+                    correct_cat_proxy
+                    and active_gate_group is not None
+                    and ebit_assignment
+                ):
+                    _append_cat_proxy_corrections(
+                        distributed_statements, active_gate_group
+                    )
             elif isinstance(statement, CleanedQuantumMeasurementStatement):
                 distributed_statements.append(
                     CleanedQuantumMeasurementStatement(
@@ -674,6 +699,36 @@ def _close_active_gate_group(
     if active_gate_group.enabled and active_gate_group.catdisent is not None:
         distributed_statements.append(active_gate_group.catdisent)
     active_gate_group.catdisent = None
+
+
+def _append_cat_proxy_corrections(
+    statements: list[CleanedStatement], group: _ActiveGateGroup
+) -> None:
+    """Keep a cat copy in sync after X or Y on its shared data control.
+
+    Wu et al., Quantum 7, 1196 (2023), Theorem 10, Eq. (30): an
+    antidiagonal U on the root embeds as U on the root and X on the proxy.
+    In particular, Y stays on the data qubit only; applying Y to the proxy
+    would introduce an unwanted relative phase. The local Bell half has
+    already been measured and is not a cat copy.
+    """
+    assert group.comm_qubits is not None
+    for proxy in group.comm_qubits[1::2]:
+        node = ast.QuantumGate(
+            modifiers=[],
+            name=ast.Identifier("x"),
+            arguments=[],
+            qubits=[_to_ast_qubit_ref(proxy)],
+        )
+        statements.append(
+            CleanedQuantumGate(
+                statement_type=ast.QuantumGate,
+                node=node,
+                is_op=True,
+                name="x",
+                qubits=[proxy],
+            )
+        )
 
 
 def _strip_remote_ebit_operands(

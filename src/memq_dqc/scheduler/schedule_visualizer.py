@@ -691,6 +691,8 @@ def _event_label(op: ScheduleEvent) -> str:
         if not op.was_used:
             return "unused epr"
         return "epr"
+    if op.cat_proxy_qubits:
+        return f"{op.name} + proxy x"
     return op.name
 
 
@@ -758,6 +760,8 @@ def _pretty_event_text(op: ScheduleEvent) -> str:
     """Return the upper-cased in-bar label for a scheduled event."""
     if isinstance(op, EntanglementGeneration):
         return "EPR"
+    if op.cat_proxy_qubits:
+        return f"{op.name.upper()} + PROXY X"
     return op.name.upper()
 
 

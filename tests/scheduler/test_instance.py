@@ -116,7 +116,7 @@ def test_compiled_instance_is_valid(
         simple1_circuit_path, three_comp_one_comm_x2_network_path
     )
     validate_scheduling_instance(instance)
-    assert instance.schema_version == SCHEDULING_INSTANCE_SCHEMA_VERSION
+    assert instance.schema_version == 1
     assert instance.operations
     assert instance.epr_demands
 
