@@ -81,8 +81,10 @@ networking operations a distributed quantum computer must perform:
   entangled (EPR) pair on the communication qubits.
 
 The gate declarations ship in `memq_dqc/builder/distgates.inc`; provide that
-include to your OpenQASM tool, or inline it after `stdgates.inc` if the tool
-does not resolve custom includes (for example, `qiskit.qasm3.loads`). The
+include to your OpenQASM tool, or inline it in place if the tool does not
+resolve custom includes (for example, `qiskit.qasm3.loads`). Its placeholders
+use the intrinsic `U(0, 0, 0)` identity, so they do not require `stdgates.inc`
+to be present or included first. The
 parameterized signatures are `gate rcp(theta) q0, q1, c0, c1` and
 `gate rcry(theta) q0, q1, c0, c1`. Their bodies are identity placeholders:
 successfully importing the program does not simulate distributed protocols.

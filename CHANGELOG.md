@@ -13,7 +13,8 @@ changes are always listed under **Changed** or **Removed**.
 ### Fixed
 
 - Distributed OpenQASM uses valid parameter syntax for `rcp` and `rcry`.
-  The distributed-gate include follows the standard gates it depends on.
+  Identity placeholders use intrinsic gates and import without depending on
+  the presence or position of `stdgates.inc`.
   Communication registers now cover all emitted physical indices, including
   networks whose communication `localIndex` values are offset or sparse.
   Physical qubit identities used by scheduling and DAG exports are unchanged.

@@ -502,8 +502,8 @@ def build_distributed_statements(
             is_op=False,
             filename="builder/distgates.inc",
         )
-        # The placeholder bodies use id from stdgates.inc, so their include
-        # must follow the source includes rather than precede them.
+        # Preserve leading source includes. The placeholders use intrinsic U,
+        # so they need no dependency on the position or presence of stdgates.
         include_idx = 0
         while include_idx < len(distributed_statements) and isinstance(
             distributed_statements[include_idx], CleanedIncludeStatement

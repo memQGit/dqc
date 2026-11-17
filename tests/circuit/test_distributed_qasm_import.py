@@ -18,6 +18,7 @@ from importlib.resources import files
 import openqasm3
 import pytest
 from qiskit import qasm3
+from qiskit.quantum_info import Operator
 
 from memq_dqc import Compiler, Scheduler
 from memq_dqc.assets import network_path
@@ -132,12 +133,16 @@ def test_qft_output_imports_with_physical_comm_indices(
 
 
 @pytest.mark.parametrize("gate", ["cx", "cp(0.5)", "cry(0.75)", "cz", "swap"])
-def test_each_remote_gate_imports(gate):
+@pytest.mark.parametrize("include_before_qubits", [True, False])
+def test_each_remote_gate_imports(gate, include_before_qubits):
+    declarations = ['include "stdgates.inc";', "qubit[4] q;"]
+    if not include_before_qubits:
+        declarations.reverse()
     source = (
-        'OPENQASM 3.0;\ninclude "stdgates.inc";\n'
-        + "qubit[4] q;\n"
-        + f"{gate} q[0], q[1];\n"
+        "OPENQASM 3.0;\n" + "\n".join(declarations) + f"\n{gate} q[0], q[1];\n"
     )
+    # Both declaration orders are valid before compilation.
+    qasm3.loads(source)
     compiler = Compiler(
         source,
         network_path("10_qubits/n2_pair_a2a"),
@@ -153,3 +158,35 @@ def test_each_remote_gate_imports(gate):
     ]
     assert len(remote) == 1
     assert remote[0].num_qubits == (6 if gate == "swap" else 4)
+
+
+@pytest.mark.parametrize(
+    ("gate", "num_qubits"),
+    [
+        ("rcx", 4),
+        ("rcp(0.5)", 4),
+        ("rcry(0.75)", 4),
+        ("rcz", 4),
+        ("rswap", 6),
+        ("catent", 4),
+        ("catdisent", 4),
+    ],
+)
+def test_distgates_are_identity_placeholders_without_stdgates(
+    gate, num_qubits
+):
+    operands = ", ".join(f"q[{index}]" for index in range(num_qubits))
+    source = (
+        "OPENQASM 3.0;\n"
+        + _distgates()
+        + f"\nqubit[{num_qubits}] q;\n{gate} {operands};\n"
+    )
+    openqasm3.parse(source)
+    circuit = qasm3.loads(source)
+    assert len(circuit.data) == 1
+    operation = circuit.data[0].operation
+    assert operation.name == gate.split("(")[0]
+    assert operation.num_qubits == num_qubits
+    # Importability must not change the documented placeholder semantics,
+    # including the otherwise unused communication operands.
+    assert Operator(operation) == Operator.from_label("I" * num_qubits)
