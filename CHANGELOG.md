@@ -21,6 +21,10 @@ changes are always listed under **Changed** or **Removed**.
   correction as `@memq.cat_proxy_x` metadata on the data gate and binds it
   to the enclosing group's selected link when scheduling.
 
+- The default FIFO scheduler now generates one EPR pair per cat-entanglement
+  group instead of an extra pair for each later remote gate in the group.
+  Grouped gates reuse their catent setup, matching compile-time EPR cost.
+
 ### Changed
 
 - DAG, scheduling-instance, and execution-schedule JSON with deferred cat

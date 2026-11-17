@@ -38,7 +38,7 @@ from memq_dqc.scheduler.schedule import (
     _physical_qubit_label,
     _remote_ebit_assignment_candidates,
     _remote_operation_qubit_labels,
-    _remote_ops_with_catent_predecessor,
+    _remote_ops_with_catent_setup,
 )
 
 
@@ -50,7 +50,7 @@ class FIFOScheduler(BaseScheduler):
         qubit_timers: dict[str, float] = {}
         qubit_order: list[str] = []
         scheduled_operations: list[ScheduleEvent] = []
-        remote_ops_with_catent = _remote_ops_with_catent_predecessor(
+        remote_ops_with_catent = _remote_ops_with_catent_setup(
             self.distributed_circuit
         )
         ops = self.distributed_circuit.ops
