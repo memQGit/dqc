@@ -40,7 +40,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal, TypeAlias, TypeVar
 
-SCHEDULING_INSTANCE_SCHEMA_VERSION = 1
+SCHEDULING_INSTANCE_SCHEMA_VERSION = 2
 
 JSONValue: TypeAlias = (
     str
@@ -132,6 +132,8 @@ class SchedulingOperation:
         group_id: Cat-entanglement group id, or ``None`` when ungrouped.
         nominal_start: Start time in the zero-EPR-wait nominal schedule.
         nominal_end: End time in the zero-EPR-wait nominal schedule.
+        cat_proxy_x: Whether the selected cat group's remote proxy also
+            receives X when the named data operation executes.
     """
 
     op_id: int
@@ -145,6 +147,7 @@ class SchedulingOperation:
     group_id: int | None
     nominal_start: float
     nominal_end: float
+    cat_proxy_x: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,6 +267,10 @@ def validate_scheduling_instance(instance: SchedulingInstance) -> None:
         ValueError: If any invariant is violated. The message names the
             offending id(s) and the invariant.
     """
+    if instance.schema_version not in (1, SCHEDULING_INSTANCE_SCHEMA_VERSION):
+        raise ValueError(
+            f"Unsupported scheduling-instance schema version {instance.schema_version!r}."
+        )
     op_ids = _validate_unique_ids(
         (op.op_id for op in instance.operations),
         kind="operation",
@@ -281,10 +288,43 @@ def validate_scheduling_instance(instance: SchedulingInstance) -> None:
     _validate_dependencies(instance, op_ids)
     _validate_acyclic(instance, op_ids)
     _validate_epr_demands(instance, op_by_id, resource_ids)
+    _validate_cat_proxy_metadata(instance)
     _validate_nominal_times(instance)
     _validate_nominal_ordering(instance, op_by_id)
     _validate_resource_intervals(instance)
     _validate_makespan(instance)
+
+
+def _validate_cat_proxy_metadata(instance: SchedulingInstance) -> None:
+    """Require proxy-X metadata to identify its enclosing root and group."""
+    openers_by_group: dict[int | None, list[SchedulingOperation]] = {}
+    closers_by_group: dict[int | None, list[SchedulingOperation]] = {}
+    for member in instance.operations:
+        if member.name == "catent":
+            openers_by_group.setdefault(member.group_id, []).append(member)
+        elif member.name == "catdisent":
+            closers_by_group.setdefault(member.group_id, []).append(member)
+    for op in instance.operations:
+        if not isinstance(op.cat_proxy_x, bool):
+            raise ValueError("cat_proxy_x must be a boolean.")
+        if not op.cat_proxy_x:
+            continue
+        if instance.schema_version < 2:
+            raise ValueError("Cat proxy corrections require schema version 2.")
+        openers = openers_by_group.get(op.group_id, [])
+        closers = closers_by_group.get(op.group_id, [])
+        if (
+            op.group_id is None
+            or op.name not in {"x", "y"}
+            or len(op.data_qubits) != 1
+            or len(openers) != 1
+            or len(closers) != 1
+            or op.data_qubits != openers[0].data_qubits[:1]
+            or not openers[0].op_id < op.op_id < closers[0].op_id
+        ):
+            raise ValueError(
+                f"Cat proxy correction {op.op_id} does not match its group."
+            )
 
 
 def _validate_unique_ids(

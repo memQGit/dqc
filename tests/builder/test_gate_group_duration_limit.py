@@ -13,6 +13,9 @@
 # limitations under the License.
 """Tests for the EPR-lifetime gate-group duration cap."""
 
+from dataclasses import replace
+
+import pytest
 from openqasm3 import ast
 
 from memq_dqc.builder.extract_utils import (
@@ -149,3 +152,25 @@ def test_duration_cap_counts_interleaved_target_one_qubit_gates():
     assert (0, 3) in group_indices
     assert reordered_ops[0].op_id == 0
     assert [op.name for op in reordered_ops[0:3]] == ["cx", "rz", "cx"]
+
+
+@pytest.mark.parametrize("name", ["x", "y"])
+@pytest.mark.parametrize("budget,grouped", [(2.7, False), (3.6, True)])
+def test_duration_cap_includes_proxy_correction(name, budget, grouped):
+    ops = [
+        _two_qubit_op(0, 0, 1),
+        replace(_one_qubit_op(1, 0), name=name),
+        _two_qubit_op(2, 0, 2),
+    ]
+    limit = GroupDurationLimit(budget, 1.0, 0.8)
+    _, groups = _identify_existing_gate_groups(ops, duration_limit=limit)
+
+    # Two CX + root X/Y + proxy X cost 3.6, not 2.6.
+    assert groups == ({(0, 3)} if grouped else {(0, 1), (2, 3)})
+    # A target-side X/Y needs no proxy correction.
+    assert (
+        limit.ops_duration(
+            [replace(ops[1], qubits=ops[0].qubits[1:])], control=0
+        )
+        == 1.0
+    )

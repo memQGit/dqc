@@ -23,6 +23,8 @@ from openqasm3 import ast
 from memq_dqc.network import PhysicalQubit
 from memq_dqc.preprocessing.qasm.types import CircuitQubit
 
+CAT_PROXY_X_ANNOTATION = "memq.cat_proxy_x"
+
 
 @dataclass(frozen=True, slots=True)
 class Op:
@@ -43,6 +45,20 @@ class Op:
     is_remote: bool
     qubits: tuple[CircuitQubit, ...]
     node: ast.QASMNode
+
+    @property
+    def cat_proxy_x(self) -> bool:
+        """Return whether this gate also requires X on its live cat proxy.
+
+        The annotation persists in OpenQASM when communication-qubit
+        assignment is deferred. It refers to the remote half of the enclosing
+        ``catent`` group's selected e-bit, not the measured local Bell half.
+        The original X/Y still acts once on its data operand.
+        """
+        return isinstance(self.node, ast.QuantumGate) and any(
+            annotation.keyword == CAT_PROXY_X_ANNOTATION
+            for annotation in self.node.annotations
+        )
 
     @property
     def is_two_qubit(self) -> bool:

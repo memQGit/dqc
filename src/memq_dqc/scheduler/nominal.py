@@ -128,9 +128,15 @@ def build_scheduling_instance(
     metadata = _build_metadata(
         options, profile, compiler_version, timing_model
     )
+    schema_version = (
+        SCHEDULING_INSTANCE_SCHEMA_VERSION
+        if any(op.cat_proxy_x for op in operations)
+        else 1
+    )
+    metadata["schema_version"] = schema_version
 
     instance = SchedulingInstance(
-        schema_version=SCHEDULING_INSTANCE_SCHEMA_VERSION,
+        schema_version=schema_version,
         instance_id=f"inst-{source_fingerprint[:16]}",
         compiler_version=compiler_version,
         source_fingerprint=source_fingerprint,
@@ -248,6 +254,7 @@ def _build_operation(
         group_id=node["group_id"],
         nominal_start=starts[op_id],
         nominal_end=ends[op_id],
+        cat_proxy_x=node.get("cat_proxy_x", False),
     )
 
 

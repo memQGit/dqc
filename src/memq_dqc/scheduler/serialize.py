@@ -72,6 +72,11 @@ def _event_to_dict(event: ScheduleEvent) -> dict[str, Any]:
             "duration": event.duration,
             "end_time": event.end_time,
             "is_remote": event.is_remote,
+            **(
+                {"cat_proxy_qubits": list(event.cat_proxy_qubits)}
+                if event.cat_proxy_qubits
+                else {}
+            ),
         }
     if isinstance(event, EntanglementGeneration):
         return {
@@ -99,6 +104,15 @@ def _schedule_to_dict(schedule: OperationSchedule) -> dict[str, Any]:
         A mapping with ``makespan`` and ``operations`` keys.
     """
     return {
+        **(
+            {"schema_version": 2}
+            if any(
+                isinstance(event, ScheduledOperation)
+                and event.cat_proxy_qubits
+                for event in schedule.operations
+            )
+            else {}
+        ),
         "makespan": schedule.makespan,
         "operations": [_event_to_dict(event) for event in schedule.operations],
     }

@@ -41,6 +41,11 @@ from memq_dqc.preprocessing.qasm.io import dump_qasm_program
 
 logger = logging.getLogger(__name__)
 
+# This versions source normalization, not the compiled output schema. The
+# output may need proxy metadata only after partitioning; precompile cache
+# lookups must still produce the same input fingerprint without compiling.
+_SCHEDULING_SOURCE_SCHEMA_VERSION = 1
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -680,7 +685,8 @@ def compute_scheduling_source_fingerprint(
     """Return the source fingerprint for a compile request without compiling.
 
     Parses and normalizes the inputs and hashes them together with the
-    compilation options, hardware profile, and schema version. This is the same
+    compilation options, hardware profile, and source-normalization schema
+    version. This is the same
     value [compile_scheduling_instance][memq_dqc.compiler.compile_scheduling_instance] records, enabling a cache lookup
     before the (much more expensive) compilation runs.
 
@@ -720,7 +726,6 @@ def _fingerprint_from_parts(
     Returns:
         A hex SHA-256 digest of the normalized inputs, options, and placement.
     """
-    from memq_dqc.scheduler.instance import SCHEDULING_INSTANCE_SCHEMA_VERSION
     from memq_dqc.scheduler.schedule import (
         _resolve_scheduler_hardware_profile,
     )
@@ -743,7 +748,7 @@ def _fingerprint_from_parts(
     if profile.overrides:
         canonical_options["hardware_overrides"] = profile.overrides
     canonical: dict[str, Any] = {
-        "schema_version": SCHEDULING_INSTANCE_SCHEMA_VERSION,
+        "schema_version": _SCHEDULING_SOURCE_SCHEMA_VERSION,
         "qasm": dump_qasm_program(program),
         "network": _network_signature(network),
         "options": canonical_options,

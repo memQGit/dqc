@@ -12,6 +12,15 @@ changes are always listed under **Changed** or **Removed**.
 
 ### Fixed
 
+- Gate grouping now preserves its shared cat-entanglement across X and Y on
+  the data control by emitting X on the live remote communication qubit.
+  This prevents a stale control copy without spending another e-bit pair.
+  SWAP, H, generic Rx/Ry, and unsupported control changes still close the
+  group. Hypergraph packets retain X/Y compatibility, and lifetime limits
+  include the added correction. Deferred e-bit assignment preserves the
+  correction as `@memq.cat_proxy_x` metadata on the data gate and binds it
+  to the enclosing group's selected link when scheduling.
+
 - The default FIFO scheduler now generates one EPR pair per cat-entanglement
   group instead of an extra pair for each later remote gate in the group.
   Grouped gates reuse their catent setup, matching compile-time EPR cost.
@@ -22,6 +31,14 @@ changes are always listed under **Changed** or **Removed**.
   Communication registers now cover all emitted physical indices, including
   networks whose communication `localIndex` values are offset or sparse.
   Physical qubit identities used by scheduling and DAG exports are unchanged.
+
+### Changed
+
+- DAG, scheduling-instance, and execution-schedule JSON with deferred cat
+  proxy corrections uses schema version 2. Consumers must apply the recorded
+  proxy X as well as the original data gate. Outputs without pending proxy
+  corrections retain their legacy format; legacy scheduling instances remain
+  readable.
 
 ## [0.1.3] - 2026-10-06
 
