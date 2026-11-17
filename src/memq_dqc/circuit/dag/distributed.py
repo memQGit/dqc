@@ -527,7 +527,16 @@ def build_distributed_statements(
             is_op=False,
             filename="builder/distgates.inc",
         )
-        distributed_statements.insert(0, cast(CleanedStatement, dist_include))
+        # Preserve leading source includes. The placeholders use intrinsic U,
+        # so they need no dependency on the position or presence of stdgates.
+        include_idx = 0
+        while include_idx < len(distributed_statements) and isinstance(
+            distributed_statements[include_idx], CleanedIncludeStatement
+        ):
+            include_idx += 1
+        distributed_statements.insert(
+            include_idx, cast(CleanedStatement, dist_include)
+        )
     if not ebit_assignment:
         distributed_statements = _strip_remote_ebit_operands(
             distributed_statements
