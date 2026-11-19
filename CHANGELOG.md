@@ -12,6 +12,10 @@ changes are always listed under **Changed** or **Removed**.
 
 ### Fixed
 
+- Statevector verification now preserves classical output width and
+  measurement destinations, including unwritten bits and repeated readouts
+  of the same qubit.
+
 - Gate grouping now preserves its shared cat-entanglement across X and Y on
   the data control by emitting X on the live remote communication qubit.
   This prevents a stale control copy without spending another e-bit pair.

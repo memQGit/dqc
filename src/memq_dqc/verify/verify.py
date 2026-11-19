@@ -79,11 +79,13 @@ def verify_distributed_circuit(
       their measured output distributions via Hellinger fidelity. This is an
       approximate, stochastic check whose accuracy depends on the shot count.
     - ``"statevector"`` computes each circuit's exact output distribution from
-      its statevector (no shots) and checks that they match within ``atol``.
+      its statevector (no shots) for circuits with final measurements and
+      checks that they match within ``atol``.
       The comparison is mapped through each circuit's own
       measurement-to-classical-bit mapping, so it is invariant to how data
-      qubits are laid out or relabeled across QPUs. This is deterministic and
-      exact, but memory grows as ``2**n`` in the qubit count ``n``.
+      qubits are laid out or relabeled across QPUs. It preserves the full
+      classical output width, including unwritten bits. This is deterministic
+      and exact, but memory grows as ``2**n`` in the qubit count ``n``.
 
     Args:
         original: The original circuit, either as a parsed OpenQASM 3
@@ -304,17 +306,15 @@ def _verify_by_statevector(
     return True
 
 
-def _measured_qubits_in_clbit_order(circuit: QuantumCircuit) -> list[int]:
-    """Return data-qubit indices ordered by the clbit they measure into.
+def _measurement_map(circuit: QuantumCircuit) -> dict[int, int]:
+    """Return the last measured qubit for each written classical bit.
 
     Args:
         circuit: A circuit whose final measurements define the mapping from
             qubits to classical bits.
 
     Returns:
-        Qubit indices ordered by ascending classical-bit index, suitable as
-        the ``qargs`` for `Statevector.probabilities_dict` so the
-        resulting bitstrings are keyed in classical-register order.
+        A mapping from global classical-bit indices to qubit indices.
     """
     clbit_to_qubit: dict[int, int] = {}
     for instruction in circuit.data:
@@ -322,7 +322,7 @@ def _measured_qubits_in_clbit_order(circuit: QuantumCircuit) -> list[int]:
             qubit = circuit.find_bit(instruction.qubits[0]).index
             clbit = circuit.find_bit(instruction.clbits[0]).index
             clbit_to_qubit[clbit] = qubit
-    return [clbit_to_qubit[clbit] for clbit in sorted(clbit_to_qubit)]
+    return clbit_to_qubit
 
 
 def _exact_classical_distribution(
@@ -336,24 +336,53 @@ def _exact_classical_distribution(
     qubits are laid out or relabeled across QPUs.
 
     Args:
-        circuit: A measured circuit to evaluate.
+        circuit: A circuit with final measurements to evaluate.
 
     Returns:
-        A mapping from classical-outcome bitstrings to their exact
-        probabilities.
+        Full-width classical bitstrings and their exact probabilities, with
+        classical bit 0 on the right and unwritten bits set to zero.
 
     Raises:
         ValueError: If the circuit contains no measurements.
     """
-    qargs = _measured_qubits_in_clbit_order(circuit)
-    if not qargs:
+    clbit_to_qubit = _measurement_map(circuit)
+    if not clbit_to_qubit:
         raise ValueError(
             "Statevector verification requires the circuit to contain "
             "measurements; none were found."
         )
-    unmeasured = circuit.remove_final_measurements(inplace=False)
+    unmeasured = circuit.copy()
+    unmeasured.remove_final_measurements()
     statevector = Statevector(unmeasured)
-    return statevector.probabilities_dict(qargs=qargs)
+    qargs = list(
+        dict.fromkeys(
+            clbit_to_qubit[clbit] for clbit in sorted(clbit_to_qubit)
+        )
+    )
+    width = circuit.num_clbits
+    if len(qargs) == width:
+        # With one distinct source per classical bit, the marginal's
+        # little-endian order already matches the output.
+        return statevector.probabilities_dict(qargs=qargs)
+
+    # Each source contributes one measurement result to all of its final
+    # destinations. The masks leave unwritten classical bits at zero.
+    masks_by_qubit = dict.fromkeys(qargs, 0)
+    for clbit, qubit in clbit_to_qubit.items():
+        masks_by_qubit[qubit] |= 1 << clbit
+    masks = [masks_by_qubit[qubit] for qubit in qargs]
+    probabilities = statevector.probabilities(qargs=qargs)
+    distribution: dict[str, float] = {}
+    for index in probabilities.nonzero()[0]:
+        measured_bits = int(index)
+        outcome = 0
+        for bit, mask in enumerate(masks):
+            if (measured_bits >> bit) & 1:
+                outcome |= mask
+        distribution[format(outcome, f"0{width}b")] = float(
+            probabilities[index]
+        )
+    return distribution
 
 
 def _total_variation_distance(
