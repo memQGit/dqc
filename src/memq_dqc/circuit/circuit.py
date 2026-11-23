@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, TypeAlias
 
 from openqasm3 import ast
@@ -67,6 +67,22 @@ def extract_program_statements(
         for statement in cleaned_statements
         if not isinstance(statement.node, ast.QuantumBarrier)
     ]
+
+
+def _reject_input_branches(node: object) -> None:
+    """Reject if/else before operation extraction can omit either branch."""
+    if isinstance(node, ast.BranchingStatement):
+        raise NotImplementedError(
+            "OpenQASM if/else statements are not supported in input circuits "
+            "for distributed compilation."
+        )
+    if isinstance(node, ast.Statement):
+        for field in fields(node):
+            _reject_input_branches(getattr(node, field.name))
+    elif isinstance(node, (list, tuple)):
+        # Switch cases, for example, store their bodies inside tuples.
+        for item in node:
+            _reject_input_branches(item)
 
 
 # The distributed builder emits its own per-QPU registers named ``q<qpu_id>``
@@ -247,12 +263,17 @@ class Circuit:
 
         Args:
             program_or_path: Parsed OpenQASM 3 program or filesystem path.
+
+        Raises:
+            NotImplementedError: If the input contains an OpenQASM if/else
+                statement.
         """
         if isinstance(program_or_path, ast.Program):
             program = program_or_path
         else:
             program = load_qasm_program(program_or_path)
 
+        _reject_input_branches(program.statements)
         statements = extract_program_statements(program)
         validate_register_names(statements)
         # TODO: think about how to make this easier to access (currently circuit.mono.program)
