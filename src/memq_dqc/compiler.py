@@ -125,6 +125,10 @@ class Compiler:
             algo: Partitioning algorithm name, class, or preconfigured
                 instance.
             algo_kwargs: Keyword arguments forwarded to the algorithm.
+
+        Raises:
+            NotImplementedError: If the input contains an OpenQASM if/else
+                statement.
         """
         self._partitioner = Partitioner(
             topology, circuit, algo=algo, algo_kwargs=algo_kwargs

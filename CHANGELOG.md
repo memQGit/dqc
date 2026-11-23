@@ -12,6 +12,10 @@ changes are always listed under **Changed** or **Removed**.
 
 ### Fixed
 
+- Distributed compilation now rejects input OpenQASM `if`/`else` with
+  `NotImplementedError` instead of producing output with unremapped qubit
+  references. Conditional operations are not supported.
+
 - Statevector verification now preserves classical output width and
   measurement destinations, including unwritten bits and repeated readouts
   of the same qubit.

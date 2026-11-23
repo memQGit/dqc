@@ -26,9 +26,11 @@ from memq_dqc import (
     VerificationArtifacts,
     get_verification_artifacts,
 )
+from memq_dqc.assets import network_path
 from memq_dqc.circuit import DistributedCircuit
 from memq_dqc.network import NetworkGraph
 from memq_dqc.partition import Partitioner
+from memq_dqc.preprocessing.qasm.io import parse_qasm_source
 
 
 def test_compiler_compiles_and_exposes_distributed_circuit(
@@ -61,6 +63,97 @@ def test_compiler_accepts_inline_qasm_source(
     compiler.compile()
 
     assert isinstance(compiler.distributed_circuit, DistributedCircuit)
+
+
+def test_compiler_rejects_if_after_measurement_in_qasm_file(tmp_path):
+    # A branch that references the input qubit register used to be emitted
+    # verbatim, even though that register had been replaced by QPU registers.
+    path = tmp_path / "conditional.qasm3"
+    path.write_text(
+        """OPENQASM 3.0;
+include "stdgates.inc";
+bit[1] m;
+qubit[4] q;
+h q[0];
+cx q[0], q[2];
+m[0] = measure q[1];
+if (m == 1) {
+    x q[3];
+}
+cx q[2], q[3];
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(NotImplementedError, match=r"OpenQASM if/else"):
+        Compiler(path, network_path("10_qubits/n2_pair_a2a"))
+
+
+def test_compiler_rejects_if_else_with_two_qubit_gates(
+    three_comp_one_comm_x2_network_path,
+):
+    program = parse_qasm_source(
+        """OPENQASM 3.0;
+include "stdgates.inc";
+bit[1] m;
+qubit[4] q;
+m[0] = measure q[0];
+if (m[0]) {
+    cx q[0], q[3];
+} else {
+    cz q[0], q[3];
+}
+"""
+    )
+    assert isinstance(program.statements[-1], ast.BranchingStatement)
+
+    with pytest.raises(NotImplementedError, match=r"OpenQASM if/else"):
+        Compiler(program, three_comp_one_comm_x2_network_path)
+
+
+def test_compiler_rejects_if_inside_switch_case(
+    three_comp_one_comm_x2_network_path,
+):
+    source = """OPENQASM 3.0;
+include "stdgates.inc";
+bit[1] m;
+qubit[2] q;
+m[0] = measure q[0];
+switch (m) {
+    case 1 {
+        if (m[0]) {
+            x q[1];
+        }
+    }
+}
+"""
+
+    with pytest.raises(NotImplementedError, match=r"OpenQASM if/else"):
+        Compiler(source, three_comp_one_comm_x2_network_path)
+
+
+def test_compiler_still_extracts_measurement_without_a_branch(
+    three_comp_one_comm_x2_network_path,
+):
+    compiler = Compiler(
+        """OPENQASM 3.0;
+include "stdgates.inc";
+bit[1] m;
+qubit[2] q;
+h q[0];
+m[0] = measure q[0];
+x q[1];
+""",
+        three_comp_one_comm_x2_network_path,
+    )
+    compiler.compile()
+
+    assert [op.name for op in compiler.distributed_circuit.ops] == [
+        "h",
+        "measure",
+        "x",
+    ]
+    assert "m[0] = measure q0[" in compiler.distributed_qasm
 
 
 def test_compiler_exposes_verification_artifacts(

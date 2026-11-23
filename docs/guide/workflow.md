@@ -35,6 +35,15 @@ OpenQASM circuit + network topology
    timeline, respecting data dependencies, communication-qubit availability,
    and per-operation durations, aiming to minimize the **makespan**.
 
+### OpenQASM input limitation
+
+Distributed compilation does not support input `if` or `if/else` statements,
+including nested branches. Constructing a `Compiler` with one of these
+statements raises `NotImplementedError` before partitioning. The compiler
+cannot account for conditional operations in placement, routing, or
+scheduling. This does not change support for standalone measurements or
+feed-forward in the compiler's generated remote-gate protocols.
+
 ### Discrete-event entanglement timing
 
 The DES link schedulers model independent entanglement attempts in fixed
