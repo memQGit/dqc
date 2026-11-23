@@ -137,7 +137,7 @@
         "q_0_0"
       ],
       "remoteConnections": [
-        "c_3_0"
+        "c_3_1"
       ]
     },
     "c_0_1": {
@@ -151,8 +151,7 @@
         "q_0_1"
       ],
       "remoteConnections": [
-        "c_1_0",
-        "c_3_1"
+        "c_1_0"
       ]
     },
     "c_0_2": {
@@ -166,7 +165,7 @@
         "q_0_2"
       ],
       "remoteConnections": [
-        "c_3_2"
+        "c_3_3"
       ]
     },
     "c_0_3": {
@@ -180,8 +179,7 @@
         "q_0_3"
       ],
       "remoteConnections": [
-        "c_1_2",
-        "c_3_3"
+        "c_1_2"
       ]
     },
     "q_1_0": {
@@ -251,8 +249,7 @@
         "q_1_0"
       ],
       "remoteConnections": [
-        "c_0_1",
-        "c_3_1"
+        "c_0_1"
       ]
     },
     "c_1_1": {
@@ -280,8 +277,7 @@
         "q_1_2"
       ],
       "remoteConnections": [
-        "c_0_3",
-        "c_3_3"
+        "c_0_3"
       ]
     },
     "c_1_3": {
@@ -477,8 +473,7 @@
         "q_3_0"
       ],
       "remoteConnections": [
-        "c_2_1",
-        "c_0_0"
+        "c_2_1"
       ]
     },
     "c_3_1": {
@@ -492,8 +487,7 @@
         "q_3_1"
       ],
       "remoteConnections": [
-        "c_0_1",
-        "c_1_0"
+        "c_0_0"
       ]
     },
     "c_3_2": {
@@ -507,8 +501,7 @@
         "q_3_2"
       ],
       "remoteConnections": [
-        "c_2_3",
-        "c_0_2"
+        "c_2_3"
       ]
     },
     "c_3_3": {
@@ -522,8 +515,7 @@
         "q_3_3"
       ],
       "remoteConnections": [
-        "c_0_3",
-        "c_1_2"
+        "c_0_2"
       ]
     }
   },
@@ -720,31 +712,11 @@
     },
     {
       "qubit1": "c_0_0",
-      "qubit2": "c_3_0",
-      "type": "remote"
-    },
-    {
-      "qubit1": "c_0_1",
       "qubit2": "c_3_1",
       "type": "remote"
     },
     {
       "qubit1": "c_0_2",
-      "qubit2": "c_3_2",
-      "type": "remote"
-    },
-    {
-      "qubit1": "c_0_3",
-      "qubit2": "c_3_3",
-      "type": "remote"
-    },
-    {
-      "qubit1": "c_1_0",
-      "qubit2": "c_3_1",
-      "type": "remote"
-    },
-    {
-      "qubit1": "c_1_2",
       "qubit2": "c_3_3",
       "type": "remote"
     }
