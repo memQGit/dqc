@@ -28,5 +28,10 @@ Every path inside the notebooks is relative to `demo/`. Inputs live in
 | `inputs/qft_n4.qasm` | 4-qubit Quantum Fourier Transform |
 | `inputs/qft_12.qasm` | 12-qubit Quantum Fourier Transform |
 | `inputs/demo_network.json` | 2 QPUs, 2 computation + 2 communication qubits each |
-| `inputs/chain_3qpu.json` | 3 QPUs in a line |
-| `inputs/ring_4qpu.json` | 4 QPUs in a ring |
+| `inputs/chain_3qpu.json` | 3 QPUs in a line, 6 computation qubits per QPU |
+| `inputs/ring_4qpu.json` | 4 QPUs in a ring, 4 computation qubits per QPU |
+
+Both topologies have two remote links per neighboring QPU pair, with a
+dedicated communication qubit at each end of every link. The separate
+`outputs/chain_3qpu.json` produced by `networks.ipynb` is a teaching example
+with two computation qubits per QPU.

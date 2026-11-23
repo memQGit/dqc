@@ -61,6 +61,14 @@ and grid topologies, each in large, small, and tiny variants. This is the
 faster route for benchmarking sweeps, where you want the same circuit against
 a dozen topologies.
 
+The **Ring Large**, **Ring Small**, and **Ring Tiny** presets are augmented
+rings, not strict cycles. For three or more QPUs, the closing edge between the
+first and last QPUs has twice as many links as an ordinary neighbor edge. For
+four or more, the presets also add longer-range shortcuts. These extra links
+can share communication qubits. By contrast, the four-QPU ring used in
+[Comparing Partitioners](../demos/comparing_partitioners.ipynb) has two
+dedicated links per neighbor pair and no shortcuts.
+
 *Generate Graph* renders a NetworkX preview of the current design. The preview
 is validated by the same
 [`NetworkGraph`][memq_dqc.network.NetworkGraph] the compiler uses, so if a network

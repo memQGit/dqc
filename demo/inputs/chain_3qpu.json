@@ -12,8 +12,6 @@
           "q_0_5"
         ],
         "communication": [
-          "c_0_0",
-          "c_0_1",
           "c_0_2",
           "c_0_3"
         ]
@@ -51,42 +49,12 @@
         ],
         "communication": [
           "c_2_0",
-          "c_2_1",
-          "c_2_2",
-          "c_2_3"
+          "c_2_1"
         ]
       }
     }
   },
   "qubits": {
-    "c_0_0": {
-      "id": "c_0_0",
-      "kind": "communication",
-      "type": "communication",
-      "processorId": 0,
-      "localIndex": 0,
-      "label": "c(0,0)",
-      "localConnections": [
-        "q_0_0"
-      ],
-      "remoteConnections": [
-        "c_2_2"
-      ]
-    },
-    "c_0_1": {
-      "id": "c_0_1",
-      "kind": "communication",
-      "type": "communication",
-      "processorId": 0,
-      "localIndex": 1,
-      "label": "c(0,1)",
-      "localConnections": [
-        "q_0_2"
-      ],
-      "remoteConnections": [
-        "c_2_3"
-      ]
-    },
     "q_0_0": {
       "id": "q_0_0",
       "kind": "computation",
@@ -95,7 +63,6 @@
       "localIndex": 0,
       "label": "q(0,0)",
       "localConnections": [
-        "c_0_0",
         "q_0_1",
         "q_0_2"
       ],
@@ -123,7 +90,6 @@
       "label": "q(0,2)",
       "localConnections": [
         "q_0_0",
-        "c_0_1",
         "q_0_3",
         "q_0_4"
       ],
@@ -381,8 +347,7 @@
       "localIndex": 1,
       "label": "q(2,1)",
       "localConnections": [
-        "q_2_0",
-        "c_2_2"
+        "q_2_0"
       ],
       "remoteConnections": []
     },
@@ -410,7 +375,6 @@
       "label": "q(2,3)",
       "localConnections": [
         "q_2_2",
-        "c_2_3",
         "q_2_5"
       ],
       "remoteConnections": []
@@ -438,34 +402,6 @@
         "q_2_3"
       ],
       "remoteConnections": []
-    },
-    "c_2_2": {
-      "id": "c_2_2",
-      "kind": "communication",
-      "type": "communication",
-      "processorId": 2,
-      "localIndex": 2,
-      "label": "c(2,2)",
-      "localConnections": [
-        "q_2_1"
-      ],
-      "remoteConnections": [
-        "c_0_0"
-      ]
-    },
-    "c_2_3": {
-      "id": "c_2_3",
-      "kind": "communication",
-      "type": "communication",
-      "processorId": 2,
-      "localIndex": 3,
-      "label": "c(2,3)",
-      "localConnections": [
-        "q_2_3"
-      ],
-      "remoteConnections": [
-        "c_0_1"
-      ]
     }
   },
   "connections": [
@@ -488,21 +424,6 @@
       "qubit1": "c_1_3",
       "qubit2": "c_2_1",
       "type": "remote"
-    },
-    {
-      "qubit1": "c_2_2",
-      "qubit2": "c_0_0",
-      "type": "remote"
-    },
-    {
-      "qubit1": "c_2_3",
-      "qubit2": "c_0_1",
-      "type": "remote"
-    },
-    {
-      "qubit1": "c_0_0",
-      "qubit2": "q_0_0",
-      "type": "local"
     },
     {
       "qubit1": "c_1_0",
@@ -540,11 +461,6 @@
       "type": "local"
     },
     {
-      "qubit1": "q_2_1",
-      "qubit2": "c_2_2",
-      "type": "local"
-    },
-    {
       "qubit1": "q_0_0",
       "qubit2": "q_0_2",
       "type": "local"
@@ -557,11 +473,6 @@
     {
       "qubit1": "q_2_0",
       "qubit2": "q_2_2",
-      "type": "local"
-    },
-    {
-      "qubit1": "q_0_2",
-      "qubit2": "c_0_1",
       "type": "local"
     },
     {
@@ -597,11 +508,6 @@
     {
       "qubit1": "q_1_3",
       "qubit2": "c_1_3",
-      "type": "local"
-    },
-    {
-      "qubit1": "q_2_3",
-      "qubit2": "c_2_3",
       "type": "local"
     },
     {
